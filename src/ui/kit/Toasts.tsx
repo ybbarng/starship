@@ -1,6 +1,7 @@
 "use client";
 
 // 동작 결과 한 줄을 잠깐 띄운다. data-toast는 클릭 확인 스크립트가 읽는다.
+import { twMerge } from "tailwind-merge";
 import { useToast } from "@/data/toast";
 
 const TONE = {
@@ -13,7 +14,10 @@ export function Toasts({ className = "" }: { className?: string }) {
   const items = useToast((s) => s.items);
   return (
     <div
-      className={`pointer-events-none fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 flex-col items-center gap-2 ${className}`}
+      className={twMerge(
+        "pointer-events-none fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 flex-col items-center gap-2",
+        className,
+      )}
     >
       {items.map((t) => (
         <div
