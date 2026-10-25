@@ -1,0 +1,1338 @@
+"use client";
+
+// 창밖 우주. 실제 별 배치·별자리 선 위에서 오늘 날짜 위치의 태양계를 여행한다.
+// 목적지는 useVoyage().travelTo(id)로 바꾼다.
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import * as THREE from "three";
+import {
+  bvToRgb,
+  compress,
+  equatorialToEcliptic,
+  galacticToEquatorial,
+  HALLEY,
+  halleyPath,
+  orbitPath,
+  raDecToEcliptic,
+  toThree,
+  type Vec3,
+} from "./astro";
+import {
+  BODIES,
+  BODY_BY_ID,
+  type BodyDef,
+  bodyPosition,
+  DESTINATION_BY_ID,
+  DESTINATIONS,
+  type Destination,
+  halleyPosition,
+} from "./bodies";
+import { loadCatalog, type SkyCatalog } from "./catalog";
+import { projector } from "./projector";
+import * as S from "./shaders";
+import { useVoyage } from "./voyage";
+
+const SKY_RADIUS = 9000;
+const STAR_DISTANCE = 2500;
+const UP = new THREE.Vector3(0, 1, 0);
+const TEXTURES = process.env.NEXT_PUBLIC_PLANET_TEXTURES;
+
+export type SpaceViewProps = {
+  className?: string;
+  /** 이름표 양 */
+  labels?: "none" | "few" | "all";
+  constellations?: boolean;
+  /** 끌어서 둘러보기 */
+  lookAround?: boolean;
+  /** 천천히 도는 순항 */
+  drift?: boolean;
+  /** 별 크기 배율(작은 창에서는 줄인다) */
+  starScale?: number;
+};
+
+export function SpaceView({
+  className,
+  labels = "few",
+  constellations = true,
+  lookAround = false,
+  drift = true,
+  starScale = 1,
+}: SpaceViewProps) {
+  const [catalog, setCatalog] = useState<SkyCatalog | null>(null);
+  const labelRef = useRef<HTMLDivElement>(null);
+  const warpRef = useRef<HTMLCanvasElement>(null);
+  const warp = useRef(0);
+
+  useEffect(() => {
+    let alive = true;
+    loadCatalog().then((c) => alive && setCatalog(c));
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  useWarpStreaks(warpRef, warp);
+
+  return (
+    <div
+      className={className}
+      style={{
+        position: "relative",
+        overflow: "hidden",
+        background: "#02030a",
+      }}
+    >
+      <Canvas
+        linear
+        flat
+        dpr={[1, 2]}
+        camera={{ fov: 55, near: 0.005, far: 30000, position: [0, 2, 20] }}
+        gl={{
+          antialias: true,
+          alpha: false,
+          powerPreference: "high-performance",
+        }}
+        style={{ position: "absolute", inset: 0 }}
+      >
+        <color attach="background" args={["#02030a"]} />
+        {catalog && (
+          <>
+            <SkyDome
+              catalog={catalog}
+              constellations={constellations}
+              starScale={starScale}
+            />
+            <SolarSystem catalog={catalog} />
+            <StarTargets />
+            <CameraRig lookAround={lookAround} drift={drift} warp={warp} />
+            {labels !== "none" && (
+              <LabelLayer
+                catalog={catalog}
+                container={labelRef}
+                amount={labels}
+              />
+            )}
+          </>
+        )}
+      </Canvas>
+      <div
+        ref={labelRef}
+        style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
+      />
+      <canvas
+        ref={warpRef}
+        style={{
+          position: "absolute",
+          inset: 0,
+          width: "100%",
+          height: "100%",
+          pointerEvents: "none",
+        }}
+      />
+    </div>
+  );
+}
+
+// ── 하늘(별·은하수·별자리 선) ─────────────────────────────
+
+function skyPoint(ra: number, dec: number, r = SKY_RADIUS): Vec3 {
+  const [x, y, z] = toThree(raDecToEcliptic(ra, dec));
+  return [x * r, y * r, z * r];
+}
+
+function SkyDome({
+  catalog,
+  constellations,
+  starScale,
+}: {
+  catalog: SkyCatalog;
+  constellations: boolean;
+  starScale: number;
+}) {
+  const group = useRef<THREE.Group>(null);
+  const { camera, gl } = useThree();
+
+  const stars = useMemo(() => {
+    const n = catalog.stars.length;
+    const pos = new Float32Array(n * 3);
+    const col = new Float32Array(n * 3);
+    const size = new Float32Array(n);
+    const seed = new Float32Array(n);
+    catalog.stars.forEach(([ra, dec, mag, bv], i) => {
+      pos.set(skyPoint(ra, dec), i * 3);
+      const [r, g, b] = bvToRgb(bv);
+      col.set([0.55 + 0.45 * r, 0.55 + 0.45 * g, 0.55 + 0.45 * b], i * 3);
+      size[i] = Math.min(9, Math.max(1.2, 6.2 - mag * 0.85));
+      seed[i] = (i * 0.618_034) % 1;
+    });
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.setAttribute("aColor", new THREE.BufferAttribute(col, 3));
+    geo.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
+    geo.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
+    return geo;
+  }, [catalog]);
+
+  const milky = useMemo(() => milkyWayGeometry(), []);
+
+  const lines = useMemo(() => {
+    const pts: number[] = [];
+    for (const c of catalog.constellations) {
+      for (const line of c.lines) {
+        for (let k = 0; k < line.length - 1; k++) {
+          const a = line[k];
+          const b = line[k + 1];
+          if (!a || !b) continue;
+          pts.push(
+            ...skyPoint(a[0], a[1], SKY_RADIUS * 0.99),
+            ...skyPoint(b[0], b[1], SKY_RADIUS * 0.99),
+          );
+        }
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+    return geo;
+  }, [catalog]);
+
+  const starMat = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        vertexShader: S.starVertex,
+        fragmentShader: S.starFragment,
+        uniforms: {
+          uPixelRatio: { value: gl.getPixelRatio() },
+          uTime: { value: 0 },
+          uScale: { value: starScale },
+        },
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    [gl, starScale],
+  );
+
+  useFrame((state) => {
+    group.current?.position.copy(camera.position);
+    if (starMat.uniforms.uTime)
+      starMat.uniforms.uTime.value = state.clock.elapsedTime;
+  });
+
+  return (
+    <group ref={group} renderOrder={-10}>
+      <points geometry={milky.dust} renderOrder={-12} frustumCulled={false}>
+        <shaderMaterial
+          args={[
+            {
+              vertexShader: S.starVertex,
+              fragmentShader: S.softFragment,
+              uniforms: {
+                uPixelRatio: { value: gl.getPixelRatio() },
+                uTime: { value: 0 },
+                uScale: { value: 1 },
+              },
+              transparent: true,
+              depthWrite: false,
+              blending: THREE.AdditiveBlending,
+            },
+          ]}
+        />
+      </points>
+      <points
+        geometry={stars}
+        material={starMat}
+        renderOrder={-11}
+        frustumCulled={false}
+      />
+      {constellations && (
+        <lineSegments geometry={lines} renderOrder={-11} frustumCulled={false}>
+          <lineBasicMaterial
+            color="#6f8fd8"
+            transparent
+            opacity={0.22}
+            depthWrite={false}
+          />
+        </lineSegments>
+      )}
+    </group>
+  );
+}
+
+/** 은하수: 은하면을 따라 흐린 점을 뿌린다(외부 자료 없이 은하 좌표로 만든다). */
+function milkyWayGeometry() {
+  const rand = mulberry32(7);
+  const n = 22_000;
+  const pos = new Float32Array(n * 3);
+  const col = new Float32Array(n * 3);
+  const size = new Float32Array(n);
+  const seed = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    // 은하 중심 쪽에 더 많이
+    let l = rand() * 360;
+    if (rand() < 0.45) l = (gauss(rand) * 40 + 360) % 360;
+    const center = Math.cos((l * Math.PI) / 180) * 0.5 + 0.5;
+    const b = gauss(rand) * (3 + 5 * center);
+    const big = rand() < 0.08;
+    const [x, y, z] = galacticToEquatorial(l, b);
+    const ecl = equatorialToEcliptic([x, y, z]);
+    const [tx, ty, tz] = toThree(ecl);
+    const r = SKY_RADIUS * 1.01;
+    pos.set([tx * r, ty * r, tz * r], i * 3);
+    const warm = center * 0.5 + rand() * 0.2;
+    const a = (big ? 0.034 : 0.17) * (0.45 + center);
+    col.set(
+      [
+        (0.6 + warm * 0.4) * a,
+        (0.62 + warm * 0.25) * a,
+        (0.8 - warm * 0.2) * a,
+      ],
+      i * 3,
+    );
+    size[i] = big ? 50 + rand() * 90 : 1.6 + rand() * 2;
+    seed[i] = 0;
+  }
+  const dust = new THREE.BufferGeometry();
+  dust.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  dust.setAttribute("aColor", new THREE.BufferAttribute(col, 3));
+  dust.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
+  dust.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
+  return { dust };
+}
+
+function mulberry32(a: number) {
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4_294_967_296;
+  };
+}
+
+function gauss(rand: () => number) {
+  return (
+    Math.sqrt(-2 * Math.log(rand() + 1e-9)) * Math.cos(2 * Math.PI * rand())
+  );
+}
+
+// ── 태양계 ───────────────────────────────────────────
+
+const typeCode: Record<string, number> = {
+  rocky: 1,
+  earth: 2,
+  gas: 3,
+  ice: 4,
+  volcanic: 5,
+  cracked: 6,
+};
+
+function planetMaterial(body: BodyDef) {
+  const s = body.surface;
+  const c = (hex: string) => new THREE.Color(hex);
+  let c1 = c("#888");
+  let c2 = c("#aaa");
+  let c3 = c("#555");
+  let bands = 0;
+  let storm = 0;
+  let craters = 0;
+  if (s.type === "earth") {
+    c1 = c(s.ocean);
+    c2 = c(s.land);
+    c3 = c(s.ice);
+  } else if (s.type !== "star") {
+    [c1, c2, c3] = s.colors.map(c) as [THREE.Color, THREE.Color, THREE.Color];
+    if (s.type === "gas") {
+      bands = s.bands;
+      storm = s.storm ? 1 : 0;
+    }
+    if (s.type === "rocky") craters = s.craters ? 1 : 0;
+  }
+  const mat = new THREE.ShaderMaterial({
+    vertexShader: S.planetVertex,
+    fragmentShader: S.planetFragment,
+    uniforms: {
+      uType: { value: typeCode[s.type] ?? 1 },
+      uC1: { value: c1 },
+      uC2: { value: c2 },
+      uC3: { value: c3 },
+      uAtmo: { value: c(body.atmosphere ?? "#000") },
+      uHasAtmo: { value: body.atmosphere ? 1 : 0 },
+      uBands: { value: bands },
+      uStorm: { value: storm },
+      uCraters: { value: craters },
+      uSeed: { value: body.id.length * 3.7 },
+      uTime: { value: 0 },
+      uSunPos: { value: new THREE.Vector3() },
+      uMap: { value: null },
+      uHasMap: { value: 0 },
+    },
+  });
+  if (TEXTURES) {
+    new THREE.TextureLoader().load(
+      `${TEXTURES.replace(/\/$/, "")}/${body.id}.jpg`,
+      (tex) => {
+        tex.colorSpace = THREE.NoColorSpace;
+        if (mat.uniforms.uMap && mat.uniforms.uHasMap) {
+          mat.uniforms.uMap.value = tex;
+          mat.uniforms.uHasMap.value = 1;
+        }
+      },
+      undefined,
+      () => {
+        // 텍스처가 없으면 코드로 그린 표면을 그대로 쓴다.
+      },
+    );
+  }
+  return mat;
+}
+
+function SolarSystem({ catalog }: { catalog: SkyCatalog }) {
+  return (
+    <group>
+      <Sun />
+      {BODIES.filter((b) => b.id !== "sun").map((b) => (
+        <Planet key={b.id} body={b} catalog={catalog} />
+      ))}
+      <AsteroidBelt />
+      <Orbits catalog={catalog} />
+      <Comet />
+    </group>
+  );
+}
+
+function Sun() {
+  const mat = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        vertexShader: S.planetVertex,
+        fragmentShader: S.sunFragment,
+        uniforms: {
+          uTime: { value: 0 },
+          uTint: { value: new THREE.Color(1, 1, 1) },
+          uIsStar: { value: 0 },
+        },
+      }),
+    [],
+  );
+  const glow = useRef<THREE.Mesh>(null);
+  const far = useRef<THREE.Points>(null);
+  const { camera } = useThree();
+  const sun = BODY_BY_ID.get("sun") as BodyDef;
+  const farGeo = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute([0, 0, 0], 3));
+    g.setAttribute(
+      "aColor",
+      new THREE.Float32BufferAttribute([1, 0.9, 0.7], 3),
+    );
+    g.setAttribute("aSize", new THREE.Float32BufferAttribute([5], 1));
+    g.setAttribute("aSeed", new THREE.Float32BufferAttribute([0.3], 1));
+    return g;
+  }, []);
+  useFrame((state) => {
+    if (mat.uniforms.uTime) mat.uniforms.uTime.value = state.clock.elapsedTime;
+    glow.current?.quaternion.copy(camera.quaternion);
+    if (far.current) far.current.visible = camera.position.length() > 300;
+  });
+  return (
+    <group>
+      <mesh material={mat}>
+        <sphereGeometry args={[sun.radius, 64, 48]} />
+      </mesh>
+      <mesh ref={glow} renderOrder={2}>
+        <planeGeometry args={[sun.radius * 9, sun.radius * 9]} />
+        <shaderMaterial
+          args={[
+            {
+              vertexShader: S.glowVertex,
+              fragmentShader: S.glowFragment,
+              uniforms: {
+                uColor: { value: new THREE.Color("#ffb347") },
+                uIntensity: { value: 1 },
+              },
+              transparent: true,
+              depthWrite: false,
+              blending: THREE.AdditiveBlending,
+            },
+          ]}
+        />
+      </mesh>
+      <points ref={far} geometry={farGeo} frustumCulled={false}>
+        <shaderMaterial
+          args={[
+            {
+              vertexShader: S.starVertex,
+              fragmentShader: S.starFragment,
+              uniforms: {
+                uPixelRatio: { value: 1 },
+                uTime: { value: 0 },
+                uScale: { value: 1.4 },
+              },
+              transparent: true,
+              depthWrite: false,
+              blending: THREE.AdditiveBlending,
+            },
+          ]}
+        />
+      </points>
+    </group>
+  );
+}
+
+function Planet({ body, catalog }: { body: BodyDef; catalog: SkyCatalog }) {
+  const group = useRef<THREE.Group>(null);
+  const spin = useRef<THREE.Mesh>(null);
+  const mat = useMemo(() => planetMaterial(body), [body]);
+  const ringMat = useMemo(
+    () =>
+      body.ring
+        ? new THREE.ShaderMaterial({
+            vertexShader: S.ringVertex,
+            fragmentShader: S.ringFragment,
+            uniforms: {
+              uColor: { value: new THREE.Color(body.ring.color) },
+              uInner: { value: body.ring.inner * body.radius },
+              uOuter: { value: body.ring.outer * body.radius },
+              uSunPos: { value: new THREE.Vector3() },
+              uPlanetPos: { value: new THREE.Vector3() },
+              uPlanetRadius: { value: body.radius },
+            },
+            transparent: true,
+            side: THREE.DoubleSide,
+            depthWrite: false,
+          })
+        : null,
+    [body],
+  );
+  const tilt = ((body.tilt ?? 0) * Math.PI) / 180;
+  const segments = body.radius > 0.5 ? 96 : 48;
+
+  useFrame((state, dt) => {
+    const [x, y, z] = bodyPosition(body, catalog.orbits, Date.now());
+    group.current?.position.set(x, y, z);
+    if (spin.current) spin.current.rotation.y += dt * 0.03;
+    if (mat.uniforms.uTime) mat.uniforms.uTime.value = state.clock.elapsedTime;
+    if (ringMat?.uniforms.uPlanetPos)
+      ringMat.uniforms.uPlanetPos.value.set(x, y, z);
+  });
+
+  return (
+    <group ref={group}>
+      <group rotation={[0, 0, tilt]}>
+        <mesh ref={spin} material={mat}>
+          <sphereGeometry args={[body.radius, segments, segments / 2]} />
+        </mesh>
+        {ringMat && body.ring && (
+          <mesh material={ringMat} rotation={[-Math.PI / 2, 0, 0]}>
+            <ringGeometry
+              args={[
+                body.ring.inner * body.radius,
+                body.ring.outer * body.radius,
+                128,
+                1,
+              ]}
+            />
+          </mesh>
+        )}
+      </group>
+    </group>
+  );
+}
+
+function AsteroidBelt() {
+  const geo = useMemo(() => {
+    const rand = mulberry32(11);
+    const n = 2400;
+    const pos = new Float32Array(n * 3);
+    const col = new Float32Array(n * 3);
+    const size = new Float32Array(n);
+    const seed = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const a = 2.15 + rand() * 1.15;
+      const th = rand() * Math.PI * 2;
+      const inc = gauss(rand) * 0.08;
+      const [x, y, z] = toThree(
+        compress([a * Math.cos(th), a * Math.sin(th), a * inc]),
+      );
+      pos.set([x, y, z], i * 3);
+      const g = 0.35 + rand() * 0.25;
+      col.set([g, g * 0.95, g * 0.88], i * 3);
+      size[i] = 1 + rand() * 1.4;
+      seed[i] = rand();
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("aColor", new THREE.BufferAttribute(col, 3));
+    g.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
+    g.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
+    return g;
+  }, []);
+  const { gl } = useThree();
+  return (
+    <points geometry={geo}>
+      <shaderMaterial
+        args={[
+          {
+            vertexShader: S.starVertex,
+            fragmentShader: S.starFragment,
+            uniforms: {
+              uPixelRatio: { value: gl.getPixelRatio() },
+              uTime: { value: 0 },
+              uScale: { value: 0.8 },
+            },
+            transparent: true,
+            depthWrite: false,
+          },
+        ]}
+      />
+    </points>
+  );
+}
+
+function Orbits({ catalog }: { catalog: SkyCatalog }) {
+  const destId = useVoyage((s) => s.destinationId);
+  const view = DESTINATION_BY_ID.get(destId)?.view;
+  const geos = useMemo(() => {
+    const now = Date.now();
+    const list = BODIES.filter((b) => b.orbit).map((b) => {
+      const el = catalog.orbits[b.orbit as string];
+      const pts = el ? orbitPath(el, now).map((p) => toThree(compress(p))) : [];
+      return new THREE.BufferGeometry().setFromPoints(
+        pts.map((p) => new THREE.Vector3(...p)),
+      );
+    });
+    const halley = new THREE.BufferGeometry().setFromPoints(
+      halleyPath().map((p) => new THREE.Vector3(...toThree(compress(p)))),
+    );
+    return { list, halley };
+  }, [catalog]);
+  // 궤도선은 위에서 내려다볼 때만 그린다(옆에서 보면 가로줄로 보여 거슬린다).
+  if (!view) return null;
+  const opacity = 0.32;
+  return (
+    <group>
+      {geos.list.map((g) => (
+        <lineLoop key={g.uuid} geometry={g}>
+          <lineBasicMaterial
+            color="#7da2ff"
+            transparent
+            opacity={opacity}
+            depthWrite={false}
+          />
+        </lineLoop>
+      ))}
+      <line>
+        <primitive object={geos.halley} attach="geometry" />
+        <lineBasicMaterial
+          color="#9fe3ff"
+          transparent
+          opacity={0.18}
+          depthWrite={false}
+        />
+      </line>
+    </group>
+  );
+}
+
+/** 핼리 혜성(1986년 근일점 무렵 자리). 먼지 꼬리와 이온 꼬리. */
+function Comet() {
+  const pos = useMemo(
+    () => halleyPosition(HALLEY.perihelion + 10 * 86_400_000),
+    [],
+  );
+  const anti = useMemo(() => new THREE.Vector3(...pos).normalize(), [pos]);
+  const side = useMemo(
+    () => new THREE.Vector3().crossVectors(anti, UP).normalize(),
+    [anti],
+  );
+  const { gl, camera } = useThree();
+  const coma = useRef<THREE.Mesh>(null);
+  const tails = useMemo(() => {
+    const make = (n: number) => {
+      const g = new THREE.BufferGeometry();
+      const p = new Float32Array(n * 3);
+      const t = new Float32Array(n);
+      const s = new Float32Array(n);
+      const rand = mulberry32(n);
+      for (let i = 0; i < n; i++) {
+        t[i] = rand();
+        s[i] = rand();
+      }
+      g.setAttribute("position", new THREE.BufferAttribute(p, 3));
+      g.setAttribute("aT", new THREE.BufferAttribute(t, 1));
+      g.setAttribute("aSeed", new THREE.BufferAttribute(s, 1));
+      return g;
+    };
+    return { dust: make(3200), ion: make(1600) };
+  }, []);
+  const mat = (color: string, curve: number, spread: number, length: number) =>
+    new THREE.ShaderMaterial({
+      vertexShader: S.tailVertex,
+      fragmentShader: S.tailFragment,
+      uniforms: {
+        uTime: { value: 0 },
+        uPixelRatio: { value: gl.getPixelRatio() },
+        uDir: { value: anti },
+        uSide: { value: side },
+        uLength: { value: length },
+        uCurve: { value: curve },
+        uSpread: { value: spread },
+        uColor: { value: new THREE.Color(color) },
+      },
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 혜성 자리는 처음 한 번만 정한다
+  const mats = useMemo(
+    () => ({
+      dust: mat("#ffe2b0", 0.35, 0.22, 7),
+      ion: mat("#8fd4ff", 0.0, 0.05, 10),
+    }),
+    [anti],
+  );
+  useFrame((state) => {
+    for (const m of [mats.dust, mats.ion])
+      if (m.uniforms.uTime) m.uniforms.uTime.value = state.clock.elapsedTime;
+    coma.current?.quaternion.copy(camera.quaternion);
+  });
+  return (
+    <group position={pos}>
+      <mesh>
+        <sphereGeometry args={[0.04, 16, 12]} />
+        <meshBasicMaterial color="#cfc6b8" />
+      </mesh>
+      <mesh ref={coma}>
+        <planeGeometry args={[1.4, 1.4]} />
+        <shaderMaterial
+          args={[
+            {
+              vertexShader: S.glowVertex,
+              fragmentShader: S.glowFragment,
+              uniforms: {
+                uColor: { value: new THREE.Color("#bfe9ff") },
+                uIntensity: { value: 0.9 },
+              },
+              transparent: true,
+              depthWrite: false,
+              blending: THREE.AdditiveBlending,
+            },
+          ]}
+        />
+      </mesh>
+      <points
+        geometry={tails.dust}
+        material={mats.dust}
+        frustumCulled={false}
+      />
+      <points geometry={tails.ion} material={mats.ion} frustumCulled={false} />
+    </group>
+  );
+}
+
+// ── 유명한 별(목적지) ─────────────────────────────────
+
+function starTargetPosition(d: Destination): THREE.Vector3 {
+  const s = d.star;
+  if (!s) return new THREE.Vector3();
+  const [x, y, z] = toThree(raDecToEcliptic(s.ra, s.dec));
+  return new THREE.Vector3(x, y, z).multiplyScalar(STAR_DISTANCE);
+}
+
+function starSurface(color: string) {
+  return new THREE.ShaderMaterial({
+    vertexShader: S.planetVertex,
+    fragmentShader: S.sunFragment,
+    uniforms: {
+      uTime: { value: 0 },
+      uTint: { value: new THREE.Color(color) },
+      uIsStar: { value: 1 },
+    },
+  });
+}
+
+function StarTargets() {
+  const { camera } = useThree();
+  const refs = useRef<(THREE.Mesh | null)[]>([]);
+  const stars = useMemo(() => DESTINATIONS.filter((d) => d.star), []);
+  const surfaces = useMemo(
+    () =>
+      new Map(stars.map((d) => [d.id, starSurface(d.star?.color ?? "#fff")])),
+    [stars],
+  );
+  useFrame(() => {
+    for (const m of refs.current) m?.quaternion.copy(camera.quaternion);
+  });
+  return (
+    <group>
+      {stars.map((d, i) => {
+        const s = d.star;
+        if (!s) return null;
+        const p = starTargetPosition(d);
+        const perp = new THREE.Vector3()
+          .crossVectors(p.clone().normalize(), UP)
+          .normalize();
+        const comp = s.companion
+          ? p.clone().add(perp.multiplyScalar(s.companion.offset))
+          : null;
+        return (
+          <group key={d.id}>
+            <mesh position={p} material={surfaces.get(d.id)}>
+              <sphereGeometry args={[s.radius, 64, 48]} />
+            </mesh>
+            <mesh
+              position={p}
+              ref={(m) => {
+                refs.current[i * 2] = m;
+              }}
+            >
+              <planeGeometry args={[s.radius * 10, s.radius * 10]} />
+              <shaderMaterial
+                args={[
+                  {
+                    vertexShader: S.glowVertex,
+                    fragmentShader: S.glowFragment,
+                    uniforms: {
+                      uColor: { value: new THREE.Color(s.color) },
+                      uIntensity: { value: 1 },
+                    },
+                    transparent: true,
+                    depthWrite: false,
+                    blending: THREE.AdditiveBlending,
+                  },
+                ]}
+              />
+            </mesh>
+            {comp && s.companion && (
+              <>
+                <mesh position={comp}>
+                  <sphereGeometry args={[s.companion.radius, 32, 24]} />
+                  <meshBasicMaterial color={s.companion.color} />
+                </mesh>
+                <mesh
+                  position={comp}
+                  ref={(m) => {
+                    refs.current[i * 2 + 1] = m;
+                  }}
+                >
+                  <planeGeometry
+                    args={[s.companion.radius * 10, s.companion.radius * 10]}
+                  />
+                  <shaderMaterial
+                    args={[
+                      {
+                        vertexShader: S.glowVertex,
+                        fragmentShader: S.glowFragment,
+                        uniforms: {
+                          uColor: { value: new THREE.Color(s.companion.color) },
+                          uIntensity: { value: 0.9 },
+                        },
+                        transparent: true,
+                        depthWrite: false,
+                        blending: THREE.AdditiveBlending,
+                      },
+                    ]}
+                  />
+                </mesh>
+              </>
+            )}
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+// ── 카메라: 목적지 자리 잡기와 이동 ─────────────────────────
+
+type Pose = { center: THREE.Vector3; dir: THREE.Vector3; dist: number };
+
+function poseFor(dest: Destination, orbits: SkyCatalog["orbits"] | null): Pose {
+  const now = Date.now();
+  if (dest.view === "overview") {
+    return {
+      center: new THREE.Vector3(),
+      dir: new THREE.Vector3(0, 0.9, 0.44).normalize(),
+      dist: 300,
+    };
+  }
+  if (dest.view === "inner") {
+    return {
+      center: new THREE.Vector3(),
+      dir: new THREE.Vector3(0, 0.88, 0.47).normalize(),
+      dist: 82,
+    };
+  }
+  if (dest.star) {
+    const center = starTargetPosition(dest);
+    const back = center.clone().normalize().negate();
+    const perp = new THREE.Vector3().crossVectors(back, UP).normalize();
+    const dir = back
+      .multiplyScalar(0.8)
+      .add(perp.multiplyScalar(0.55))
+      .add(UP.clone().multiplyScalar(0.12))
+      .normalize();
+    return { center, dir, dist: dest.star.radius * 7 };
+  }
+  if (dest.id === "halley") {
+    const center = new THREE.Vector3(
+      ...halleyPosition(HALLEY.perihelion + 10 * 86_400_000),
+    );
+    const anti = center.clone().normalize();
+    const side = new THREE.Vector3().crossVectors(anti, UP).normalize();
+    const dir = side
+      .multiplyScalar(0.9)
+      .add(UP.clone().multiplyScalar(0.25))
+      .add(anti.multiplyScalar(-0.35))
+      .normalize();
+    return {
+      center: center.add(
+        new THREE.Vector3(
+          ...center.clone().normalize().multiplyScalar(3).toArray(),
+        ),
+      ),
+      dir,
+      dist: 9,
+    };
+  }
+  const body = dest.body ? BODY_BY_ID.get(dest.body) : undefined;
+  if (!body || !orbits)
+    return {
+      center: new THREE.Vector3(),
+      dir: new THREE.Vector3(0, 0.2, 1).normalize(),
+      dist: 20,
+    };
+  if (body.id === "sun") {
+    return {
+      center: new THREE.Vector3(),
+      dir: new THREE.Vector3(0.35, 0.22, 1).normalize(),
+      dist: 15,
+    };
+  }
+  const center = new THREE.Vector3(...bodyPosition(body, orbits, now));
+  const sunDir = center.clone().normalize().negate();
+  const side = new THREE.Vector3().crossVectors(sunDir, UP).normalize();
+  let dir: THREE.Vector3;
+  if (body.parent) {
+    const parent = BODY_BY_ID.get(body.parent.id) as BodyDef;
+    const pPos = new THREE.Vector3(...bodyPosition(parent, orbits, now));
+    const away = center.clone().sub(pPos).normalize();
+    dir = away
+      .multiplyScalar(0.85)
+      .add(sunDir.multiplyScalar(0.45))
+      .add(UP.clone().multiplyScalar(0.12))
+      .normalize();
+    return { center, dir, dist: body.radius * 7 };
+  }
+  dir = sunDir
+    .multiplyScalar(0.55)
+    .add(side.multiplyScalar(0.8))
+    .add(UP.clone().multiplyScalar(0.2))
+    .normalize();
+  const reach = body.ring
+    ? body.radius * body.ring.outer * 2.2
+    : body.radius * 4.6;
+  return { center, dir, dist: reach };
+}
+
+const easeInOut = (t: number) =>
+  t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+
+function CameraRig({
+  lookAround,
+  drift,
+  warp,
+}: {
+  lookAround: boolean;
+  drift: boolean;
+  warp: RefObject<number>;
+}) {
+  const { camera, gl } = useThree();
+  const destinationId = useVoyage((s) => s.destinationId);
+  const setPhase = useVoyage((s) => s._setPhase);
+  const [orbits, setOrbits] = useState<SkyCatalog["orbits"] | null>(null);
+  const trip = useRef<{
+    from: THREE.Vector3;
+    fromLook: THREE.Vector3;
+    start: number;
+    duration: number;
+    far: boolean;
+  } | null>(null);
+  const look = useRef(new THREE.Vector3());
+  const yaw = useRef(0);
+  const pitch = useRef(0);
+  const first = useRef(true);
+  const lastProgress = useRef(0);
+
+  useEffect(() => {
+    loadCatalog().then((c) => setOrbits(c.orbits));
+  }, []);
+
+  // 목적지가 바뀌면 지금 자리에서 출발한다.
+  useEffect(() => {
+    if (!orbits) return;
+    const dest = DESTINATION_BY_ID.get(destinationId);
+    if (!dest) return;
+    if (first.current) {
+      first.current = false;
+      const p = poseFor(dest, orbits);
+      camera.position.copy(
+        p.center.clone().add(p.dir.clone().multiplyScalar(p.dist)),
+      );
+      look.current.copy(p.center);
+      camera.lookAt(look.current);
+      setPhase("cruise");
+      return;
+    }
+    const p = poseFor(dest, orbits);
+    const to = p.center.clone().add(p.dir.clone().multiplyScalar(p.dist));
+    const d = camera.position.distanceTo(to);
+    trip.current = {
+      from: camera.position.clone(),
+      fromLook: look.current.clone(),
+      start: performance.now(),
+      duration: Math.min(7, 2.4 + 1.1 * Math.log10(1 + d)) * 1000,
+      far: d > 200,
+    };
+    yaw.current = 0;
+    pitch.current = 0;
+  }, [destinationId, orbits, camera, setPhase]);
+
+  // 끌어서 둘러보기
+  useEffect(() => {
+    if (!lookAround) return;
+    const el = gl.domElement;
+    let down: { x: number; y: number } | null = null;
+    const onDown = (e: PointerEvent) => {
+      down = { x: e.clientX, y: e.clientY };
+      el.setPointerCapture(e.pointerId);
+    };
+    const onMove = (e: PointerEvent) => {
+      if (!down) return;
+      yaw.current -= (e.clientX - down.x) * 0.005;
+      pitch.current = Math.max(
+        -1.2,
+        Math.min(1.2, pitch.current + (e.clientY - down.y) * 0.004),
+      );
+      down = { x: e.clientX, y: e.clientY };
+    };
+    const onUp = () => {
+      down = null;
+    };
+    el.addEventListener("pointerdown", onDown);
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerup", onUp);
+    el.style.cursor = "grab";
+    return () => {
+      el.removeEventListener("pointerdown", onDown);
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerup", onUp);
+    };
+  }, [lookAround, gl]);
+
+  useFrame((_, dt) => {
+    projector.camera = camera as THREE.PerspectiveCamera;
+    projector.width = gl.domElement.clientWidth;
+    projector.height = gl.domElement.clientHeight;
+    if (!orbits) return;
+    const dest = DESTINATION_BY_ID.get(destinationId);
+    if (!dest) return;
+    const p = poseFor(dest, orbits);
+    if (drift && !trip.current) yaw.current += dt * 0.012;
+    const dir = p.dir
+      .clone()
+      .applyAxisAngle(UP, yaw.current)
+      .applyAxisAngle(
+        new THREE.Vector3().crossVectors(p.dir, UP).normalize(),
+        pitch.current,
+      );
+    const target = p.center.clone().add(dir.multiplyScalar(p.dist));
+
+    const t0 = trip.current;
+    if (t0) {
+      const raw = Math.min(1, (performance.now() - t0.start) / t0.duration);
+      const e = easeInOut(raw);
+      const mid = t0.from.clone().lerp(target, 0.5);
+      if (!t0.far)
+        mid.add(UP.clone().multiplyScalar(t0.from.distanceTo(target) * 0.25));
+      // 2차 베지어
+      const a = t0.from.clone().lerp(mid, e);
+      const b = mid.clone().lerp(target, e);
+      camera.position.copy(a.lerp(b, e));
+      look.current.copy(
+        t0.fromLook.clone().lerp(p.center, easeInOut(Math.min(1, raw * 1.5))),
+      );
+      warp.current = (t0.far ? 1 : 0.35) * Math.sin(Math.PI * raw) ** 1.5;
+      if (raw - lastProgress.current > 0.05 || raw === 1) {
+        lastProgress.current = raw;
+        setPhase(raw === 1 ? "cruise" : "travel", raw);
+      }
+      if (raw === 1) {
+        trip.current = null;
+        lastProgress.current = 0;
+      }
+    } else {
+      camera.position.lerp(target, Math.min(1, dt * 3));
+      look.current.lerp(p.center, Math.min(1, dt * 3));
+      warp.current = 0;
+    }
+    camera.lookAt(look.current);
+  });
+  return null;
+}
+
+// ── 이름표 ──────────────────────────────────────────
+
+type LabelSpec = {
+  key: string;
+  text: string;
+  kind: "star" | "constellation" | "body" | "sun";
+  /** 하늘 방향이면 dir, 장면 위치면 at() */
+  dir?: THREE.Vector3;
+  at?: () => THREE.Vector3;
+  body?: BodyDef;
+};
+
+const LABEL_STYLE: Record<LabelSpec["kind"], string> = {
+  star: "font-size:11px;color:rgba(235,240,255,.72);",
+  constellation:
+    "font-size:11px;letter-spacing:.18em;color:rgba(140,170,255,.55);",
+  body: "font-size:12.5px;color:rgba(255,236,200,.92);font-weight:600;",
+  sun: "font-size:12px;color:rgba(255,220,160,.9);font-weight:600;",
+};
+
+function LabelLayer({
+  catalog,
+  container,
+  amount,
+}: {
+  catalog: SkyCatalog;
+  container: RefObject<HTMLDivElement | null>;
+  amount: "few" | "all";
+}) {
+  const { camera, gl } = useThree();
+  const nodes = useRef<Map<string, HTMLSpanElement>>(new Map());
+
+  const specs = useMemo<LabelSpec[]>(() => {
+    const out: LabelSpec[] = [];
+    const magLimit = amount === "all" ? 2.4 : 1.4;
+    for (const s of catalog.named) {
+      if (s.mag > magLimit) continue;
+      const [x, y, z] = toThree(raDecToEcliptic(s.ra, s.dec));
+      out.push({
+        key: `s-${s.hip}`,
+        text: s.ko,
+        kind: "star",
+        dir: new THREE.Vector3(x, y, z),
+      });
+    }
+    for (const c of catalog.constellations) {
+      if (amount === "few" && c.rank > 1) continue;
+      const [x, y, z] = toThree(raDecToEcliptic(c.label[0], c.label[1]));
+      out.push({
+        key: `c-${c.id}`,
+        text: c.ko,
+        kind: "constellation",
+        dir: new THREE.Vector3(x, y, z),
+      });
+    }
+    for (const b of BODIES) {
+      if (b.id === "sun") continue;
+      out.push({
+        key: `b-${b.id}`,
+        text: b.ko,
+        kind: "body",
+        body: b,
+        at: () =>
+          new THREE.Vector3(...bodyPosition(b, catalog.orbits, Date.now())),
+      });
+    }
+    out.push({
+      key: "sun",
+      text: "태양",
+      kind: "sun",
+      at: () => new THREE.Vector3(),
+    });
+    out.push({
+      key: "halley",
+      text: "핼리 혜성",
+      kind: "body",
+      at: () =>
+        new THREE.Vector3(
+          ...halleyPosition(HALLEY.perihelion + 10 * 86_400_000),
+        ),
+    });
+    return out;
+  }, [catalog, amount]);
+
+  useEffect(() => {
+    const root = container.current;
+    if (!root) return;
+    const map = nodes.current;
+    for (const s of specs) {
+      const el = document.createElement("span");
+      el.textContent = s.text;
+      el.style.cssText = `position:absolute;left:0;top:0;white-space:nowrap;text-shadow:0 0 6px #000,0 0 2px #000;will-change:transform;transition:opacity .3s;${LABEL_STYLE[s.kind]}`;
+      root.appendChild(el);
+      map.set(s.key, el);
+    }
+    return () => {
+      for (const el of map.values()) el.remove();
+      map.clear();
+    };
+  }, [specs, container]);
+
+  const v = useMemo(() => new THREE.Vector3(), []);
+  // 행성 이름표가 먼저 자리를 잡고, 별·별자리는 남는 자리에.
+  const ordered = useMemo(() => {
+    const rank = { body: 0, sun: 0, star: 1, constellation: 2 } as const;
+    return [...specs].sort((a, b) => rank[a.kind] - rank[b.kind]);
+  }, [specs]);
+  const occluderBodies = useMemo(
+    () => [
+      ...BODIES.map((b) => ({
+        r: b.radius,
+        at: () =>
+          new THREE.Vector3(...bodyPosition(b, catalog.orbits, Date.now())),
+      })),
+      ...DESTINATIONS.filter((d) => d.star).map((d) => {
+        const p = starTargetPosition(d);
+        return { r: d.star?.radius ?? 1, at: () => p };
+      }),
+    ],
+    [catalog],
+  );
+
+  useFrame(() => {
+    const w = gl.domElement.clientWidth;
+    const h = gl.domElement.clientHeight;
+    const camDist = camera.position.length();
+    const focal =
+      h /
+      2 /
+      Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360);
+    // 화면에서 천체가 차지하는 원(이름표를 가리는 것)
+    const discs: { x: number; y: number; r: number; d: number }[] = [];
+    for (const o of occluderBodies) {
+      const p = o.at();
+      const d = camera.position.distanceTo(p);
+      const rpx = (o.r / d) * focal;
+      if (rpx < 5) continue;
+      v.copy(p).project(camera);
+      if (v.z >= 1) continue;
+      discs.push({
+        x: (v.x * 0.5 + 0.5) * w,
+        y: (-v.y * 0.5 + 0.5) * h,
+        r: rpx,
+        d,
+      });
+    }
+    const placed: { x: number; y: number; hw: number }[] = [];
+    for (const s of ordered) {
+      const el = nodes.current.get(s.key);
+      if (!el) continue;
+      let show = true;
+      let offsetY = 8;
+      let depth = Number.POSITIVE_INFINITY;
+      if (s.dir) {
+        v.copy(s.dir).multiplyScalar(1000).add(camera.position);
+      } else if (s.at) {
+        v.copy(s.at());
+        const d = camera.position.distanceTo(v);
+        depth = d;
+        const r = s.body?.radius ?? 0.1;
+        // 너무 가까우면(화면을 채우면) 이름표를 숨기고, 너무 멀면 행성만 남긴다.
+        const apparent = r / d;
+        if (s.kind === "body") {
+          const isMoon = Boolean(s.body?.parent);
+          show = apparent < 0.08 && (isMoon ? d < 30 : d < 600);
+          offsetY = Math.max(8, apparent * h * 0.6 + 6);
+        } else {
+          show = camDist > 25;
+        }
+      }
+      v.project(camera);
+      const visible =
+        show && v.z < 1 && Math.abs(v.x) < 1.05 && Math.abs(v.y) < 1.05;
+      if (!visible) {
+        el.style.opacity = "0";
+        continue;
+      }
+      const x = (v.x * 0.5 + 0.5) * w;
+      const y = (-v.y * 0.5 + 0.5) * h;
+      // 더 가까운 천체 뒤에 있으면 숨긴다(자기 자신은 제외: 0.99).
+      const hidden = discs.some(
+        (c) => c.d < depth * 0.99 && Math.hypot(c.x - x, c.y - y) < c.r * 1.05,
+      );
+      const hw = (el.offsetWidth || 40) / 2;
+      const ly = y + offsetY;
+      const overlaps = placed.some(
+        (p) => Math.abs(p.x - x) < p.hw + hw + 4 && Math.abs(p.y - ly) < 15,
+      );
+      if (hidden || overlaps) {
+        el.style.opacity = "0";
+        continue;
+      }
+      placed.push({ x, y: ly, hw });
+      el.style.opacity = "1";
+      el.style.transform = `translate(${x.toFixed(1)}px, ${(y + offsetY).toFixed(1)}px) translateX(-50%)`;
+    }
+  });
+  return null;
+}
+
+// ── 워프 줄기(2D 덧그림) ───────────────────────────────
+
+function useWarpStreaks(
+  ref: RefObject<HTMLCanvasElement | null>,
+  warp: RefObject<number>,
+) {
+  useEffect(() => {
+    const canvas = ref.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    const rand = mulberry32(3);
+    const streaks = Array.from({ length: 260 }, () => ({
+      a: rand() * Math.PI * 2,
+      r: rand(),
+      speed: 0.4 + rand(),
+      hue: 200 + rand() * 40,
+    }));
+    let raf = 0;
+    const draw = () => {
+      raf = requestAnimationFrame(draw);
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      if (canvas.width !== w * devicePixelRatio) {
+        canvas.width = w * devicePixelRatio;
+        canvas.height = h * devicePixelRatio;
+      }
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      const k = warp.current ?? 0;
+      if (k < 0.01) return;
+      const cx = w / 2;
+      const cy = h / 2;
+      const maxR = Math.hypot(w, h) / 2;
+      ctx.lineCap = "round";
+      for (const s of streaks) {
+        s.r += 0.012 * s.speed * (0.3 + k * 2.5);
+        if (s.r > 1) s.r = 0.02 + rand() * 0.1;
+        const r0 = s.r * maxR;
+        const len = (20 + 260 * k * k) * s.r * s.speed;
+        const x0 = cx + Math.cos(s.a) * r0;
+        const y0 = cy + Math.sin(s.a) * r0;
+        const x1 = cx + Math.cos(s.a) * (r0 + len);
+        const y1 = cy + Math.sin(s.a) * (r0 + len);
+        ctx.strokeStyle = `hsla(${s.hue}, 90%, 85%, ${0.55 * k * s.r})`;
+        ctx.lineWidth = 0.6 + 1.6 * k * s.r;
+        ctx.beginPath();
+        ctx.moveTo(x0, y0);
+        ctx.lineTo(x1, y1);
+        ctx.stroke();
+      }
+    };
+    raf = requestAnimationFrame(draw);
+    return () => cancelAnimationFrame(raf);
+  }, [ref, warp]);
+}
