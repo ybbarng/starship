@@ -130,9 +130,15 @@ export function formatLightTime(km: number): string {
   const s = km / LIGHT_KM_S;
   if (s < 1) return `${(s * 1000).toFixed(0)}밀리초`;
   if (s < 60) return `${s.toFixed(1)}초`;
-  if (s < 3600) return `${Math.floor(s / 60)}분 ${Math.round(s % 60)}초`;
-  if (s < 86_400)
-    return `${Math.floor(s / 3600)}시간 ${Math.round((s % 3600) / 60)}분`;
+  // 먼저 반올림한 뒤 나눠야 "4분 60초" 같은 글이 나오지 않는다.
+  if (s < 3600) {
+    const t = Math.round(s);
+    return `${Math.floor(t / 60)}분 ${t % 60}초`;
+  }
+  if (s < 86_400) {
+    const t = Math.round(s / 60);
+    return `${Math.floor(t / 60)}시간 ${t % 60}분`;
+  }
   const y = s / 31_557_600;
   if (y >= 1)
     return `${y.toLocaleString("ko-KR", { maximumFractionDigits: 1 })}년`;

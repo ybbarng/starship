@@ -29,3 +29,12 @@ describe("실제 거리", () => {
     expect(formatLightTime(fromEarth("sirius"))).toBe("8.6년");
   });
 });
+
+describe("빛 시간 글", () => {
+  it("반올림이 자리올림을 넘기지 않는다", () => {
+    // 299.9초 → 5분 0초 (4분 60초가 아니다)
+    expect(formatLightTime(299.9 * 299_792.458)).toBe("5분 0초");
+    // 7199.9초 → 2시간 0분
+    expect(formatLightTime(7199.9 * 299_792.458)).toBe("2시간 0분");
+  });
+});
