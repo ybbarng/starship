@@ -1,0 +1,7 @@
+# 배포된 지 7일(10080분)이 안 된 버전은 받지 않는다.
+minimumReleaseAge: 10080
+allowBuilds:
+  lefthook: true
+  sharp: true
+  '@biomejs/biome': true
+  unrs-resolver: true

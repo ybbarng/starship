@@ -1,0 +1,30 @@
+@import "tailwindcss";
+@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+
+@theme {
+  --font-sans:
+    "Pretendard Variable", Pretendard, -apple-system, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --color-hull-950: #05070d;
+  --color-hull-900: #0b1020;
+  --color-hull-800: #141b2f;
+  --color-hull-700: #1f2942;
+  --color-hull-600: #2c3a5c;
+  --color-glow-work: #6cb6ff;
+  --color-glow-personal: #ffb86c;
+  --color-signal-ok: #5ee08a;
+  --color-signal-warn: #ffcf5c;
+  --color-signal-alert: #ff6b6b;
+}
+
+html,
+body {
+  background: var(--color-hull-950);
+  color: #e8ecf6;
+  font-family: var(--font-sans);
+}
+
+body {
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
+}
