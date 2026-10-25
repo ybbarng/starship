@@ -16,13 +16,15 @@ export function useTelemetry(hz = 6): Telemetry {
   return snap;
 }
 
-/** 한국 시각 "15:42:07" */
+/** 한국 시각 "15:42:07". 서버와 브라우저의 첫 글이 어긋나지 않게 화면이 뜬 뒤에 채운다. */
 export function useKoreaTime(): { time: string; date: string } {
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState<Date | null>(null);
   useEffect(() => {
+    setNow(new Date());
     const t = window.setInterval(() => setNow(new Date()), 1000);
     return () => window.clearInterval(t);
   }, []);
+  if (!now) return { time: "--:--:--", date: "" };
   const time = now.toLocaleTimeString("ko-KR", {
     timeZone: "Asia/Seoul",
     hour12: false,
