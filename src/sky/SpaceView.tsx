@@ -9,6 +9,8 @@ import * as THREE from "three";
 import {
   bvToRgb,
   compress,
+  directionToCoords,
+  earthBasis,
   equatorialToEcliptic,
   galacticToEquatorial,
   HALLEY,
@@ -31,12 +33,23 @@ import {
 import { loadCatalog, type SkyCatalog } from "./catalog";
 import { projector } from "./projector";
 import * as S from "./shaders";
+import {
+  distanceKm,
+  REAL_RADIUS_KM,
+  realPositionAU,
+  telemetry,
+} from "./telemetry";
 import { useVoyage } from "./voyage";
 
 const SKY_RADIUS = 9000;
 const STAR_DISTANCE = 2500;
 const UP = new THREE.Vector3(0, 1, 0);
-const TEXTURES = process.env.NEXT_PUBLIC_PLANET_TEXTURES;
+/** 행성 사진 텍스처 폴더. 기본은 저장소의 /textures, "off"면 모두 코드로 그린다. */
+const DEFAULT_TEXTURES = "/textures";
+const TEXTURES =
+  process.env.NEXT_PUBLIC_PLANET_TEXTURES === "off"
+    ? null
+    : (process.env.NEXT_PUBLIC_PLANET_TEXTURES ?? DEFAULT_TEXTURES);
 
 export type SpaceViewProps = {
   className?: string;
@@ -49,6 +62,10 @@ export type SpaceViewProps = {
   drift?: boolean;
   /** 별 크기 배율(작은 창에서는 줄인다) */
   starScale?: number;
+  /** 천체나 이름표를 눌러 그곳으로 날아가기 */
+  clickToFly?: boolean;
+  /** 적도 좌표 격자(적경 2시간, 적위 15도마다) */
+  grid?: boolean;
 };
 
 export function SpaceView({
@@ -58,7 +75,11 @@ export function SpaceView({
   lookAround = false,
   drift = true,
   starScale = 1,
+  clickToFly = true,
+  grid = false,
 }: SpaceViewProps) {
+  const travelTo = useVoyage((s) => s.travelTo);
+  const onPick = clickToFly ? travelTo : undefined;
   const [catalog, setCatalog] = useState<SkyCatalog | null>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   const warpRef = useRef<HTMLCanvasElement>(null);
@@ -98,8 +119,9 @@ export function SpaceView({
               catalog={catalog}
               constellations={constellations}
               starScale={starScale}
+              grid={grid}
             />
-            <SolarSystem catalog={catalog} />
+            <SolarSystem catalog={catalog} onPick={onPick} />
             <StarTargets />
             <CameraRig lookAround={lookAround} drift={drift} warp={warp} />
             {labels !== "none" && (
@@ -107,6 +129,7 @@ export function SpaceView({
                 catalog={catalog}
                 container={labelRef}
                 amount={labels}
+                onPick={onPick}
               />
             )}
           </>
@@ -141,11 +164,14 @@ function SkyDome({
   catalog,
   constellations,
   starScale,
+  grid,
 }: {
   catalog: SkyCatalog;
   constellations: boolean;
   starScale: number;
+  grid: boolean;
 }) {
+  const gridGeo = useMemo(() => equatorialGrid(), []);
   const group = useRef<THREE.Group>(null);
   const { camera, gl } = useThree();
 
@@ -241,6 +267,20 @@ function SkyDome({
         renderOrder={-11}
         frustumCulled={false}
       />
+      {grid && (
+        <lineSegments
+          geometry={gridGeo}
+          renderOrder={-11}
+          frustumCulled={false}
+        >
+          <lineBasicMaterial
+            color="#5fd4c4"
+            transparent
+            opacity={0.13}
+            depthWrite={false}
+          />
+        </lineSegments>
+      )}
       {constellations && (
         <lineSegments geometry={lines} renderOrder={-11} frustumCulled={false}>
           <lineBasicMaterial
@@ -364,31 +404,70 @@ function planetMaterial(body: BodyDef) {
       uHasMap: { value: 0 },
     },
   });
-  if (TEXTURES) {
-    new THREE.TextureLoader().load(
-      `${TEXTURES.replace(/\/$/, "")}/${body.id}.jpg`,
-      (tex) => {
-        tex.colorSpace = THREE.NoColorSpace;
-        if (mat.uniforms.uMap && mat.uniforms.uHasMap) {
-          mat.uniforms.uMap.value = tex;
-          mat.uniforms.uHasMap.value = 1;
-        }
-      },
-      undefined,
-      () => {
-        // 텍스처가 없으면 코드로 그린 표면을 그대로 쓴다.
-      },
-    );
+  mat.uniforms.uNight = { value: null };
+  loadTexture(`${body.id}.jpg`, (tex) => {
+    if (mat.uniforms.uMap && mat.uniforms.uHasMap) {
+      mat.uniforms.uMap.value = tex;
+      mat.uniforms.uHasMap.value = 1;
+    }
+  });
+  if (body.id === "earth") {
+    loadTexture("earth-night.jpg", (tex) => {
+      if (mat.uniforms.uNight) mat.uniforms.uNight.value = tex;
+    });
   }
   return mat;
 }
 
-function SolarSystem({ catalog }: { catalog: SkyCatalog }) {
+/** public/textures에 있는 파일(docs/ASSETS.md). 없는 천체는 코드로 그린 표면을 쓴다. */
+const TEXTURE_FILES = new Set([
+  "sun.jpg",
+  "mercury.jpg",
+  "venus.jpg",
+  "earth.jpg",
+  "earth-night.jpg",
+  "earth-clouds.jpg",
+  "moon.jpg",
+  "mars.jpg",
+  "jupiter.jpg",
+  "saturn.jpg",
+  "saturn-ring.png",
+  "uranus.jpg",
+  "neptune.jpg",
+]);
+
+const loader = new THREE.TextureLoader();
+
+function loadTexture(file: string, onLoad: (tex: THREE.Texture) => void) {
+  if (!TEXTURES) return;
+  // 기본 폴더(/textures)에는 정해진 파일만 있다. 다른 폴더를 주면 무엇이든 시도한다.
+  if (TEXTURES === DEFAULT_TEXTURES && !TEXTURE_FILES.has(file)) return;
+  loader.load(
+    `${TEXTURES.replace(/\/$/, "")}/${file}`,
+    (tex) => {
+      tex.colorSpace = THREE.NoColorSpace;
+      tex.anisotropy = 4;
+      onLoad(tex);
+    },
+    undefined,
+    () => {
+      // 텍스처가 없으면 코드로 그린 표면을 그대로 쓴다.
+    },
+  );
+}
+
+function SolarSystem({
+  catalog,
+  onPick,
+}: {
+  catalog: SkyCatalog;
+  onPick?: (id: string) => void;
+}) {
   return (
     <group>
       <Sun />
       {BODIES.filter((b) => b.id !== "sun").map((b) => (
-        <Planet key={b.id} body={b} catalog={catalog} />
+        <Planet key={b.id} body={b} catalog={catalog} onPick={onPick} />
       ))}
       <AsteroidBelt />
       <Orbits catalog={catalog} />
@@ -407,10 +486,20 @@ function Sun() {
           uTime: { value: 0 },
           uTint: { value: new THREE.Color(1, 1, 1) },
           uIsStar: { value: 0 },
+          uMap: { value: null },
+          uHasMap: { value: 0 },
         },
       }),
     [],
   );
+  useEffect(() => {
+    loadTexture("sun.jpg", (tex) => {
+      if (mat.uniforms.uMap && mat.uniforms.uHasMap) {
+        mat.uniforms.uMap.value = tex;
+        mat.uniforms.uHasMap.value = 1;
+      }
+    });
+  }, [mat]);
   const glow = useRef<THREE.Mesh>(null);
   const far = useRef<THREE.Points>(null);
   const { camera } = useThree();
@@ -476,7 +565,15 @@ function Sun() {
   );
 }
 
-function Planet({ body, catalog }: { body: BodyDef; catalog: SkyCatalog }) {
+function Planet({
+  body,
+  catalog,
+  onPick,
+}: {
+  body: BodyDef;
+  catalog: SkyCatalog;
+  onPick?: (id: string) => void;
+}) {
   const group = useRef<THREE.Group>(null);
   const spin = useRef<THREE.Mesh>(null);
   const mat = useMemo(() => planetMaterial(body), [body]);
@@ -493,6 +590,8 @@ function Planet({ body, catalog }: { body: BodyDef; catalog: SkyCatalog }) {
               uSunPos: { value: new THREE.Vector3() },
               uPlanetPos: { value: new THREE.Vector3() },
               uPlanetRadius: { value: body.radius },
+              uMap: { value: null },
+              uHasMap: { value: 0 },
             },
             transparent: true,
             side: THREE.DoubleSide,
@@ -503,11 +602,71 @@ function Planet({ body, catalog }: { body: BodyDef; catalog: SkyCatalog }) {
   );
   const tilt = ((body.tilt ?? 0) * Math.PI) / 180;
   const segments = body.radius > 0.5 ? 96 : 48;
+  const isEarth = body.id === "earth";
+  const isMoon = body.id === "moon";
+  const clouds = useRef<THREE.Mesh>(null);
+  const cloudMat = useMemo(
+    () =>
+      isEarth
+        ? new THREE.ShaderMaterial({
+            vertexShader: S.planetVertex,
+            fragmentShader: S.cloudFragment,
+            uniforms: {
+              uMap: { value: null },
+              uSunPos: { value: new THREE.Vector3() },
+            },
+            transparent: true,
+            depthWrite: false,
+          })
+        : null,
+    [isEarth],
+  );
+  useEffect(() => {
+    if (cloudMat)
+      loadTexture("earth-clouds.jpg", (tex) => {
+        if (cloudMat.uniforms.uMap) cloudMat.uniforms.uMap.value = tex;
+        if (clouds.current) clouds.current.visible = true;
+      });
+    if (ringMat)
+      loadTexture(`${body.id}-ring.png`, (tex) => {
+        if (ringMat.uniforms.uMap && ringMat.uniforms.uHasMap) {
+          ringMat.uniforms.uMap.value = tex;
+          ringMat.uniforms.uHasMap.value = 1;
+        }
+      });
+  }, [cloudMat, ringMat, body.id]);
+  const basis = useMemo(() => new THREE.Matrix4(), []);
+  const vx = useMemo(() => new THREE.Vector3(), []);
+  const vy = useMemo(() => new THREE.Vector3(), []);
+  const vz = useMemo(() => new THREE.Vector3(), []);
+  const earthBody = BODY_BY_ID.get("earth") as BodyDef;
+  const pickable = Boolean(onPick && DESTINATION_BY_ID.has(body.id));
 
   useFrame((state, dt) => {
-    const [x, y, z] = bodyPosition(body, catalog.orbits, Date.now());
+    const now = Date.now();
+    const [x, y, z] = bodyPosition(body, catalog.orbits, now);
     group.current?.position.set(x, y, z);
-    if (spin.current) spin.current.rotation.y += dt * 0.03;
+    const m = spin.current;
+    if (m && isEarth) {
+      // 지금 이 순간의 실제 자전 각도: 그리니치가 가리키는 방향에 텍스처 경도 0을 맞춘다.
+      const { greenwich: g, north: n, east: e } = earthBasis(now);
+      basis.makeBasis(vx.set(...g), vy.set(...n), vz.set(-e[0], -e[1], -e[2]));
+      m.quaternion.setFromRotationMatrix(basis);
+      if (clouds.current) {
+        clouds.current.quaternion.copy(m.quaternion);
+        clouds.current.rotateY(state.clock.elapsedTime * 0.004);
+      }
+    } else if (m && isMoon) {
+      // 달은 늘 같은 면(텍스처 경도 0)이 지구를 본다.
+      const [ex, ey, ez] = bodyPosition(earthBody, catalog.orbits, now);
+      vx.set(ex - x, ey - y, ez - z).normalize();
+      vz.crossVectors(vx, UP).normalize();
+      vy.crossVectors(vz, vx);
+      basis.makeBasis(vx, vy, vz);
+      m.quaternion.setFromRotationMatrix(basis);
+    } else if (m) {
+      m.rotation.y += dt * 0.03;
+    }
     if (mat.uniforms.uTime) mat.uniforms.uTime.value = state.clock.elapsedTime;
     if (ringMat?.uniforms.uPlanetPos)
       ringMat.uniforms.uPlanetPos.value.set(x, y, z);
@@ -515,10 +674,47 @@ function Planet({ body, catalog }: { body: BodyDef; catalog: SkyCatalog }) {
 
   return (
     <group ref={group}>
-      <group rotation={[0, 0, tilt]}>
-        <mesh ref={spin} material={mat}>
+      <group rotation={[0, 0, isEarth || isMoon ? 0 : tilt]}>
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: three.js 메시라 HTML 접근성 규칙이 맞지 않는다(이름표 버튼이 같은 일을 한다) */}
+        <mesh
+          ref={spin}
+          material={mat}
+          onClick={
+            pickable
+              ? (e) => {
+                  // 끌어서 둘러본 것이면 날아가지 않는다.
+                  if (e.delta > 5) return;
+                  e.stopPropagation();
+                  onPick?.(body.id);
+                }
+              : undefined
+          }
+          onPointerOver={
+            pickable
+              ? (e) => {
+                  e.stopPropagation();
+                  document.body.style.cursor = "pointer";
+                }
+              : undefined
+          }
+          onPointerOut={
+            pickable ? () => (document.body.style.cursor = "") : undefined
+          }
+        >
           <sphereGeometry args={[body.radius, segments, segments / 2]} />
         </mesh>
+        {cloudMat && (
+          <mesh
+            ref={clouds}
+            material={cloudMat}
+            visible={false}
+            raycast={() => null}
+          >
+            <sphereGeometry
+              args={[body.radius * 1.012, segments, segments / 2]}
+            />
+          </mesh>
+        )}
         {ringMat && body.ring && (
           <mesh material={ringMat} rotation={[-Math.PI / 2, 0, 0]}>
             <ringGeometry
@@ -954,8 +1150,13 @@ function CameraRig({
     start: number;
     duration: number;
     far: boolean;
+    /** 출발할 때의 실제 위치(AU) */
+    fromReal: Vec3;
   } | null>(null);
   const look = useRef(new THREE.Vector3());
+  const lastInteract = useRef(0);
+  const lastReal = useRef<Vec3 | null>(null);
+  const camDir = useMemo(() => new THREE.Vector3(), []);
   const yaw = useRef(0);
   const pitch = useRef(0);
   const first = useRef(true);
@@ -990,6 +1191,7 @@ function CameraRig({
       start: performance.now(),
       duration: Math.min(7, 2.4 + 1.1 * Math.log10(1 + d)) * 1000,
       far: d > 200,
+      fromReal: [...telemetry.position] as Vec3,
     };
     yaw.current = 0;
     pitch.current = 0;
@@ -1002,6 +1204,7 @@ function CameraRig({
     let down: { x: number; y: number } | null = null;
     const onDown = (e: PointerEvent) => {
       down = { x: e.clientX, y: e.clientY };
+      lastInteract.current = performance.now();
       el.setPointerCapture(e.pointerId);
     };
     const onMove = (e: PointerEvent) => {
@@ -1035,7 +1238,13 @@ function CameraRig({
     const dest = DESTINATION_BY_ID.get(destinationId);
     if (!dest) return;
     const p = poseFor(dest, orbits);
-    if (drift && !trip.current) yaw.current += dt * 0.012;
+    // 둘러본 뒤 몇 초는 저절로 돌지 않는다.
+    if (
+      drift &&
+      !trip.current &&
+      performance.now() - lastInteract.current > 5000
+    )
+      yaw.current += dt * 0.012;
     const dir = p.dir
       .clone()
       .applyAxisAngle(UP, yaw.current)
@@ -1074,7 +1283,85 @@ function CameraRig({
       warp.current = 0;
     }
     camera.lookAt(look.current);
+    updateTelemetry(dest, orbits, p, t0, dt);
   });
+
+  /** 계기판의 진짜 값: 위치·지구 거리·고도·속도·남은 거리·보는 방향 */
+  function updateTelemetry(
+    dest: Destination,
+    orbits: SkyCatalog["orbits"],
+    p: Pose,
+    t0: typeof trip.current,
+    dt: number,
+  ) {
+    const now = Date.now();
+    const toReal = realPositionAU(dest, orbits, now);
+    const earth = DESTINATION_BY_ID.get("earth") as Destination;
+    const earthReal = realPositionAU(earth, orbits, now);
+    let cur: Vec3 = toReal;
+    if (t0) {
+      const raw = Math.min(1, (performance.now() - t0.start) / t0.duration);
+      const e = easeInOut(raw);
+      cur = [0, 1, 2].map(
+        (i) =>
+          (t0.fromReal[i] ?? 0) +
+          ((toReal[i] ?? 0) - (t0.fromReal[i] ?? 0)) * e,
+      ) as Vec3;
+      telemetry.remainingKm = distanceKm(cur, toReal);
+      telemetry.progress = raw;
+    } else {
+      telemetry.remainingKm = 0;
+      telemetry.progress = 1;
+    }
+    const prev = lastReal.current;
+    telemetry.speedKmS = t0 && prev && dt > 0 ? distanceKm(prev, cur) / dt : 0;
+    lastReal.current = cur;
+    telemetry.traveling = Boolean(t0);
+    telemetry.position = cur;
+    const body = dest.body ? BODY_BY_ID.get(dest.body) : undefined;
+    const realR = body ? REAL_RADIUS_KM[body.id] : undefined;
+    telemetry.altitudeKm =
+      !t0 && body && realR
+        ? Math.max(
+            0,
+            (camera.position.distanceTo(p.center) / body.radius - 1) * realR,
+          )
+        : null;
+    telemetry.earthKm =
+      dest.id === "earth" && !t0
+        ? (telemetry.altitudeKm ?? 0)
+        : distanceKm(cur, earthReal);
+    camera.getWorldDirection(camDir);
+    telemetry.view = directionToCoords([camDir.x, camDir.y, camDir.z]);
+  }
+
+  // 마우스가 가리키는 하늘의 좌표
+  useEffect(() => {
+    const el = gl.domElement;
+    const ray = new THREE.Vector3();
+    const onMove = (e: PointerEvent) => {
+      const r = el.getBoundingClientRect();
+      ray
+        .set(
+          ((e.clientX - r.left) / r.width) * 2 - 1,
+          -((e.clientY - r.top) / r.height) * 2 + 1,
+          0.5,
+        )
+        .unproject(camera)
+        .sub(camera.position)
+        .normalize();
+      telemetry.cursor = directionToCoords([ray.x, ray.y, ray.z]);
+    };
+    const onLeave = () => {
+      telemetry.cursor = null;
+    };
+    el.addEventListener("pointermove", onMove);
+    el.addEventListener("pointerleave", onLeave);
+    return () => {
+      el.removeEventListener("pointermove", onMove);
+      el.removeEventListener("pointerleave", onLeave);
+    };
+  }, [gl, camera]);
   return null;
 }
 
@@ -1088,6 +1375,18 @@ type LabelSpec = {
   dir?: THREE.Vector3;
   at?: () => THREE.Vector3;
   body?: BodyDef;
+  /** 누르면 날아갈 목적지 */
+  target?: string;
+};
+
+/** 이름표 별 중 목적지가 있는 것 */
+const STAR_TARGET: Record<string, string> = {
+  Sirius: "sirius",
+  Vega: "vega",
+  Betelgeuse: "betelgeuse",
+  Antares: "antares",
+  Polaris: "polaris",
+  "Rigil Kentaurus": "alpha-cen",
 };
 
 const LABEL_STYLE: Record<LabelSpec["kind"], string> = {
@@ -1102,10 +1401,12 @@ function LabelLayer({
   catalog,
   container,
   amount,
+  onPick,
 }: {
   catalog: SkyCatalog;
   container: RefObject<HTMLDivElement | null>;
   amount: "few" | "all";
+  onPick?: (id: string) => void;
 }) {
   const { camera, gl } = useThree();
   const nodes = useRef<Map<string, HTMLSpanElement>>(new Map());
@@ -1120,6 +1421,7 @@ function LabelLayer({
         key: `s-${s.hip}`,
         text: s.ko,
         kind: "star",
+        target: STAR_TARGET[s.en],
         dir: new THREE.Vector3(x, y, z),
       });
     }
@@ -1140,6 +1442,7 @@ function LabelLayer({
         text: b.ko,
         kind: "body",
         body: b,
+        target: DESTINATION_BY_ID.has(b.id) ? b.id : undefined,
         at: () =>
           new THREE.Vector3(...bodyPosition(b, catalog.orbits, Date.now())),
       });
@@ -1148,12 +1451,14 @@ function LabelLayer({
       key: "sun",
       text: "태양",
       kind: "sun",
+      target: "sun",
       at: () => new THREE.Vector3(),
     });
     out.push({
       key: "halley",
       text: "핼리 혜성",
       kind: "body",
+      target: "halley",
       at: () =>
         new THREE.Vector3(
           ...halleyPosition(HALLEY.perihelion + 10 * 86_400_000),
@@ -1169,6 +1474,14 @@ function LabelLayer({
     for (const s of specs) {
       const el = document.createElement("span");
       el.textContent = s.text;
+      const target = s.target;
+      if (onPick && target) {
+        // 이름표를 눌러도 그곳으로 날아간다.
+        el.style.pointerEvents = "auto";
+        el.style.cursor = "pointer";
+        el.title = `${s.text}(으)로 가기`;
+        el.addEventListener("click", () => onPick(target));
+      }
       el.style.cssText = `position:absolute;left:0;top:0;white-space:nowrap;text-shadow:0 0 6px #000,0 0 2px #000;will-change:transform;transition:opacity .3s;${LABEL_STYLE[s.kind]}`;
       root.appendChild(el);
       map.set(s.key, el);
@@ -1177,7 +1490,7 @@ function LabelLayer({
       for (const el of map.values()) el.remove();
       map.clear();
     };
-  }, [specs, container]);
+  }, [specs, container, onPick]);
 
   const v = useMemo(() => new THREE.Vector3(), []);
   // 행성 이름표가 먼저 자리를 잡고, 별·별자리는 남는 자리에.
@@ -1332,4 +1645,23 @@ function useWarpStreaks(
     raf = requestAnimationFrame(draw);
     return () => cancelAnimationFrame(raf);
   }, [ref, warp]);
+}
+
+/** 적도 좌표 격자: 적경 2시간(30도)마다 자오선, 적위 15도마다 위선. */
+function equatorialGrid() {
+  const pts: number[] = [];
+  const r = SKY_RADIUS * 0.985;
+  for (let ra = 0; ra < 360; ra += 30) {
+    for (let dec = -88; dec < 88; dec += 4) {
+      pts.push(...skyPoint(ra, dec, r), ...skyPoint(ra, dec + 4, r));
+    }
+  }
+  for (let dec = -75; dec <= 75; dec += 15) {
+    for (let ra = 0; ra < 360; ra += 4) {
+      pts.push(...skyPoint(ra, dec, r), ...skyPoint(ra + 4, dec, r));
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
+  return geo;
 }

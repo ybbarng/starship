@@ -111,6 +111,7 @@ uniform float uTime;
 uniform vec3 uSunPos;
 uniform sampler2D uMap;
 uniform float uHasMap;
+uniform sampler2D uNight;
 varying vec3 vNormalW;
 varying vec3 vPosW;
 varying vec3 vLocal;
@@ -176,7 +177,14 @@ void main() {
   float diff = max(dot(n, L), 0.0);
   float wrap = smoothstep(-0.08, 0.25, dot(n, L));
   vec3 col = base * (0.035 + 1.05 * diff * wrap);
-  if (uType == 2) {
+  if (uType == 2 && uHasMap > 0.5) {
+    // 사진 지구: 밤 쪽에 도시 불빛, 바다에 햇빛 반짝임. 구름은 따로 한 겹 더 그린다.
+    float dark = 1.0 - smoothstep(-0.15, 0.06, dot(n, L));
+    col += texture2D(uNight, vUv).rgb * vec3(1.0, 0.85, 0.6) * dark * 1.3;
+    float water = smoothstep(0.12, 0.02, base.g - base.b * 0.6);
+    vec3 H = normalize(L + V);
+    col += vec3(1.0, 0.95, 0.85) * pow(max(dot(n, H), 0.0), 60.0) * water * 0.6 * wrap;
+  } else if (uType == 2) {
     float cl = smoothstep(0.55, 0.72, fbm(vLocal * 4.0 + vec3(uTime * 0.004, 0.0, 0.0)));
     col = mix(col, vec3(1.0) * (0.04 + diff), cl * 0.85);
     col += vec3(1.0, 0.78, 0.45) * night * (1.0 - smoothstep(-0.15, 0.05, dot(n, L))) * 0.9 * (1.0 - cl);
@@ -194,6 +202,8 @@ ${NOISE}
 uniform float uTime;
 uniform vec3 uTint;
 uniform float uIsStar;
+uniform sampler2D uMap;
+uniform float uHasMap;
 varying vec3 vNormalW;
 varying vec3 vPosW;
 varying vec3 vLocal;
@@ -207,6 +217,9 @@ void main() {
   vec3 c = uIsStar > 0.5
     ? uTint * (0.7 + 0.5 * g) * (0.45 + 0.55 * pow(mu, 0.6))
     : mix(warm, hot, g) * (0.55 + 0.45 * pow(mu, 0.5));
+  if (uHasMap > 0.5 && uIsStar < 0.5) {
+    c = texture2D(uMap, vUv).rgb * (0.6 + 0.3 * g) * (0.6 + 0.5 * pow(mu, 0.5)) * 1.2;
+  }
   gl_FragColor = vec4(c * 1.15, 1.0);
 }
 `;
@@ -230,6 +243,8 @@ uniform float uOuter;
 uniform vec3 uSunPos;
 uniform vec3 uPlanetPos;
 uniform float uPlanetRadius;
+uniform sampler2D uMap;
+uniform float uHasMap;
 varying vec3 vPosW;
 varying vec3 vLocal;
 void main() {
@@ -239,13 +254,19 @@ void main() {
   float bands = 0.55 + 0.45 * sin(t * 90.0 + vnoise(vec3(t * 40.0)) * 4.0);
   float gap = 1.0 - smoothstep(0.0, 0.02, abs(t - 0.62)) * 0.9;
   float a = bands * gap * smoothstep(0.0, 0.05, t) * smoothstep(1.0, 0.9, t) * 0.8;
+  vec3 ringColor = uColor;
+  if (uHasMap > 0.5) {
+    vec4 tx = texture2D(uMap, vec2(t, 0.5));
+    ringColor = tx.rgb;
+    a = tx.a;
+  }
   // 행성 그림자
   vec3 L = normalize(uSunPos - vPosW);
   vec3 toP = uPlanetPos - vPosW;
   float along = dot(toP, L);
   float dist = length(toP - L * along);
   float shadow = along > 0.0 ? smoothstep(uPlanetRadius * 0.95, uPlanetRadius * 1.05, dist) : 1.0;
-  vec3 c = uColor * (0.25 + 0.75 * shadow);
+  vec3 c = ringColor * (0.25 + 0.75 * shadow);
   gl_FragColor = vec4(c, a);
 }
 `;
@@ -297,5 +318,22 @@ void main() {
   if (r > 1.0) discard;
   float g = exp(-r * r * 4.0);
   gl_FragColor = vec4(vColor * g, g);
+}
+`;
+
+/** 지구 구름 한 겹: 구름 지도의 밝기를 투명도로 쓴다. */
+export const cloudFragment = /* glsl */ `
+uniform sampler2D uMap;
+uniform vec3 uSunPos;
+varying vec3 vNormalW;
+varying vec3 vPosW;
+varying vec3 vLocal;
+varying vec2 vUv;
+void main() {
+  vec3 n = normalize(vNormalW);
+  vec3 L = normalize(uSunPos - vPosW);
+  float lit = smoothstep(-0.1, 0.35, dot(n, L));
+  float a = texture2D(uMap, vUv).r;
+  gl_FragColor = vec4(vec3(0.03 + 0.97 * lit), a * 0.92);
 }
 `;

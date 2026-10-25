@@ -252,3 +252,56 @@ export function compress([x, y, z]: Vec3): Vec3 {
 export function toThree([x, y, z]: Vec3): Vec3 {
   return [x, z, -y];
 }
+
+/** 그리니치 평균 항성시(도). 지구가 춘분점에 대해 얼마나 돌았나. */
+export function gmstDeg(ms: number): number {
+  const d = julianDay(ms) - 2_451_545;
+  return (((280.460_618_37 + 360.985_647_366_29 * d) % 360) + 360) % 360;
+}
+
+/**
+ * 지구 표면의 실제 방향(three.js 좌표): 그리니치 자오선, 북극, 동쪽 90도.
+ * 지구본 텍스처(가운데가 경도 0)를 이 기준에 맞추면 지금 이 순간의 낮·밤이 맞는다.
+ */
+export function earthBasis(ms: number): {
+  greenwich: Vec3;
+  north: Vec3;
+  east: Vec3;
+} {
+  const t = (gmstDeg(ms) * Math.PI) / 180;
+  const conv = (v: Vec3) => toThree(equatorialToEcliptic(v));
+  return {
+    greenwich: conv([Math.cos(t), Math.sin(t), 0]),
+    north: conv([0, 0, 1]),
+    east: conv([-Math.sin(t), Math.cos(t), 0]),
+  };
+}
+
+/** three.js 방향 벡터 → 적경·적위, 황경·황위(도) */
+export function directionToCoords([x, y, z]: Vec3): {
+  ra: number;
+  dec: number;
+  lon: number;
+  lat: number;
+} {
+  // three → 황도: (x, y, z) = (ex, ez, -ey)
+  const ex = x;
+  const ey = -z;
+  const ez = y;
+  const r = Math.hypot(ex, ey, ez) || 1;
+  const lon = ((Math.atan2(ey, ex) * 180) / Math.PI + 360) % 360;
+  const lat = (Math.asin(ez / r) * 180) / Math.PI;
+  const c = Math.cos(OBLIQUITY);
+  const s = Math.sin(OBLIQUITY);
+  // 황도 → 적도
+  const qx = ex;
+  const qy = ey * c - ez * s;
+  const qz = ey * s + ez * c;
+  const ra = ((Math.atan2(qy, qx) * 180) / Math.PI + 360) % 360;
+  const dec = (Math.asin(qz / r) * 180) / Math.PI;
+  return { ra, dec, lon, lat };
+}
+
+export const AU_KM = 149_597_870.7;
+export const LIGHT_KM_S = 299_792.458;
+export const LY_AU = 63_241.077;

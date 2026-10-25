@@ -2,10 +2,15 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   bvToRgb,
+  directionToCoords,
   type Elements,
+  earthBasis,
   galacticToEquatorial,
+  gmstDeg,
   halleyAt,
   heliocentric,
+  raDecToEcliptic,
+  toThree,
 } from "./astro";
 
 const sky = JSON.parse(
@@ -56,5 +61,48 @@ describe("좌표와 색", () => {
     const [r2, , b2] = bvToRgb(1.8);
     expect(b1).toBeGreaterThan(r1 - 0.01);
     expect(r2).toBeGreaterThan(b2);
+  });
+});
+
+describe("지구 자전과 좌표", () => {
+  it("J2000.0 정오의 그리니치 항성시는 280.46도", () => {
+    expect(gmstDeg(Date.UTC(2000, 0, 1, 12))).toBeCloseTo(280.46, 1);
+  });
+
+  it("방향 → 좌표는 적경·적위 → 방향의 역", () => {
+    const [x, y, z] = toThree(raDecToEcliptic(101.29, -16.72));
+    const c = directionToCoords([x, y, z]);
+    expect(c.ra).toBeCloseTo(101.29, 3);
+    expect(c.dec).toBeCloseTo(-16.72, 3);
+  });
+
+  it("북극은 적위 +90도", () => {
+    const { north } = earthBasis(Date.UTC(2026, 9, 25));
+    expect(directionToCoords(north).dec).toBeCloseTo(90, 3);
+  });
+});
+
+describe("서울의 낮과 밤", () => {
+  const seoulFacesSun = (ms: number) => {
+    const earth = toThree(heliocentric(sky.orbits.ter as Elements, ms));
+    const toSun = earth.map((v) => -v);
+    const { greenwich: g, north: n, east: e } = earthBasis(ms);
+    const lat = (37.57 * Math.PI) / 180;
+    const lon = (126.98 * Math.PI) / 180;
+    const p = [0, 1, 2].map(
+      (i) =>
+        Math.cos(lat) *
+          (Math.cos(lon) * (g[i] ?? 0) + Math.sin(lon) * (e[i] ?? 0)) +
+        Math.sin(lat) * (n[i] ?? 0),
+    );
+    return p.reduce((s, v, i) => s + v * (toSun[i] ?? 0), 0) > 0;
+  };
+
+  it("한국 시각 오후 3시 반이면 낮", () => {
+    expect(seoulFacesSun(Date.UTC(2026, 9, 25, 6, 30))).toBe(true);
+  });
+
+  it("한국 시각 새벽 3시면 밤", () => {
+    expect(seoulFacesSun(Date.UTC(2026, 9, 24, 18, 0))).toBe(false);
   });
 });
