@@ -54,6 +54,9 @@ const named = stars
   })
   .sort((a, b) => a.mag - b.mag);
 
+// 원자료의 한국어 이름 오류를 바로잡는다.
+const KO_FIX = { Crv: "까마귀자리" };
+
 const conInfo = new Map(
   read("constellations.json").features.map((f) => [f.id, f]),
 );
@@ -63,7 +66,7 @@ const constellations = read("constellations.lines.json").features.map((f) => {
   return {
     id: f.id,
     en: info?.properties.en ?? f.id,
-    ko: info?.properties.ko ?? f.id,
+    ko: KO_FIX[f.id] ?? info?.properties.ko ?? f.id,
     rank: Number(info?.properties.rank ?? 3),
     label: [r2(ra(lon)), r2(lat)],
     lines: f.geometry.coordinates.map((line) =>
