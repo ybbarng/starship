@@ -23,6 +23,10 @@ case "${1:-}" in
   staged)
     found=0
     while IFS= read -r file; do
+      # 제3자 공개 자료에서 만든 파일(별 이름 등)은 낱말 조각이 우연히 겹쳐 건너뛴다.
+      case "$file" in
+        public/sky/*) continue ;;
+      esac
       if grep -q -i -F -f "$patterns" <<<"$file"; then
         echo "금지어: 파일 이름 $file"
         found=1
