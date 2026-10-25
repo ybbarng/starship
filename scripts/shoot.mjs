@@ -32,7 +32,7 @@ page.on("console", (m) => {
     logs.push(`[${m.type()}] ${m.text()}`);
 });
 page.on("pageerror", (e) => logs.push(`[pageerror] ${e.message}`));
-await page.goto(url, { waitUntil: "networkidle" });
+await page.goto(url, { waitUntil: "load" });
 await page.waitForTimeout(Number(opt("--wait", "4000")));
 const scroll = opt("--scroll");
 if (scroll) {
