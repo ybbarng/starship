@@ -9,8 +9,8 @@ export const PROTOCOL = "starship/1" as const;
 export const Context = z.enum(["work", "personal"]);
 export type Context = z.infer<typeof Context>;
 
-/** 시각은 모두 Unix 밀리초. */
-const Millis = z.number().int().nonnegative();
+/** 시각은 모두 Unix 밀리초. 소수점이 와도 받아서 반올림한다. */
+const Millis = z.number().nonnegative().transform(Math.round);
 
 /**
  * 할 일이 어디서 왔나.
