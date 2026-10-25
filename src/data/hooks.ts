@@ -12,13 +12,34 @@ import {
 } from "@/protocol/v1";
 import { useToast } from "./toast";
 
+/** 데모 시나리오(?demo=)와 자리(페이지 경로)를 서버에 넘긴다. */
 function scenarioParam(): string {
   if (typeof window === "undefined") return "";
+  const q = new URLSearchParams({ seat: window.location.pathname });
   const demo = new URLSearchParams(window.location.search).get("demo");
-  return demo ? `?demo=${encodeURIComponent(demo)}` : "";
+  if (demo) q.set("demo", demo);
+  return `?${q}`;
+}
+
+let resetDone = false;
+
+/** 데모 모드에서 이 자리의 상태를 처음으로 돌린다. 주소에 ?reset=1이 있으면 처음 한 번 저절로. */
+export async function resetDemo(): Promise<void> {
+  await fetch(`/api/v1/actions${scenarioParam()}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ reset: true }),
+  });
 }
 
 async function fetchSnapshot(): Promise<Snapshot> {
+  if (
+    !resetDone &&
+    new URLSearchParams(window.location.search).get("reset") === "1"
+  ) {
+    resetDone = true;
+    await resetDemo();
+  }
   const res = await fetch(`/api/v1/snapshot${scenarioParam()}`, {
     cache: "no-store",
   });
@@ -27,7 +48,7 @@ async function fetchSnapshot(): Promise<Snapshot> {
 }
 
 async function postAction(req: ActionRequest): Promise<ActionResult> {
-  const res = await fetch("/api/v1/actions", {
+  const res = await fetch(`/api/v1/actions${scenarioParam()}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(req),

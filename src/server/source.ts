@@ -19,25 +19,39 @@ export function sourceInfo(): SourceInfo {
 }
 
 // dev 서버가 모듈을 다시 읽어도 데모 상태가 이어지게 globalThis에 둔다.
-const g = globalThis as typeof globalThis & { __starshipDemo?: DemoState };
-function demoState() {
-  g.__starshipDemo ??= createDemoState();
-  return g.__starshipDemo;
+// 자리(seat, 보통 페이지 경로)마다 따로 두어 여러 시안이 서로의 데모를 건드리지 않게 한다.
+const g = globalThis as typeof globalThis & {
+  __starshipDemoSeats?: Map<string, DemoState>;
+};
+function demoState(seat: string) {
+  g.__starshipDemoSeats ??= new Map();
+  let s = g.__starshipDemoSeats.get(seat);
+  if (!s) {
+    s = createDemoState();
+    g.__starshipDemoSeats.set(seat, s);
+  }
+  return s;
 }
 
-export function resetDemo() {
-  g.__starshipDemo = createDemoState();
+export function resetDemo(seat: string) {
+  g.__starshipDemoSeats?.set(seat, createDemoState());
 }
 
-export async function getSnapshot(scenario: Scenario): Promise<Snapshot> {
+export async function getSnapshot(
+  scenario: Scenario,
+  seat = "default",
+): Promise<Snapshot> {
   const info = sourceInfo();
-  if (info.mode === "demo") return buildSnapshot(demoState(), scenario);
+  if (info.mode === "demo") return buildSnapshot(demoState(seat), scenario);
   const res = await fetch(`${info.base}/v1/snapshot`, { cache: "no-store" });
   if (!res.ok) throw new Error(`snapshot ${res.status}`);
   return Snapshot.parse(await res.json());
 }
 
-export async function runAction(req: ActionRequest): Promise<ActionResult> {
+export async function runAction(
+  req: ActionRequest,
+  seat = "default",
+): Promise<ActionResult> {
   const info = sourceInfo();
   if (info.mode === "remote") {
     const res = await fetch(`${info.base}/v1/actions`, {
@@ -49,11 +63,11 @@ export async function runAction(req: ActionRequest): Promise<ActionResult> {
       return { ok: false, note: `서버가 거절했어요 (${res.status})` };
     return ActionResult.parse(await res.json());
   }
-  return demoAction(req);
+  return demoAction(req, seat);
 }
 
-function demoAction(req: ActionRequest): ActionResult {
-  const state = demoState();
+function demoAction(req: ActionRequest, seat: string): ActionResult {
+  const state = demoState(seat);
   if (req.target === "crew") {
     return req.action === "focus"
       ? { ok: true, note: `${req.id} 창으로 옮겼어요 (데모)` }

@@ -10,6 +10,7 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
+  const seat = new URL(request.url).searchParams.get("seat") ?? "default";
   const body: unknown = await request.json().catch(() => null);
   if (
     sourceInfo().mode === "demo" &&
@@ -17,12 +18,12 @@ export async function POST(request: Request) {
     body !== null &&
     "reset" in body
   ) {
-    resetDemo();
+    resetDemo(seat);
     return Response.json({ ok: true, note: "데모를 처음 상태로 돌렸어요" });
   }
   const parsed = ActionRequest.safeParse(body);
   if (!parsed.success) {
     return Response.json({ ok: false, note: "잘못된 요청" }, { status: 400 });
   }
-  return Response.json(await runAction(parsed.data));
+  return Response.json(await runAction(parsed.data, seat));
 }
