@@ -4,6 +4,7 @@
 // 목적지는 useVoyage().travelTo(id)로 바꾼다.
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
+import { twMerge } from "tailwind-merge";
 import * as THREE from "three";
 import {
   bvToRgb,
@@ -74,13 +75,9 @@ export function SpaceView({
   useWarpStreaks(warpRef, warp);
 
   return (
+    // 배치는 className으로 받는다(예: "absolute inset-0"). 주지 않으면 relative.
     <div
-      className={className}
-      style={{
-        position: "relative",
-        overflow: "hidden",
-        background: "#02030a",
-      }}
+      className={twMerge("relative overflow-hidden bg-[#02030a]", className)}
     >
       <Canvas
         linear
