@@ -1,5 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
+import { ActClock } from "./ActClock";
 import styles from "./Animal.module.css";
+import { type Act, hashSeed } from "./acts";
 
 export const ANIMAL_KINDS = [
   "cat",
@@ -191,7 +193,7 @@ const SPECS: Record<AnimalKind, Spec> = {
 
 const POSE_LABEL: Record<Pose, string> = {
   work: "일하는 중",
-  wave: "손을 흔들며 부르는 중",
+  wave: "나를 부르는 중",
   sleep: "자는 중",
   walk: "걷는 중",
   stand: "서 있음",
@@ -217,18 +219,28 @@ export interface AnimalProps {
   className?: string;
   /** work·off 자세에서 책상과 의자를 그린다. 기본 true. */
   furniture?: boolean;
-}
-
-/** 같은 그림이 동시에 같은 박자로 움직이지 않게 이름으로 시작점을 흩는다. */
-function phaseOf(seed: string): string {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
-  return `${-((Math.abs(h) % 1000) / 1000) * 3}s`;
+  /**
+   * 부름(`wave`)의 급한 정도 0..1. 기본 0.6.
+   * 낮으면 슬쩍 돌아보고 갸웃, 높으면 일어서 몸을 기울이며 손짓하고 깡충 뛴다.
+   * 기다린 시간으로 넘기면 된다.
+   */
+  urgency?: number;
+  /** 확인판용: 이 동작만 되풀이한다. 보통은 비워 둔다. */
+  act?: Act;
 }
 
 const at = (x: number, y: number): CSSProperties => ({
   transformOrigin: `${x}px ${y}px`,
 });
+
+const cx = (...names: (string | false | undefined)[]) =>
+  names.filter(Boolean).join(" ");
+
+/** 흰색에서 주황빛 노랑으로: 급할수록 말풍선이 따뜻해진다. */
+function bubbleFill(u: number): string {
+  const mix = (a: number, b: number) => Math.round(a + (b - a) * u);
+  return `rgb(${mix(255, 255)} ${mix(255, 196)} ${mix(255, 84)})`;
+}
 
 export function Animal({
   kind,
@@ -238,12 +250,21 @@ export function Animal({
   label,
   className,
   furniture = true,
+  urgency = 0.6,
+  act,
 }: AnimalProps) {
   const s = SPECS[kind];
   const text = label ?? `${s.name} 선원, ${POSE_LABEL[pose]}`;
+  const u = Math.min(1, Math.max(0, Number.isFinite(urgency) ? urgency : 0.6));
+  // 같은 그림이 같은 박자로 움직이지 않게: 이름으로 시작점과 빠르기를 흩는다.
+  const seed = `${label ?? ""}|${kind}`;
+  const h = hashSeed(seed);
+  const tempo = 0.86 + (h % 280) / 1000;
   const style = {
     "--accent": ACCENT[context],
-    "--phase": phaseOf(`${label ?? ""}${kind}${pose}`),
+    "--phase": `${-((h % 997) / 997) * 4}s`,
+    "--tempo": tempo.toFixed(3),
+    "--u": u.toFixed(2),
   } as CSSProperties;
 
   let body: ReactNode;
@@ -252,7 +273,7 @@ export function Animal({
       body = <WorkPose s={s} furniture={furniture} />;
       break;
     case "wave":
-      body = <WavePose s={s} />;
+      body = <WavePose s={s} u={u} />;
       break;
     case "sleep":
       body = <SleepPose s={s} />;
@@ -275,11 +296,25 @@ export function Animal({
       height={size * 1.25}
       role="img"
       aria-label={text}
+      data-pose={pose}
       className={className ? `${styles.root} ${className}` : styles.root}
       style={style}
     >
       <title>{text}</title>
       {body}
+      <ActClock
+        pose={pose}
+        traits={{
+          kind,
+          hasEars: s.ear !== "none",
+          hasTail: s.tail !== "none",
+          furniture,
+        }}
+        seed={seed}
+        urgency={u}
+        tempo={tempo}
+        act={act}
+      />
     </svg>
   );
 }
@@ -288,6 +323,16 @@ export function Animal({
 
 type Eyes = "open" | "down" | "closed";
 type Mouth = "smile" | "open" | "sleep";
+/** 동작 중에 잠깐 바꿔 끼우는 표정 */
+type Alt = "up" | "yawn" | "peek";
+
+const ALT_FACE: Record<Alt, { eyes: Eyes; mouth: Mouth; className: string }> = {
+  up: { eyes: "open", mouth: "smile", className: styles.faceUp ?? "" },
+  yawn: { eyes: "closed", mouth: "open", className: styles.faceYawn ?? "" },
+  peek: { eyes: "down", mouth: "sleep", className: styles.facePeek ?? "" },
+};
+
+const earClass = (d: number) => (d < 0 ? styles.earL : styles.earR);
 
 function Head({
   s,
@@ -297,6 +342,7 @@ function Head({
   mouth,
   lookX = 0,
   headset = true,
+  alts = [],
 }: {
   s: Spec;
   x: number;
@@ -305,6 +351,7 @@ function Head({
   mouth: Mouth;
   lookX?: number;
   headset?: boolean;
+  alts?: Alt[];
 }) {
   const dy = eyes === "down" ? 4 : 0;
   const fx = x + lookX;
@@ -313,27 +360,42 @@ function Head({
     <g>
       <EarsBack s={s} x={x} y={y} />
       <ellipse cx={x} cy={y} rx={s.rx} ry={s.ry} fill={s.fur} />
-      <FacePatch s={s} x={fx} y={fy} />
+      <g className={styles.face}>
+        <FacePatch s={s} x={fx} y={fy} />
+      </g>
       <EarsFront s={s} x={x} y={y} />
       {headset && <Headset s={s} x={x} y={y} />}
-      <EyePair s={s} x={fx} y={fy} eyes={eyes} />
-      <ellipse
-        cx={fx - 22}
-        cy={fy + 13}
-        rx={6}
-        ry={3.8}
-        fill={CHEEK}
-        opacity={0.6}
-      />
-      <ellipse
-        cx={fx + 22}
-        cy={fy + 13}
-        rx={6}
-        ry={3.8}
-        fill={CHEEK}
-        opacity={0.6}
-      />
-      <NoseMouth s={s} x={fx} y={fy} mouth={mouth} />
+      <g className={styles.face}>
+        <ellipse
+          cx={fx - 22}
+          cy={fy + 13}
+          rx={6}
+          ry={3.8}
+          fill={CHEEK}
+          opacity={0.6}
+        />
+        <ellipse
+          cx={fx + 22}
+          cy={fy + 13}
+          rx={6}
+          ry={3.8}
+          fill={CHEEK}
+          opacity={0.6}
+        />
+        <g className={alts.length ? styles.faceBase : undefined}>
+          <EyePair s={s} x={fx} y={fy} eyes={eyes} />
+          <NoseMouth s={s} x={fx} y={fy} mouth={mouth} />
+        </g>
+        {alts.map((a) => {
+          const f = ALT_FACE[a];
+          return (
+            <g key={a} className={cx(styles.alt, f.className)}>
+              <EyePair s={s} x={fx} y={y} eyes={f.eyes} still />
+              <NoseMouth s={s} x={fx} y={fy} mouth={f.mouth} />
+            </g>
+          );
+        })}
+      </g>
     </g>
   );
 }
@@ -344,7 +406,7 @@ function EarsBack({ s, x, y }: { s: Spec; x: number; y: number }) {
       return (
         <g strokeLinejoin="round">
           {[-1, 1].map((d) => (
-            <g key={d}>
+            <g key={d} className={earClass(d)}>
               <path
                 d={`M${x + d * 30} ${y - 8} L${x + d * 25} ${y - 44} L${x + d * 6} ${y - 28} Z`}
                 fill={s.fur}
@@ -372,7 +434,7 @@ function EarsBack({ s, x, y }: { s: Spec; x: number; y: number }) {
       return (
         <g>
           {[-1, 1].map((d) => (
-            <g key={d}>
+            <g key={d} className={earClass(d)}>
               <circle cx={x + d * 25} cy={y - 24} r={12} fill={s.fur} />
               <circle cx={x + d * 25} cy={y - 24} r={6.5} fill={s.inner} />
             </g>
@@ -383,7 +445,7 @@ function EarsBack({ s, x, y }: { s: Spec; x: number; y: number }) {
       return (
         <g>
           {[-1, 1].map((d) => (
-            <g key={d}>
+            <g key={d} className={earClass(d)}>
               <circle cx={x + d * 24} cy={y - 24} r={9} fill={s.fur} />
               <circle cx={x + d * 24} cy={y - 24} r={4.5} fill={s.inner} />
             </g>
@@ -394,21 +456,23 @@ function EarsBack({ s, x, y }: { s: Spec; x: number; y: number }) {
       return (
         <g>
           {[-1, 1].map((d) => (
-            <g key={d} transform={`rotate(${d * 9} ${x + d * 13} ${y - 26})`}>
-              <ellipse
-                cx={x + d * 13}
-                cy={y - 46}
-                rx={9.5}
-                ry={22}
-                fill={s.fur}
-              />
-              <ellipse
-                cx={x + d * 13}
-                cy={y - 44}
-                rx={4.5}
-                ry={15}
-                fill={s.inner}
-              />
+            <g key={d} className={earClass(d)}>
+              <g transform={`rotate(${d * 9} ${x + d * 13} ${y - 26})`}>
+                <ellipse
+                  cx={x + d * 13}
+                  cy={y - 46}
+                  rx={9.5}
+                  ry={22}
+                  fill={s.fur}
+                />
+                <ellipse
+                  cx={x + d * 13}
+                  cy={y - 44}
+                  rx={4.5}
+                  ry={15}
+                  fill={s.inner}
+                />
+              </g>
             </g>
           ))}
         </g>
@@ -419,6 +483,7 @@ function EarsBack({ s, x, y }: { s: Spec; x: number; y: number }) {
           {[-1, 1].map((d) => (
             <path
               key={d}
+              className={earClass(d)}
               d={`M${x + d * 30} ${y - 12} L${x + d * 30} ${y - 38} L${x + d * 12} ${y - 28} Z`}
               fill={s.dark}
               stroke={s.dark}
@@ -437,15 +502,16 @@ function EarsFront({ s, x, y }: { s: Spec; x: number; y: number }) {
   return (
     <g>
       {[-1, 1].map((d) => (
-        <ellipse
-          key={d}
-          cx={x + d * 31}
-          cy={y - 2}
-          rx={10}
-          ry={21}
-          fill={s.dark}
-          transform={`rotate(${d * -18} ${x + d * 31} ${y - 18})`}
-        />
+        <g key={d} className={cx(earClass(d), styles.earFlop)}>
+          <ellipse
+            cx={x + d * 31}
+            cy={y - 2}
+            rx={10}
+            ry={21}
+            fill={s.dark}
+            transform={`rotate(${d * -18} ${x + d * 31} ${y - 18})`}
+          />
+        </g>
       ))}
     </g>
   );
@@ -533,11 +599,14 @@ function EyePair({
   x,
   y,
   eyes,
+  still = false,
 }: {
   s: Spec;
   x: number;
   y: number;
   eyes: Eyes;
+  /** 깜빡이지 않는다(잠깐 바꿔 끼우는 표정) */
+  still?: boolean;
 }) {
   const big = s.face === "owl" ? 1.3 : 1;
   const gap = s.face === "owl" ? 13 : 12;
@@ -556,7 +625,7 @@ function EyePair({
   const ry = eyes === "down" ? 4 : 6.2;
   const ring = s.face === "raccoon" || s.face === "penguin";
   return (
-    <g className={styles.blink}>
+    <g className={still ? undefined : styles.blink}>
       {[-1, 1].map((d) => (
         <g key={d}>
           {ring && (
@@ -759,31 +828,100 @@ function starPath(cx: number, cy: number, r: number, ir: number): string {
   return `M${pts.join(" L")} Z`;
 }
 
-function Arm({
-  x1,
-  y1,
-  x2,
-  y2,
+/**
+ * 두 마디 팔. 위팔은 어깨(x,y)에서, 아래팔은 팔꿈치에서 돈다.
+ * a1·a2는 기본 자세 각도(시계 방향 +, 0 = 아래로). CSS는 그 위에 더하는 각도만 다룬다.
+ */
+function Limb({
   s,
+  x,
+  y,
+  l,
+  a1,
+  a2,
+  up,
+  fore,
+  loop,
+  hold,
+  hand,
 }: {
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
   s: Spec;
+  x: number;
+  y: number;
+  /** 한 마디 길이 */
+  l: number;
+  a1: number;
+  a2: number;
+  up?: string;
+  fore?: string;
+  loop?: string;
+  /** 손에 쥔 물건(손 아래에 그린다) */
+  hold?: ReactNode;
+  /** 손 모양을 바꿀 때 */
+  hand?: ReactNode;
 }) {
+  const ey = y + l;
+  const hy = ey + l;
+  return (
+    <g transform={`rotate(${a1} ${x} ${y})`}>
+      <g className={cx(styles.pivot, up)} style={at(x, y)}>
+        <line
+          x1={x}
+          y1={y}
+          x2={x}
+          y2={ey}
+          strokeWidth={13}
+          strokeLinecap="round"
+          className={styles.suitStroke}
+        />
+        <g transform={`rotate(${a2} ${x} ${ey})`}>
+          <g className={cx(styles.pivot, fore)} style={at(x, ey)}>
+            <g className={cx(styles.pivot, loop)} style={at(x, ey)}>
+              <line
+                x1={x}
+                y1={ey}
+                x2={x}
+                y2={hy}
+                strokeWidth={12}
+                strokeLinecap="round"
+                className={styles.suitStroke}
+              />
+              {hold}
+              {hand ?? <circle cx={x} cy={hy} r={7.5} fill={s.fur} />}
+            </g>
+          </g>
+        </g>
+      </g>
+    </g>
+  );
+}
+
+/** 컵: (x,y)가 가운데 */
+function Mug({ x, y }: { x: number; y: number }) {
   return (
     <g>
-      <line
-        x1={x1}
-        y1={y1}
-        x2={x2}
-        y2={y2}
-        strokeWidth={13}
-        strokeLinecap="round"
-        className={styles.suitStroke}
+      <path
+        d={`M${x + 5} ${y - 3} Q${x + 10} ${y - 3} ${x + 10} ${y + 1} Q${x + 10} ${y + 4} ${x + 5} ${y + 3}`}
+        fill="none"
+        stroke="#e9edf5"
+        strokeWidth={2.2}
       />
-      <circle cx={x2} cy={y2} r={7.5} fill={s.fur} />
+      <rect
+        x={x - 5.5}
+        y={y - 6}
+        width={11}
+        height={12}
+        rx={2.5}
+        fill="#e9edf5"
+      />
+      <rect
+        x={x - 5.5}
+        y={y - 1}
+        width={11}
+        height={3}
+        className={styles.glow}
+      />
+      <ellipse cx={x} cy={y - 6} rx={5.5} ry={1.4} fill="#7a4a2c" />
     </g>
   );
 }
@@ -976,51 +1114,171 @@ function Keyboard() {
 
 /* ───────── 자세 ───────── */
 
-function WorkPose({ s, furniture }: { s: Spec; furniture: boolean }) {
+/** 꼬리: 바깥 묶음은 짧은 동작, 안쪽 묶음은 늘 하는 살랑임 */
+function Tail({ s, x, y }: { s: Spec; x: number; y: number }) {
+  if (s.tail === "none") return null;
   return (
-    <g>
-      {furniture && <Chair />}
-      <Suit cx={80} cy={154} rx={29} ry={32} />
-      <g className={`${styles.pivot} ${styles.nod}`} style={at(80, 124)}>
-        <Head s={s} x={80} y={94} eyes="down" mouth="smile" />
-      </g>
-      {furniture ? <Desk lit /> : null}
-      <Keyboard />
-      <g className={styles.typeA}>
-        <Arm s={s} x1={58} y1={134} x2={66} y2={147} />
-      </g>
-      <g className={styles.typeB}>
-        <Arm s={s} x1={102} y1={134} x2={94} y2={147} />
+    <g className={cx(styles.pivot, styles.tail)} style={at(x, y)}>
+      <g className={cx(styles.pivot, styles.tailLoop)} style={at(x, y)}>
+        <TailShape s={s} x={x} y={y} />
       </g>
     </g>
   );
 }
 
-function WavePose({ s }: { s: Spec }) {
+function WorkPose({ s, furniture }: { s: Spec; furniture: boolean }) {
   return (
-    <g className={styles.hop}>
-      <TailShape s={s} x={96} y={160} />
-      <Leg x={64} top={164} s={s} />
-      <Leg x={88} top={164} s={s} />
-      <Suit cx={76} cy={140} rx={27} ry={32} />
-      <Arm s={s} x1={54} y1={126} x2={46} y2={154} />
-      <Head s={s} x={74} y={78} eyes="open" mouth="open" />
-      {/* 크게 흔드는 손: 머리 앞, 바깥쪽으로 높이 */}
-      <g className={`${styles.pivot} ${styles.waveArm}`} style={at(100, 124)}>
-        <Arm s={s} x1={100} y1={124} x2={126} y2={64} />
-        <Palm s={s} x={126} y={60} />
+    <g>
+      {furniture && <Chair />}
+      <g className={cx(styles.pivot, styles.body)} style={at(80, 186)}>
+        <g className={cx(styles.pivot, styles.breath)} style={at(80, 186)}>
+          <Suit cx={80} cy={154} rx={29} ry={32} />
+        </g>
       </g>
-      {/* 흔드는 손 옆 움직임 선 */}
-      <g
-        className={`${styles.pivot} ${styles.shout}`}
-        style={at(150, 58)}
-        stroke="#ffffff"
-        strokeWidth={3.4}
-        strokeLinecap="round"
-        fill="none"
-      >
-        <path d="M144 44 Q152 56 146 70" />
-        <path d="M153 36 Q164 56 155 78" opacity={0.6} />
+      <g className={cx(styles.pivot, styles.head)} style={at(80, 124)}>
+        <g className={cx(styles.pivot, styles.nod)} style={at(80, 124)}>
+          <Head
+            s={s}
+            x={80}
+            y={94}
+            eyes="down"
+            mouth="smile"
+            alts={["up", "yawn"]}
+          />
+        </g>
+      </g>
+      {furniture ? <Desk lit /> : null}
+      <Keyboard />
+      {furniture && (
+        <g className={styles.mugDesk}>
+          <Mug x={111} y={144} />
+        </g>
+      )}
+      <Limb
+        s={s}
+        x={58}
+        y={134}
+        l={11}
+        a1={13}
+        a2={-86}
+        up={styles.armLUp}
+        fore={styles.armLFore}
+        loop={styles.typeL}
+      />
+      <Limb
+        s={s}
+        x={102}
+        y={134}
+        l={11}
+        a1={-13}
+        a2={86}
+        up={styles.armRUp}
+        fore={styles.armRFore}
+        loop={styles.typeR}
+        hold={
+          furniture && (
+            <g className={styles.mugHand}>
+              <g
+                className={cx(styles.pivot, styles.mugTilt)}
+                style={at(102, 161)}
+              >
+                <Mug x={102} y={161} />
+              </g>
+            </g>
+          )
+        }
+      />
+    </g>
+  );
+}
+
+function WavePose({ s, u }: { s: Spec; u: number }) {
+  return (
+    <g className={cx(styles.pivot, styles.callEnter)} style={at(76, 192)}>
+      <g className={cx(styles.pivot, styles.body)} style={at(76, 192)}>
+        <g className={cx(styles.pivot, styles.sway)} style={at(76, 192)}>
+          <Tail s={s} x={96} y={160} />
+          <Leg x={64} top={164} s={s} />
+          <Leg x={88} top={164} s={s} />
+          <g className={cx(styles.pivot, styles.breath)} style={at(76, 172)}>
+            <Suit cx={76} cy={140} rx={27} ry={32} />
+          </g>
+          <Limb
+            s={s}
+            x={54}
+            y={126}
+            l={15}
+            a1={29}
+            a2={-35}
+            up={styles.armLUp}
+            fore={styles.armLFore}
+          />
+          <g className={cx(styles.pivot, styles.head)} style={at(74, 110)}>
+            <Head
+              s={s}
+              x={74}
+              y={78}
+              eyes="open"
+              mouth={u >= 0.5 ? "open" : "smile"}
+            />
+          </g>
+          {/* 부르는 손: 쉴 때는 내려 두고, 동작 때 팔꿈치에서 흔든다 */}
+          <Limb
+            s={s}
+            x={100}
+            y={124}
+            l={15}
+            a1={-21}
+            a2={18}
+            up={cx(styles.armRUp, styles.callUp)}
+            fore={cx(styles.armRFore, styles.callFore)}
+            hand={
+              <g>
+                {/* 쉴 때는 둥근 발, 손을 들면 편 손바닥 */}
+                <circle
+                  cx={100}
+                  cy={154}
+                  r={7.5}
+                  fill={s.fur}
+                  className={styles.paw}
+                />
+                <g transform="rotate(180 100 154)" className={styles.palm}>
+                  <Palm s={s} x={100} y={154} />
+                </g>
+              </g>
+            }
+          />
+          <Bubble u={u} />
+        </g>
+      </g>
+    </g>
+  );
+}
+
+/** 머리 위 말풍선: 모든 동물이 같은 "나를 부른다" 표시. 급하면 점 대신 느낌표. */
+function Bubble({ u }: { u: number }) {
+  const fill = bubbleFill(u);
+  return (
+    <g className={cx(styles.pivot, styles.bubbleIn)} style={at(106, 52)}>
+      <g className={cx(styles.pivot, styles.bubbleBob)} style={at(106, 52)}>
+        <path d="M104 54 L111 40 L119 45 Z" fill={fill} />
+        <circle cx={122} cy={32} r={15} fill={fill} />
+        {u < 0.5 ? (
+          <g fill={INK}>
+            <circle cx={115} cy={32} r={2.6} className={styles.dot} />
+            <circle cx={122} cy={32} r={2.6} className={styles.dot} />
+            <circle cx={129} cy={32} r={2.6} className={styles.dot} />
+          </g>
+        ) : (
+          <g
+            className={cx(styles.pivot, styles.bang)}
+            style={at(122, 32)}
+            fill={INK}
+          >
+            <rect x={119.8} y={22} width={4.4} height={12.5} rx={2.2} />
+            <circle cx={122} cy={40} r={2.5} />
+          </g>
+        )}
       </g>
     </g>
   );
@@ -1049,15 +1307,26 @@ function Palm({ s, x, y }: { s: Spec; x: number; y: number }) {
 function SleepPose({ s }: { s: Spec }) {
   return (
     <g>
-      <g className={styles.breathe}>
-        <TailShape s={s} x={104} y={180} />
-        <Suit cx={80} cy={162} rx={33} ry={27} />
-        <ellipse cx={60} cy={188} rx={11} ry={6} fill={BOOT} />
-        <ellipse cx={100} cy={188} rx={11} ry={6} fill={BOOT} />
-        <circle cx={70} cy={166} r={7.5} fill={s.fur} />
-        <circle cx={90} cy={166} r={7.5} fill={s.fur} />
-        <g transform="rotate(-10 80 140)">
-          <Head s={s} x={80} y={110} eyes="closed" mouth="sleep" />
+      <g className={cx(styles.pivot, styles.body)} style={at(80, 192)}>
+        <g className={styles.breathe}>
+          <Tail s={s} x={104} y={180} />
+          <Suit cx={80} cy={162} rx={33} ry={27} />
+          <ellipse cx={60} cy={188} rx={11} ry={6} fill={BOOT} />
+          <ellipse cx={100} cy={188} rx={11} ry={6} fill={BOOT} />
+          <circle cx={70} cy={166} r={7.5} fill={s.fur} />
+          <circle cx={90} cy={166} r={7.5} fill={s.fur} />
+          <g transform="rotate(-10 80 140)">
+            <g className={cx(styles.pivot, styles.head)} style={at(80, 140)}>
+              <Head
+                s={s}
+                x={80}
+                y={110}
+                eyes="closed"
+                mouth="sleep"
+                alts={["peek"]}
+              />
+            </g>
+          </g>
         </g>
       </g>
       <g fill="#cfe0ff" fontFamily="system-ui, sans-serif" fontWeight={700}>
@@ -1074,8 +1343,8 @@ function SleepPose({ s }: { s: Spec }) {
 
 function WalkPose({ s }: { s: Spec }) {
   return (
-    <g className={`${styles.pivot} ${styles.walk}`} style={at(80, 190)}>
-      <TailShape s={s} x={98} y={160} />
+    <g className={cx(styles.pivot, styles.walk)} style={at(80, 190)}>
+      <Tail s={s} x={98} y={160} />
       <g className={styles.legA}>
         <Leg x={68} top={164} s={s} />
       </g>
@@ -1083,27 +1352,27 @@ function WalkPose({ s }: { s: Spec }) {
         <Leg x={92} top={164} s={s} />
       </g>
       <Suit cx={80} cy={140} rx={27} ry={32} />
-      <g className={styles.legB}>
-        <Arm s={s} x1={58} y1={126} x2={52} y2={152} />
-      </g>
-      <g className={styles.legA}>
-        <Arm s={s} x1={102} y1={126} x2={108} y2={152} />
-      </g>
+      <Limb s={s} x={58} y={126} l={14} a1={12} a2={-10} up={styles.swingA} />
       <Head s={s} x={80} y={78} eyes="open" mouth="smile" lookX={6} />
+      <Limb s={s} x={102} y={126} l={14} a1={-12} a2={10} up={styles.swingB} />
     </g>
   );
 }
 
 function StandPose({ s }: { s: Spec }) {
   return (
-    <g>
-      <TailShape s={s} x={100} y={160} />
+    <g className={cx(styles.pivot, styles.body)} style={at(80, 192)}>
+      <Tail s={s} x={100} y={160} />
       <Leg x={68} top={164} s={s} />
       <Leg x={92} top={164} s={s} />
-      <Suit cx={80} cy={140} rx={27} ry={32} />
-      <Arm s={s} x1={58} y1={126} x2={52} y2={154} />
-      <Arm s={s} x1={102} y1={126} x2={108} y2={154} />
-      <Head s={s} x={80} y={78} eyes="open" mouth="smile" />
+      <g className={cx(styles.pivot, styles.breath)} style={at(80, 172)}>
+        <Suit cx={80} cy={140} rx={27} ry={32} />
+      </g>
+      <Limb s={s} x={58} y={126} l={15} a1={29} a2={-35} />
+      <g className={cx(styles.pivot, styles.head)} style={at(80, 110)}>
+        <Head s={s} x={80} y={78} eyes="open" mouth="smile" />
+      </g>
+      <Limb s={s} x={102} y={126} l={15} a1={-29} a2={35} />
     </g>
   );
 }

@@ -1,13 +1,22 @@
-/* 동물 선원 움직임. transform·opacity만 써서 30마리가 함께 움직여도 가볍다. */
+/*
+ * 동물 선원 움직임. transform·opacity만 써서 30마리가 함께 움직여도 가볍다.
+ *
+ * 두 겹으로 움직인다.
+ * - 늘 하는 동작(숨쉬기·깜빡임·타자·살랑임): 동물마다 --phase(시작점)와
+ *   --tempo(빠르기)를 달리해 박자가 어긋난다.
+ * - 짧은 동작: ActClock이 svg 뿌리에 data-act="sip"처럼 붙였다 떼면
+ *   그 동작이 --act-dur 동안 한 번 재생된다. 늘 하는 동작과는 다른 묶음에 걸어
+ *   서로 덮어쓰지 않는다.
+ */
 
 .root {
   display: block;
   overflow: visible;
   --phase: 0s;
-}
-
-.root * {
-  animation-delay: var(--phase);
+  --tempo: 1;
+  --u: 0.6;
+  --act-dur: 2s;
+  --act-ease: cubic-bezier(0.45, 0, 0.3, 1);
 }
 
 /* 회전·이동 기준점을 viewBox 좌표로 잡는다. 기준점은 style로 넣는다. */
@@ -31,54 +40,52 @@
   fill: var(--accent);
 }
 
-/* 눈 깜빡임 */
+/* ───────── 늘 하는 동작 ───────── */
+
 .blink {
   transform-box: fill-box;
   transform-origin: center;
-  animation: blink 4.2s infinite;
+  animation: blink calc(4.6s * var(--tempo)) var(--phase) infinite;
 }
 
 @keyframes blink {
   0%,
-  94%,
+  90%,
   100% {
     transform: scaleY(1);
   }
-  96% {
+  92% {
     transform: scaleY(0.1);
   }
-}
-
-/* 자판 두드림: 두 손이 번갈아 */
-.typeA,
-.typeB {
-  animation: type 0.36s ease-in-out infinite alternate;
-}
-
-.typeB {
-  animation-name: typeB;
-}
-
-@keyframes type {
-  from {
-    transform: translateY(0);
+  94% {
+    transform: scaleY(1);
   }
-  to {
-    transform: translateY(-3px);
+  /* 가끔 두 번 깜빡인다: 박자가 4.6초라 매번 같지 않게 느껴진다 */
+  96.5% {
+    transform: scaleY(0.15);
+  }
+  98.5% {
+    transform: scaleY(1);
   }
 }
 
-@keyframes typeB {
-  from {
-    transform: translateY(-3px);
+.breath {
+  animation: breath calc(3.8s * var(--tempo)) ease-in-out var(--phase) infinite;
+}
+
+@keyframes breath {
+  0%,
+  100% {
+    transform: scale(1, 1);
   }
-  to {
-    transform: translateY(0);
+  50% {
+    transform: scale(1.012, 1.022);
   }
 }
 
+/* 고개: 자판과 화면 사이를 천천히 오간다 */
 .nod {
-  animation: nod 1.8s ease-in-out infinite;
+  animation: nod calc(5.2s * var(--tempo)) ease-in-out var(--phase) infinite;
 }
 
 @keyframes nod {
@@ -86,8 +93,56 @@
   100% {
     transform: rotate(5deg);
   }
-  50% {
-    transform: rotate(8deg);
+  35% {
+    transform: rotate(7.5deg);
+  }
+  60% {
+    transform: rotate(4deg) translateY(-0.5px);
+  }
+}
+
+/* 타자: 두 손이 다른 박자로, 몇 번 두드리고 쉰다 */
+.typeL {
+  animation: typeL calc(1.9s * var(--tempo)) ease-in-out var(--phase) infinite;
+}
+
+.typeR {
+  animation: typeR calc(1.45s * var(--tempo)) ease-in-out var(--phase) infinite;
+}
+
+@keyframes typeL {
+  0%,
+  44%,
+  100% {
+    transform: rotate(0);
+  }
+  7%,
+  21%,
+  35% {
+    transform: rotate(-9deg);
+  }
+  14%,
+  28% {
+    transform: rotate(1deg);
+  }
+}
+
+@keyframes typeR {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  10%,
+  30% {
+    transform: rotate(9deg);
+  }
+  20%,
+  40%,
+  70% {
+    transform: rotate(-1deg);
+  }
+  55% {
+    transform: rotate(7deg);
   }
 }
 
@@ -106,48 +161,38 @@
   }
 }
 
-/* 손 흔들기: 크게, 빠르게 */
-.waveArm {
-  animation: wave 0.5s ease-in-out infinite alternate;
+/* 꼬리 살랑임: 부를 때는 급할수록 빠르다 */
+.tailLoop {
+  animation: tailLoop calc(3.2s * var(--tempo)) ease-in-out var(--phase)
+    infinite;
 }
 
-@keyframes wave {
-  from {
-    transform: rotate(-14deg);
-  }
-  to {
-    transform: rotate(14deg);
-  }
+.root[data-pose="wave"] .tailLoop {
+  animation-duration: calc((2.6s - var(--u) * 1.8s) * var(--tempo));
 }
 
-.hop {
-  animation: hop 1s ease-in-out infinite;
-}
-
-@keyframes hop {
-  0%,
-  60%,
-  100% {
-    transform: translateY(0);
-  }
-  30% {
-    transform: translateY(-5px);
-  }
-}
-
-.shout {
-  animation: shout 1s ease-in-out infinite;
-}
-
-@keyframes shout {
+@keyframes tailLoop {
   0%,
   100% {
-    opacity: 0.35;
-    transform: scale(0.9);
+    transform: rotate(-4deg);
   }
   50% {
-    opacity: 1;
-    transform: scale(1.08);
+    transform: rotate(5deg);
+  }
+}
+
+/* 부를 때 몸을 살짝 흔들며 기다린다 */
+.sway {
+  animation: sway calc(3.4s * var(--tempo)) ease-in-out var(--phase) infinite;
+}
+
+@keyframes sway {
+  0%,
+  100% {
+    transform: rotate(-1.2deg);
+  }
+  50% {
+    transform: rotate(1.2deg);
   }
 }
 
@@ -155,7 +200,7 @@
 .breathe {
   transform-box: fill-box;
   transform-origin: 50% 100%;
-  animation: breathe 3.6s ease-in-out infinite;
+  animation: breathe calc(3.8s * var(--tempo)) ease-in-out var(--phase) infinite;
 }
 
 @keyframes breathe {
@@ -163,18 +208,19 @@
   100% {
     transform: scale(1, 1);
   }
-  50% {
+  45% {
     transform: scale(1.025, 1.045);
   }
 }
 
 .zz {
-  animation: zz 3.6s ease-out infinite;
+  animation: zz calc(3.8s * var(--tempo)) ease-out var(--phase) infinite;
   opacity: 0;
 }
 
 .zz2 {
-  animation: zz 3.6s ease-out 1.8s infinite;
+  animation: zz calc(3.8s * var(--tempo)) ease-out
+    calc(var(--phase) + 1.9s * var(--tempo)) infinite;
   opacity: 0;
 }
 
@@ -192,49 +238,80 @@
   }
 }
 
-/* 걷기: 두 프레임으로 좌우 흔들림 */
+/* 걷기: 몸이 오르내리고 팔다리가 엇갈린다 */
 .walk {
-  animation: walk 0.6s steps(1) infinite;
+  animation: walk 0.7s ease-in-out infinite;
 }
 
 @keyframes walk {
   0%,
-  49.9% {
-    transform: rotate(-4deg) translateY(0);
-  }
-  50%,
   100% {
-    transform: rotate(4deg) translateY(-2px);
+    transform: rotate(-3deg) translateY(0);
+  }
+  25%,
+  75% {
+    transform: rotate(0) translateY(-3px);
+  }
+  50% {
+    transform: rotate(3deg) translateY(0);
   }
 }
 
-.legA {
-  animation: legA 0.6s steps(1) infinite;
+.legA,
+.legB {
+  animation: legA 0.7s ease-in-out infinite;
 }
 
 .legB {
-  animation: legB 0.6s steps(1) infinite;
+  animation-name: legB;
 }
 
 @keyframes legA {
   0%,
-  49.9% {
+  100% {
     transform: translateY(-5px);
   }
-  50%,
-  100% {
+  50% {
     transform: translateY(0);
   }
 }
 
 @keyframes legB {
   0%,
-  49.9% {
+  100% {
     transform: translateY(0);
   }
-  50%,
-  100% {
+  50% {
     transform: translateY(-5px);
+  }
+}
+
+.swingA,
+.swingB {
+  animation: swingA 0.7s ease-in-out infinite;
+}
+
+.swingB {
+  animation-name: swingB;
+}
+
+@keyframes swingA {
+  0%,
+  100% {
+    transform: rotate(-16deg);
+  }
+  50% {
+    transform: rotate(16deg);
+  }
+}
+
+@keyframes swingB {
+  0%,
+  100% {
+    transform: rotate(16deg);
+  }
+  50% {
+    transform: rotate(-16deg);
   }
 }
 
@@ -243,13 +320,1263 @@
   filter: grayscale(1);
 }
 
+/* 빈자리 그림은 움직이지 않는다(늘 하는 동작 뒤에 두어 이긴다) */
+.ghost * {
+  animation: none;
+}
+
+/* ───────── 부름 표시 ───────── */
+
+/* 부르기 시작하면 한 번: 몸을 돌려 세우고 말풍선이 톡 뜬다 */
+.callEnter {
+  animation: callEnter 0.5s cubic-bezier(0.3, 1.5, 0.5, 1) both;
+}
+
+@keyframes callEnter {
+  0% {
+    transform: scale(0.92, 0.96) translateY(3px);
+  }
+  100% {
+    transform: none;
+  }
+}
+
+.bubbleIn {
+  animation: pop 0.5s cubic-bezier(0.3, 1.7, 0.5, 1) 0.15s both;
+}
+
+@keyframes pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.2);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.bubbleBob {
+  animation: bubbleBob calc((2.6s - var(--u) * 1.2s) * var(--tempo)) ease-in-out
+    var(--phase) infinite;
+}
+
+@keyframes bubbleBob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(calc(-1.5px - var(--u) * 2.5px));
+  }
+}
+
+/* 덜 급할 때: 말하려는 듯 점 셋이 차례로 */
+.dot {
+  animation: dot 1.4s ease-in-out infinite;
+}
+
+.dot:nth-child(2) {
+  animation-delay: 0.18s;
+}
+
+.dot:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+@keyframes dot {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  25% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+/* 급할 때: 느낌표가 두근 */
+.bang {
+  animation: bang calc(1.6s - var(--u) * 0.7s) ease-in-out infinite;
+}
+
+@keyframes bang {
+  0%,
+  55%,
+  100% {
+    transform: scale(1) rotate(0);
+  }
+  15% {
+    transform: scale(1.2) rotate(-6deg);
+  }
+  30% {
+    transform: scale(0.95) rotate(4deg);
+  }
+}
+
+/* ───────── 짧은 동작 (data-act) ───────── */
+
+/* 바꿔 끼우는 표정, 손에 든 컵, 편 손바닥은 평소에 숨긴다 */
+.alt,
+.mugHand,
+.palm {
+  opacity: 0;
+}
+
+.earL,
+.earR {
+  transform-box: fill-box;
+  transform-origin: 50% 85%;
+}
+
+.earFlop {
+  transform-origin: 50% 10%;
+}
+
+/* 손을 쓰는 동작 동안 타자를 멈춘다 */
+.root[data-act="look"] .typeL,
+.root[data-act="look"] .typeR,
+.root[data-act="chin"] .typeL,
+.root[data-act="sip"] .typeR,
+.root[data-act="stretch"] .typeL,
+.root[data-act="stretch"] .typeR,
+.root[data-act="yawn"] .typeL,
+.root[data-act="yawn"] .typeR {
+  animation: none;
+}
+
+.root[data-act] .head,
+.root[data-act] .body,
+.root[data-act] .armLUp,
+.root[data-act] .armLFore,
+.root[data-act] .armRUp,
+.root[data-act] .armRFore,
+.root[data-act] .tail,
+.root[data-act] .earL,
+.root[data-act] .earR,
+.root[data-act] .face,
+.root[data-act] .faceBase,
+.root[data-act] .alt,
+.root[data-act] .mugDesk,
+.root[data-act] .mugHand,
+.root[data-act] .mugTilt,
+.root[data-act] .paw,
+.root[data-act] .palm {
+  animation-duration: var(--act-dur);
+  animation-timing-function: var(--act-ease);
+  animation-fill-mode: both;
+}
+
+/* 표정 바꿔 끼우기: 동작 길이의 14%~86% 동안 */
+@keyframes swapOut {
+  0%,
+  12% {
+    opacity: 1;
+  }
+  15%,
+  85% {
+    opacity: 0;
+  }
+  88%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes swapIn {
+  0%,
+  12% {
+    opacity: 0;
+  }
+  15%,
+  85% {
+    opacity: 1;
+  }
+  88%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes swapOutMid {
+  0%,
+  22% {
+    opacity: 1;
+  }
+  25%,
+  70% {
+    opacity: 0;
+  }
+  73%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes swapInMid {
+  0%,
+  22% {
+    opacity: 0;
+  }
+  25%,
+  70% {
+    opacity: 1;
+  }
+  73%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* 귀 쫑긋: 한쪽 귀가 두 번 튄다 */
+.root[data-act="ear"] .earR {
+  animation-name: earTwitch;
+  animation-timing-function: ease-out;
+}
+
+@keyframes earTwitch {
+  0%,
+  70%,
+  100% {
+    transform: rotate(0);
+  }
+  12% {
+    transform: rotate(16deg);
+  }
+  26% {
+    transform: rotate(-4deg);
+  }
+  40% {
+    transform: rotate(11deg);
+  }
+  55% {
+    transform: rotate(-2deg);
+  }
+}
+
+/* 꼬리 크게 흔들기 */
+.root[data-act="tail"] .tail {
+  animation-name: tailFlick;
+}
+
+@keyframes tailFlick {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  15% {
+    transform: rotate(-5deg);
+  }
+  35% {
+    transform: rotate(16deg);
+  }
+  55% {
+    transform: rotate(-9deg);
+  }
+  75% {
+    transform: rotate(6deg);
+  }
+}
+
+/* ── 일함 ── */
+
+/* 화면 보기: 고개를 들어 오른쪽 화면을 본다 */
+.root[data-act="look"] .head {
+  animation-name: lookHead;
+}
+
+.root[data-act="look"] .face {
+  animation-name: lookFace;
+}
+
+.root[data-act="look"] .faceBase {
+  animation-name: swapOut;
+}
+
+.root[data-act="look"] .faceUp {
+  animation-name: swapIn;
+}
+
+@keyframes lookHead {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  14% {
+    transform: rotate(-7deg) translateY(-2px);
+  }
+  20%,
+  62% {
+    transform: rotate(-6deg) translateY(-1.5px);
+  }
+  70% {
+    transform: rotate(-7.5deg) translateY(-2px);
+  }
+  88% {
+    transform: rotate(1deg);
+  }
+}
+
+@keyframes lookFace {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  16%,
+  58% {
+    transform: translateX(4px);
+  }
+  66%,
+  80% {
+    transform: translateX(2px) translateY(-1px);
+  }
+}
+
+/* 턱 괴기: 왼손을 턱 아래로, 고개를 손에 기댄다 */
+.root[data-act="chin"] .armLUp {
+  animation-name: chinUp;
+}
+
+.root[data-act="chin"] .armLFore {
+  animation-name: chinFore;
+}
+
+.root[data-act="chin"] .head {
+  animation-name: chinHead;
+}
+
+.root[data-act="chin"] .faceBase {
+  animation-name: swapOut;
+}
+
+.root[data-act="chin"] .faceUp {
+  animation-name: swapIn;
+}
+
+.root[data-act="chin"] .face {
+  animation-name: chinFace;
+}
+
+@keyframes chinUp {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  5% {
+    transform: rotate(6deg);
+  }
+  18%,
+  82% {
+    transform: rotate(-99deg);
+  }
+}
+
+@keyframes chinFore {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  18%,
+  82% {
+    transform: rotate(2deg);
+  }
+}
+
+@keyframes chinHead {
+  0%,
+  14%,
+  92%,
+  100% {
+    transform: rotate(0);
+  }
+  22% {
+    transform: rotate(-6deg) translate(-1px, 2px);
+  }
+  50% {
+    transform: rotate(-4.5deg) translate(-1px, 1.5px);
+  }
+  78% {
+    transform: rotate(-6deg) translate(-1px, 2px);
+  }
+}
+
+@keyframes chinFace {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25%,
+  45% {
+    transform: translate(-3px, -1px);
+  }
+  55%,
+  80% {
+    transform: translate(2px, -1px);
+  }
+}
+
+/* 한 모금: 오른손으로 책상의 컵을 들어 마시고 내려놓는다 */
+.root[data-act="sip"] .armRUp {
+  animation-name: sipUp;
+}
+
+.root[data-act="sip"] .armRFore {
+  animation-name: sipFore;
+}
+
+.root[data-act="sip"] .mugTilt {
+  animation-name: sipMug;
+}
+
+.root[data-act="sip"] .mugDesk {
+  animation-name: mugDesk;
+}
+
+.root[data-act="sip"] .mugHand {
+  animation-name: mugHand;
+}
+
+.root[data-act="sip"] .head {
+  animation-name: sipHead;
+}
+
+@keyframes sipUp {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  12%,
+  18% {
+    transform: rotate(-110deg);
+  }
+  42%,
+  58% {
+    transform: rotate(108deg);
+  }
+  64% {
+    transform: rotate(104deg);
+  }
+  70% {
+    transform: rotate(108deg);
+  }
+  86%,
+  91% {
+    transform: rotate(-110deg);
+  }
+}
+
+@keyframes sipFore {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  12%,
+  18% {
+    transform: rotate(38deg);
+  }
+  42%,
+  70% {
+    transform: rotate(-1.5deg);
+  }
+  86%,
+  91% {
+    transform: rotate(38deg);
+  }
+}
+
+/* 팔이 도는 만큼 컵을 거꾸로 돌려 똑바로 들고, 입에 대면 기울인다 */
+@keyframes sipMug {
+  0%,
+  18% {
+    transform: rotate(-1.2deg);
+  }
+  42% {
+    transform: rotate(-200deg);
+  }
+  50%,
+  70% {
+    transform: rotate(-218deg);
+  }
+  86%,
+  100% {
+    transform: rotate(-1.2deg);
+  }
+}
+
+@keyframes mugDesk {
+  0%,
+  14% {
+    opacity: 1;
+  }
+  15%,
+  88% {
+    opacity: 0;
+  }
+  89%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes mugHand {
+  0%,
+  14% {
+    opacity: 0;
+  }
+  15%,
+  88% {
+    opacity: 1;
+  }
+  89%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes sipHead {
+  0%,
+  30%,
+  80%,
+  100% {
+    transform: rotate(0);
+  }
+  45%,
+  66% {
+    transform: rotate(-4deg) translateY(-1px);
+  }
+}
+
+/* 기지개: 살짝 웅크렸다가 두 팔을 번쩍, 하품하며 늘어진다 */
+.root[data-act="stretch"] .armLUp {
+  animation-name: stretchLUp;
+}
+
+.root[data-act="stretch"] .armLFore {
+  animation-name: stretchLFore;
+}
+
+.root[data-act="stretch"] .armRUp {
+  animation-name: stretchRUp;
+}
+
+.root[data-act="stretch"] .armRFore {
+  animation-name: stretchRFore;
+}
+
+.root[data-act="stretch"] .body {
+  animation-name: stretchBody;
+}
+
+.root[data-act="stretch"] .head {
+  animation-name: stretchHead;
+}
+
+.root[data-act="stretch"] .faceBase {
+  animation-name: swapOutMid;
+}
+
+.root[data-act="stretch"] .faceYawn {
+  animation-name: swapInMid;
+}
+
+@keyframes stretchLUp {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  12% {
+    transform: rotate(-12deg);
+  }
+  36% {
+    transform: rotate(122deg);
+  }
+  64% {
+    transform: rotate(116deg);
+  }
+}
+
+@keyframes stretchLFore {
+  0%,
+  12%,
+  100% {
+    transform: rotate(0);
+  }
+  36%,
+  64% {
+    transform: rotate(89deg);
+  }
+}
+
+@keyframes stretchRUp {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  12% {
+    transform: rotate(12deg);
+  }
+  36% {
+    transform: rotate(-122deg);
+  }
+  64% {
+    transform: rotate(-116deg);
+  }
+}
+
+@keyframes stretchRFore {
+  0%,
+  12%,
+  100% {
+    transform: rotate(0);
+  }
+  36%,
+  64% {
+    transform: rotate(-89deg);
+  }
+}
+
+@keyframes stretchBody {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  12% {
+    transform: scale(1.03, 0.96);
+  }
+  38%,
+  62% {
+    transform: scale(0.98, 1.05) translateY(-2px);
+  }
+  78% {
+    transform: scale(1.01, 0.99);
+  }
+}
+
+@keyframes stretchHead {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  12% {
+    transform: translateY(2px);
+  }
+  38%,
+  62% {
+    transform: rotate(-7deg) translateY(-5px);
+  }
+  78% {
+    transform: rotate(1deg) translateY(1px);
+  }
+}
+
+/* 하품: 고개를 젖히고 입을 크게 */
+.root[data-act="yawn"] .head {
+  animation-name: yawnHead;
+}
+
+.root[data-act="yawn"] .body {
+  animation-name: yawnBody;
+}
+
+.root[data-act="yawn"] .faceBase {
+  animation-name: swapOutMid;
+}
+
+.root[data-act="yawn"] .faceYawn {
+  animation-name: swapInMid;
+}
+
+@keyframes yawnHead {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25% {
+    transform: rotate(-8deg) translateY(-2px);
+  }
+  55% {
+    transform: rotate(-9deg) translateY(-2.5px);
+  }
+  80% {
+    transform: rotate(2deg);
+  }
+}
+
+@keyframes yawnBody {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.01, 1.03);
+  }
+}
+
+/* ── 쉼 ── */
+
+/* 꾸벅: 천천히 고개가 떨어지다 퍼뜩 들고, 실눈을 떴다 다시 감는다 */
+.root[data-act="nodoff"] .head {
+  animation-name: nodHead;
+}
+
+.root[data-act="nodoff"] .body {
+  animation-name: nodBody;
+}
+
+.root[data-act="nodoff"] .faceBase {
+  animation-name: peekOut;
+}
+
+.root[data-act="nodoff"] .facePeek {
+  animation-name: peekIn;
+}
+
+@keyframes nodHead {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  52% {
+    transform: rotate(-9deg) translateY(5px);
+    animation-timing-function: cubic-bezier(0.2, 0.9, 0.3, 1.3);
+  }
+  60% {
+    transform: rotate(3deg) translateY(-3px);
+  }
+  70% {
+    transform: rotate(-1deg) translateY(0);
+  }
+}
+
+@keyframes nodBody {
+  0%,
+  52%,
+  100% {
+    transform: translateY(0);
+  }
+  58% {
+    transform: translateY(-2px);
+  }
+  68% {
+    transform: translateY(0.5px);
+  }
+}
+
+@keyframes peekOut {
+  0%,
+  57% {
+    opacity: 1;
+  }
+  58%,
+  76% {
+    opacity: 0;
+  }
+  77%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes peekIn {
+  0%,
+  57% {
+    opacity: 0;
+  }
+  58%,
+  76% {
+    opacity: 1;
+  }
+  77%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* 뒤척이기: 몸을 이쪽저쪽으로 굴리고 머리·꼬리가 조금 늦게 따라온다 */
+.root[data-act="toss"] .body {
+  animation-name: tossBody;
+}
+
+.root[data-act="toss"] .head {
+  animation-name: tossHead;
+  animation-delay: 0.18s;
+}
+
+.root[data-act="toss"] .tail {
+  animation-name: tossTail;
+  animation-delay: 0.3s;
+}
+
+@keyframes tossBody {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  18% {
+    transform: rotate(-2.5deg) translateX(-1px);
+  }
+  45% {
+    transform: rotate(4deg) translate(2px, -1.5px);
+  }
+  62% {
+    transform: rotate(2.5deg) translate(1px, 0);
+  }
+}
+
+@keyframes tossHead {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25% {
+    transform: rotate(-4deg);
+  }
+  50% {
+    transform: rotate(5deg) translateY(1px);
+  }
+  66% {
+    transform: rotate(3deg);
+  }
+}
+
+@keyframes tossTail {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  30% {
+    transform: rotate(-10deg);
+  }
+  55% {
+    transform: rotate(12deg);
+  }
+}
+
+/* 실눈: 한쪽 눈을 슬쩍 떴다 감는다 */
+.root[data-act="peek"] .faceBase {
+  animation-name: swapOutMid;
+}
+
+.root[data-act="peek"] .facePeek {
+  animation-name: swapInMid;
+}
+
+.root[data-act="peek"] .head {
+  animation-name: peekHead;
+}
+
+@keyframes peekHead {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  30%,
+  65% {
+    transform: rotate(4deg) translateY(-1px);
+  }
+}
+
+/* ── 서 있기 ── */
+
+.root[data-act="glance"] .face {
+  animation-name: glanceFace;
+}
+
+.root[data-act="glance"] .head {
+  animation-name: glanceHead;
+}
+
+@keyframes glanceFace {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  15%,
+  40% {
+    transform: translateX(-5px);
+  }
+  55%,
+  80% {
+    transform: translateX(5px);
+  }
+}
+
+@keyframes glanceHead {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  18%,
+  40% {
+    transform: rotate(-3deg);
+  }
+  58%,
+  80% {
+    transform: rotate(3deg);
+  }
+}
+
+/* 갸웃: 서 있을 때도, 덜 급하게 부를 때도 */
+.root[data-act="tilt"] .head {
+  animation-name: tiltHead;
+}
+
+.root[data-act="tilt"] .body {
+  animation-name: tiltBody;
+}
+
+.root[data-act="tilt"] .earL,
+.root[data-act="tilt"] .earR {
+  animation-name: earFollow;
+  animation-delay: 0.12s;
+}
+
+@keyframes tiltHead {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  20% {
+    transform: rotate(11deg);
+  }
+  28%,
+  70% {
+    transform: rotate(9deg);
+  }
+  86% {
+    transform: rotate(-1.5deg);
+  }
+}
+
+@keyframes tiltBody {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25%,
+  70% {
+    transform: rotate(-1.5deg);
+  }
+}
+
+@keyframes earFollow {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  18% {
+    transform: rotate(-8deg);
+  }
+  32% {
+    transform: rotate(3deg);
+  }
+  45% {
+    transform: rotate(0);
+  }
+  80% {
+    transform: rotate(6deg);
+  }
+  92% {
+    transform: rotate(-2deg);
+  }
+}
+
+/* ── 부름: 세기에 따라 갸웃 → 손 반쯤 → 손짓 → 깡충 ── */
+
+/* 손을 드는 동안 둥근 발을 편 손바닥으로 바꾼다 */
+.root[data-act="raise"] .paw,
+.root[data-act="beckon"] .paw,
+.root[data-act="hop"] .paw {
+  animation-name: pawOut;
+}
+
+.root[data-act="raise"] .palm,
+.root[data-act="beckon"] .palm,
+.root[data-act="hop"] .palm {
+  animation-name: pawIn;
+}
+
+@keyframes pawOut {
+  0%,
+  10% {
+    opacity: 1;
+  }
+  14%,
+  86% {
+    opacity: 0;
+  }
+  90%,
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes pawIn {
+  0%,
+  10% {
+    opacity: 0;
+  }
+  14%,
+  86% {
+    opacity: 1;
+  }
+  90%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* 반쯤 든 손: 가슴께에서 조그맣게 흔든다 */
+.root[data-act="raise"] .armRUp {
+  animation-name: raiseUp;
+}
+
+.root[data-act="raise"] .armRFore {
+  animation-name: raiseFore;
+}
+
+.root[data-act="raise"] .head {
+  animation-name: raiseHead;
+  animation-delay: 0.1s;
+}
+
+@keyframes raiseUp {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  8% {
+    transform: rotate(5deg);
+  }
+  24%,
+  80% {
+    transform: rotate(-58deg);
+  }
+}
+
+@keyframes raiseFore {
+  0%,
+  8%,
+  100% {
+    transform: rotate(0);
+  }
+  24% {
+    transform: rotate(-126deg);
+  }
+  36% {
+    transform: rotate(-110deg);
+  }
+  48% {
+    transform: rotate(-130deg);
+  }
+  60% {
+    transform: rotate(-112deg);
+  }
+  80% {
+    transform: rotate(-124deg);
+  }
+}
+
+@keyframes raiseHead {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  25%,
+  75% {
+    transform: rotate(5deg);
+  }
+}
+
+/* 손짓: 살짝 움츠렸다가 팔을 번쩍 들어 팔꿈치에서 세 번 흔든다.
+   몸은 손 쪽으로 기울고, 머리·귀·꼬리는 조금 늦게 따라온다. 급할수록 크게. */
+.root[data-act="beckon"] .armRUp,
+.root[data-act="hop"] .armRUp {
+  animation-name: beckonUp;
+}
+
+.root[data-act="beckon"] .armRFore,
+.root[data-act="hop"] .armRFore {
+  animation-name: beckonFore;
+  animation-timing-function: ease-in-out;
+}
+
+.root[data-act="beckon"] .body {
+  animation-name: beckonBody;
+}
+
+.root[data-act="beckon"] .head {
+  animation-name: beckonHead;
+  animation-delay: 0.08s;
+}
+
+.root[data-act="beckon"] .earL,
+.root[data-act="beckon"] .earR,
+.root[data-act="hop"] .earL,
+.root[data-act="hop"] .earR {
+  animation-name: earFollow;
+  animation-delay: 0.14s;
+}
+
+.root[data-act="beckon"] .tail,
+.root[data-act="hop"] .tail {
+  animation-name: tailFlick;
+  animation-delay: 0.1s;
+}
+
+@keyframes beckonUp {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  8% {
+    transform: rotate(7deg);
+  }
+  22% {
+    transform: rotate(-110deg);
+  }
+  28%,
+  80% {
+    transform: rotate(-103deg);
+  }
+  92% {
+    transform: rotate(4deg);
+  }
+}
+
+@keyframes beckonFore {
+  0%,
+  8%,
+  100% {
+    transform: rotate(0);
+  }
+  22% {
+    transform: rotate(-50deg);
+  }
+  32% {
+    transform: rotate(-84deg);
+  }
+  44% {
+    transform: rotate(-38deg);
+  }
+  56% {
+    transform: rotate(-84deg);
+  }
+  68% {
+    transform: rotate(-40deg);
+  }
+  80% {
+    transform: rotate(-64deg);
+  }
+}
+
+@keyframes beckonBody {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  8% {
+    transform: scale(1.02, 0.97);
+  }
+  26%,
+  78% {
+    transform: rotate(calc(1deg + var(--u) * 6deg)) translateY(-2px)
+      scale(calc(1 + var(--u) * 0.04));
+  }
+}
+
+@keyframes beckonHead {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  26%,
+  50% {
+    transform: rotate(-6deg);
+  }
+  62%,
+  78% {
+    transform: rotate(-3deg);
+  }
+}
+
+/* 깡충: 웅크림 → 뛰어오름 → 착지 찌그러짐 → 제자리 */
+.root[data-act="hop"] .body {
+  animation-name: hopBody;
+  animation-timing-function: ease-out;
+}
+
+.root[data-act="hop"] .head {
+  animation-name: hopHead;
+  animation-delay: 0.06s;
+}
+
+@keyframes hopBody {
+  0%,
+  100% {
+    transform: none;
+  }
+  12% {
+    transform: scale(1.07, 0.9);
+  }
+  30% {
+    transform: translateY(-13px) scale(0.96, 1.06);
+  }
+  44% {
+    transform: translateY(0) scale(1.08, 0.9);
+  }
+  56% {
+    transform: scale(0.98, 1.03);
+  }
+  66% {
+    transform: rotate(calc(var(--u) * 4deg));
+  }
+}
+
+@keyframes hopHead {
+  0%,
+  100% {
+    transform: none;
+  }
+  14% {
+    transform: translateY(3px);
+  }
+  32% {
+    transform: translateY(-3px) rotate(-4deg);
+  }
+  46% {
+    transform: translateY(3px);
+  }
+  58% {
+    transform: rotate(-3deg);
+  }
+}
+
+/* ───────── 움직임 줄이기 ───────── */
+
 @media (prefers-reduced-motion: reduce) {
   .root,
   .root * {
     animation: none;
   }
   .zz,
-  .zz2 {
-    opacity: 0.8;
+  .zz2,
+  .dot {
+    opacity: 0.85;
+  }
+  /* 부름은 손을 든 채 멈춰 둔다: 뜻은 남기고 움직임만 뺀다 */
+  .callUp {
+    transform: rotate(-103deg);
+  }
+  .callFore {
+    transform: rotate(-60deg);
+  }
+  .palm {
+    opacity: 1;
+  }
+  .paw {
+    opacity: 0;
   }
 }

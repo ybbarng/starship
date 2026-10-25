@@ -10,6 +10,7 @@ export {
   POSES,
   type Pose,
 } from "./Animal";
+export { ACTS, type Act } from "./acts";
 
 /** 승무원 id로 늘 같은 동물을 고른다(FNV-1a 해시). */
 export function animalFor(crewId: string): AnimalKind {
@@ -28,7 +29,10 @@ const POSE_BY_STATUS: Record<CrewStatus, Pose> = {
   off: "off",
 };
 
-/** 승무원 상태를 자세로 바꾼다. 나를 기다리면 손을 흔든다. */
+/**
+ * 승무원 상태를 자세로 바꾼다. 나를 기다리면 부른다(`wave`).
+ * 얼마나 급한지는 `<Animal urgency>`로 따로 넘긴다.
+ */
 export function poseFor(status: CrewStatus): Pose {
   return POSE_BY_STATUS[status];
 }
