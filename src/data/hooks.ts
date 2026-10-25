@@ -1,0 +1,109 @@
+"use client";
+
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+import {
+  type ActionRequest,
+  ActionResult,
+  type Crew,
+  type Snapshot,
+  Snapshot as SnapshotSchema,
+  type Task,
+} from "@/protocol/v1";
+import { useToast } from "./toast";
+
+function scenarioParam(): string {
+  if (typeof window === "undefined") return "";
+  const demo = new URLSearchParams(window.location.search).get("demo");
+  return demo ? `?demo=${encodeURIComponent(demo)}` : "";
+}
+
+async function fetchSnapshot(): Promise<Snapshot> {
+  const res = await fetch(`/api/v1/snapshot${scenarioParam()}`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`snapshot ${res.status}`);
+  return SnapshotSchema.parse(await res.json());
+}
+
+async function postAction(req: ActionRequest): Promise<ActionResult> {
+  const res = await fetch("/api/v1/actions", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(req),
+  });
+  const body = ActionResult.safeParse(await res.json().catch(() => null));
+  return body.success ? body.data : { ok: false, note: `실패 (${res.status})` };
+}
+
+/** 5초마다 새로 읽는 전체 상태. */
+export function useSnapshot() {
+  return useQuery({
+    queryKey: ["snapshot", scenarioParam()],
+    queryFn: fetchSnapshot,
+    refetchInterval: 5_000,
+  });
+}
+
+/** 화면이 바로 쓰기 좋게 묶은 값. */
+export function useBridge() {
+  const query = useSnapshot();
+  const snap = query.data;
+  const derived = useMemo(() => {
+    const tasks = snap?.tasks ?? [];
+    const crew = snap?.crew ?? [];
+    const crewById = new Map(crew.map((c) => [c.id, c]));
+    const tasksByCrew = new Map<string, Task[]>();
+    for (const t of tasks) {
+      if (!t.crewId) continue;
+      const list = tasksByCrew.get(t.crewId) ?? [];
+      list.push(t);
+      tasksByCrew.set(t.crewId, list);
+    }
+    return {
+      now: tasks[0],
+      next: tasks.slice(1, 4),
+      tasks,
+      loose: tasks.filter((t) => !t.crewId),
+      hails: snap?.hails ?? [],
+      crew,
+      crewById,
+      tasksByCrew,
+      gauges: snap?.gauges ?? [],
+      notice: snap?.notice,
+    };
+  }, [snap]);
+  return { ...derived, isLoading: query.isLoading, error: query.error };
+}
+
+/** 할 일·승무원 동작. 결과 한 줄을 토스트로 띄우고 상태를 다시 읽는다. */
+export function useAct() {
+  const client = useQueryClient();
+  const toast = useToast((s) => s.show);
+  const mutation = useMutation({
+    mutationFn: postAction,
+    onSuccess: (result) => {
+      if (result.openUrl) window.open(result.openUrl, "_blank", "noopener");
+      if (result.note) toast(result.note, result.ok ? "ok" : "error");
+      client.invalidateQueries({ queryKey: ["snapshot"] });
+    },
+    onError: () => toast("요청을 보내지 못했어요", "error"),
+  });
+  return {
+    task: (
+      task: Task,
+      action: Extract<ActionRequest, { target: "task" }>["action"],
+      answer?: string,
+    ) =>
+      mutation.mutate({
+        target: "task",
+        id: task.id,
+        action,
+        answer,
+        until: action === "snooze" ? Date.now() + 3_600_000 : undefined,
+      }),
+    crew: (crew: Crew, action: Crew["actions"][number]) =>
+      mutation.mutate({ target: "crew", id: crew.id, action }),
+    pending: mutation.isPending,
+  };
+}
