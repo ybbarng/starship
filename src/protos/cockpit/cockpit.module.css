@@ -1,0 +1,212 @@
+/* 3차 "조종석과 감상창": Tailwind로 쓰기 번거로운 질감과 움직임만 둔다. 모두 느리고 조용하게. */
+
+/* 계기판 판: 아주 옅은 빗질 무늬 + 위에서 오는 빛(유리창 쪽) */
+.panel {
+  background-color: #141923;
+  background-image:
+    radial-gradient(
+      120% 70% at 50% -10%,
+      rgba(120, 170, 255, 0.07),
+      transparent 60%
+    ),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(0, 0, 0, 0.3)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.014) 0 1px,
+      rgba(0, 0, 0, 0.02) 1px 3px
+    );
+}
+
+/* 판 위에 오목하게 들어간 칸 */
+.bay {
+  background: linear-gradient(180deg, #0d1118, #10151e);
+  box-shadow:
+    inset 0 1px 0 rgba(0, 0, 0, 0.6),
+    inset 0 0 18px rgba(0, 0, 0, 0.45),
+    0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+/* 주 표시창 유리: 옅은 주사선과 위쪽 반사 */
+.screen {
+  background:
+    linear-gradient(172deg, rgba(255, 255, 255, 0.045) 0%, transparent 22%),
+    radial-gradient(
+      110% 80% at 50% 0%,
+      rgba(90, 160, 255, 0.09),
+      transparent 62%
+    ),
+    repeating-linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.014) 0 1px,
+      transparent 1px 3px
+    ),
+    #050a12;
+}
+
+/* 누름 단추 */
+.key {
+  background: linear-gradient(180deg, #333b4a 0%, #222834 100%);
+  border: 1px solid rgba(0, 0, 0, 0.6);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    0 2px 0 #0c0f15,
+    0 3px 6px rgba(0, 0, 0, 0.4);
+  transition:
+    transform 80ms,
+    box-shadow 80ms,
+    filter 120ms;
+}
+.key:hover {
+  filter: brightness(1.18);
+}
+.key:active {
+  transform: translateY(2px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 #0c0f15,
+    0 1px 2px rgba(0, 0, 0, 0.4);
+}
+.keyPrimary {
+  background: linear-gradient(180deg, #3b84f0 0%, #2357be 100%);
+  color: #fff;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 2px 0 #112c66,
+    0 0 12px rgba(80, 150, 255, 0.3);
+}
+.keyChoice {
+  background: linear-gradient(180deg, #2b5546 0%, #1b3a2f 100%);
+  color: #d9ffe9;
+}
+
+/* 경고등 칸(애넌시에이터): 꺼져 있어도 글은 흐리게 읽힌다 */
+.tile {
+  background: linear-gradient(180deg, #0b0e13, #121620);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.7),
+    0 1px 0 rgba(255, 255, 255, 0.05);
+  transition:
+    background 400ms,
+    color 400ms,
+    box-shadow 400ms;
+}
+.tileWarn {
+  background: linear-gradient(180deg, #4a3608, #2f2205);
+  color: #ffd56a;
+  box-shadow:
+    inset 0 0 10px rgba(255, 200, 80, 0.35),
+    0 0 12px rgba(255, 190, 60, 0.18);
+}
+.tileAlert {
+  background: linear-gradient(180deg, #4d1212, #2e0909);
+  color: #ff9d9d;
+  box-shadow:
+    inset 0 0 10px rgba(255, 90, 90, 0.4),
+    0 0 14px rgba(255, 80, 80, 0.22);
+}
+
+/* 나를 기다리는 등: 천천히 깜빡 */
+.wait {
+  animation: wait 2.2s ease-in-out infinite;
+}
+@keyframes wait {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+/* 새 교신: 수신등이 숨 쉬듯 */
+.breathe {
+  animation: breathe 1.8s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%,
+  100% {
+    filter: brightness(1);
+    box-shadow: 0 0 16px rgba(255, 176, 32, 0.65);
+  }
+  50% {
+    filter: brightness(0.7);
+    box-shadow: 0 0 4px rgba(255, 176, 32, 0.25);
+  }
+}
+
+/* 주 표시창 글이 바뀔 때 */
+.swap {
+  animation: swap 420ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+@keyframes swap {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+    filter: blur(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
+}
+
+/* 서랍이 위로 올라온다 */
+.drawer {
+  animation: drawer 320ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  transform-origin: 50% 100%;
+}
+@keyframes drawer {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scaleY(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 교신 화상 창 자리 */
+.hailIn {
+  animation: hailIn 420ms cubic-bezier(0.2, 1.1, 0.4, 1) both;
+  transform-origin: 100% 0;
+}
+@keyframes hailIn {
+  from {
+    opacity: 0;
+    transform: scaleY(0.05) scaleX(0.7);
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 유리 위 먼지: 아주 천천히 흐른다 */
+.dust {
+  animation: dust 60s linear infinite;
+}
+@keyframes dust {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-40px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wait,
+  .breathe,
+  .swap,
+  .drawer,
+  .hailIn,
+  .dust {
+    animation: none;
+  }
+}
