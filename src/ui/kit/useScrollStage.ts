@@ -8,11 +8,15 @@ export function useScrollStage({
   stages = 2,
   threshold = 160,
   duration = 900,
+  enabled = true,
 }: {
   stages?: number;
   threshold?: number;
   duration?: number;
+  /** false면 휠·키보드·터치로 장면을 바꾸지 않는다(예: 전체 화면 감상 중) */
+  enabled?: boolean;
 } = {}) {
+  const stageRef = useRef(0);
   const [stage, setStage] = useState(0);
   const [progress, setProgress] = useState(0); // 0 = 첫 장면, stages-1 = 마지막
   /** 문턱까지 얼마나 밀었나(0..1). 버티는 느낌을 보여 줄 때 쓴다. */
@@ -25,6 +29,7 @@ export function useScrollStage({
   const go = useCallback(
     (next: number) => {
       const target = Math.max(0, Math.min(stages - 1, next));
+      stageRef.current = target;
       setStage(target);
       acc.current = 0;
       setPush(0);
@@ -45,8 +50,7 @@ export function useScrollStage({
   );
 
   useEffect(() => {
-    let stageNow = 0;
-    const unsub = () => {};
+    if (!enabled) return;
     const feed = (dy: number) => {
       // 같은 방향으로 계속 밀어야 쌓인다.
       if (Math.sign(dy) !== Math.sign(acc.current)) acc.current = 0;
@@ -57,13 +61,9 @@ export function useScrollStage({
         acc.current = 0;
         setPush(0);
       }, 260);
-      if (acc.current > threshold && stageNow < stages - 1) {
-        stageNow += 1;
-        go(stageNow);
-      } else if (acc.current < -threshold && stageNow > 0) {
-        stageNow -= 1;
-        go(stageNow);
-      }
+      const now = stageRef.current;
+      if (acc.current > threshold && now < stages - 1) go(now + 1);
+      else if (acc.current < -threshold && now > 0) go(now - 1);
     };
     const onWheel = (e: WheelEvent) => {
       // 안쪽에 스스로 스크롤하는 목록이 있으면 그쪽을 먼저.
@@ -88,33 +88,20 @@ export function useScrollStage({
       feed((touchY - y) * 2);
       touchY = y;
     };
-    // go()가 stage를 바꾸면 이 효과 안의 stageNow도 맞춘다.
-    const sync = (e: Event) => {
-      stageNow = (e as CustomEvent<number>).detail;
-    };
     window.addEventListener("wheel", onWheel, { passive: false });
     window.addEventListener("keydown", onKey);
     window.addEventListener("touchstart", onTouchStart, { passive: true });
     window.addEventListener("touchmove", onTouchMove, { passive: true });
-    window.addEventListener("starship:stage", sync);
     return () => {
-      unsub();
       window.removeEventListener("wheel", onWheel);
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("touchstart", onTouchStart);
       window.removeEventListener("touchmove", onTouchMove);
-      window.removeEventListener("starship:stage", sync);
     };
-  }, [threshold, stages, go]);
+  }, [threshold, stages, go, enabled]);
 
   /** 버튼으로 장면을 바꿀 때 */
-  const goTo = useCallback(
-    (next: number) => {
-      window.dispatchEvent(new CustomEvent("starship:stage", { detail: next }));
-      go(next);
-    },
-    [go],
-  );
+  const goTo = go;
 
   return { stage, progress, push, goTo };
 }
