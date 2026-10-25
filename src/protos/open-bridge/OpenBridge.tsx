@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 // 2차 시안 "트인 함교". 방향: docs/prototypes/direction-round2.md
 // 첫 장면 = 창틀 없이 트인 우주(끌어서 둘러보기, 천체를 눌러 날아가기) 위에 얇은 계기와 접히는 패널.
 // 아래로 밀면 창밖이 위쪽 띠로 줄고, 층층이 구조화된 우주선 내부가 드러난다.
@@ -15,6 +16,7 @@ export const BAND_SHARE = 0.3;
 export function OpenBridge() {
   const { stage, progress: p, push, goTo } = useScrollStage();
   const bandScale = 1 - (1 - BAND_SHARE) * p;
+  const [grid, setGrid] = useState(false);
 
   return (
     <main className="fixed inset-0 overflow-hidden bg-hull-950 text-white">
@@ -33,6 +35,7 @@ export function OpenBridge() {
           lookAround
           clickToFly
           drift
+          grid={grid}
         />
         <EventLayer every={150} enabled={stage === 0} />
       </div>
@@ -45,7 +48,13 @@ export function OpenBridge() {
           visibility: p > 0.98 ? "hidden" : "visible",
         }}
       >
-        <Cockpit active={stage === 0} push={push} onInterior={() => goTo(1)} />
+        <Cockpit
+          active={stage === 0}
+          push={push}
+          onInterior={() => goTo(1)}
+          grid={grid}
+          onGrid={() => setGrid((g) => !g)}
+        />
       </div>
 
       {/* 내부 장면(창밖 띠 아래) */}
@@ -62,7 +71,8 @@ export function OpenBridge() {
         <Interior active={stage === 1} onCockpit={() => goTo(0)} />
       </div>
 
-      <Toasts />
+      {/* 행성 단추 줄을 덮지 않게 조금 위에 띄운다 */}
+      <Toasts className="bottom-20" />
       <ProtoBadge name="트인 함교 (2차)" />
     </main>
   );

@@ -1,0 +1,116 @@
+/* 조종석 층: Tailwind로 쓰기 번거로운 움직임만 둔다. 모두 느리고 조용하게. */
+
+/* 새 교신 점: 숨 쉬듯 */
+.breathe {
+  animation: breathe 2.4s ease-in-out infinite;
+}
+@keyframes breathe {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(255, 196, 120, 0.55);
+  }
+  50% {
+    opacity: 0.45;
+    box-shadow: 0 0 0 5px rgba(255, 196, 120, 0);
+  }
+}
+
+/* 가장자리에서 미끄러져 들어온다 */
+.slideIn {
+  animation: slideIn 520ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+@keyframes slideIn {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* 아래에서 떠오른다(패널) */
+.rise {
+  animation: rise 260ms cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+@keyframes rise {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* 교신 화상 창이 켜진다 */
+.tuneIn {
+  animation: tuneIn 420ms cubic-bezier(0.2, 1.1, 0.4, 1) both;
+  transform-origin: 100% 0;
+}
+@keyframes tuneIn {
+  from {
+    transform: scaleY(0.05) scaleX(0.7);
+    opacity: 0;
+  }
+  60% {
+    opacity: 1;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* 화상 주사선 */
+.scan {
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.035) 0 1px,
+    transparent 1px 3px
+  );
+  animation: scanMove 7s linear infinite;
+}
+@keyframes scanMove {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 0 120px;
+  }
+}
+
+.blink {
+  animation: blink 1.4s steps(1, end) infinite;
+}
+@keyframes blink {
+  0%,
+  60% {
+    opacity: 1;
+  }
+  61%,
+  100% {
+    opacity: 0.2;
+  }
+}
+
+/* 속도계 바늘이 부드럽게 따라간다 */
+.needle {
+  transition: transform 260ms ease-out;
+  transform-box: view-box;
+  transform-origin: 50px 50px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .breathe,
+  .scan,
+  .blink,
+  .slideIn,
+  .rise,
+  .tuneIn {
+    animation: none;
+  }
+}
