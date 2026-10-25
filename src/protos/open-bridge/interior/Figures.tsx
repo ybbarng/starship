@@ -33,6 +33,13 @@ type Spot = {
   furniture?: boolean;
 };
 
+/** 나를 기다린 지 30분이면 가장 급하게(슬쩍 돌아봄 → 몸 기울여 손짓). */
+function urgencyOf(crew: Crew): number {
+  if (crew.status !== "needs-you" || !crew.since) return 0.6;
+  const minutes = (Date.now() - crew.since) / 60_000;
+  return Math.max(0.15, Math.min(1, minutes / 30));
+}
+
 /** 선원 그림 하나. 자리가 바뀌면 옛 자리에서 걸어온다. 누름은 아래 자리 단추가 받는다. */
 function Walker({ spot }: { spot: Spot }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -80,6 +87,7 @@ function Walker({ spot }: { spot: Spot }) {
           context={spot.crew.context}
           size={size}
           furniture={walking ? false : spot.furniture}
+          urgency={urgencyOf(spot.crew)}
           label={`${spot.crew.name}, ${CREW_STATUS_LABEL[spot.crew.status]}`}
         />
       </div>
