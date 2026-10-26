@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useVoyage } from "@/sky/voyage";
 
 /** 창밖에서 일어날 수 있는 일. 앞의 넷은 이 저장소에서 지어낸 손님, 뒤의 넷은 실제 우주 현상이다. */
 export const EVENT_KINDS = [
@@ -33,7 +34,7 @@ export const EVENT_LABELS: Record<EventKind, string> = {
   kkung: "정비 로봇 끙이 지나가요",
   comet: "혜성 통과",
   meteors: "유성우",
-  station: "우주정거장이 달 앞을 지나가요",
+  station: "우주정거장이 지나가요",
   oumuamua: "길쭉한 성간 천체가 굴러가요",
 };
 
@@ -57,7 +58,7 @@ export const EVENT_SHOWCASE_MS: Record<EventKind, number> = {
   kkung: 9_000,
   comet: 7_000,
   meteors: 3_200,
-  station: 600,
+  station: 4_000,
   oumuamua: 9_000,
 };
 
@@ -93,8 +94,14 @@ interface EventBusState {
 
 let nextId = 1;
 
+/** 우주정거장은 지구 둘레를 돌므로 지구나 달에 있을 때만 지나간다. */
+const NEAR_EARTH = new Set(["earth", "moon"]);
+
 function pickRandom(except: EventKind | null): EventKind {
-  const pool = EVENT_KINDS.filter((k) => k !== except);
+  const here = useVoyage.getState().destinationId;
+  const pool = EVENT_KINDS.filter(
+    (k) => k !== except && (k !== "station" || NEAR_EARTH.has(here)),
+  );
   return pool[Math.floor(Math.random() * pool.length)] ?? "comet";
 }
 

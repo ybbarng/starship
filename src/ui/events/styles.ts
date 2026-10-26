@@ -67,8 +67,6 @@ export const EVENT_CSS = `
 .ev-trail { animation: ev-trail 2.2s ease-out infinite; }
 .ev-streak { animation: ev-streak var(--sd) cubic-bezier(.2,.6,.4,1) var(--delay) both; }
 .ev-streak-still { animation: ev-streak-still 1.6s ease var(--delay) both; }
-.ev-moon { animation: ev-moon var(--dur) ease both; }
-.ev-iss { animation: ev-iss 6s linear .8s both; }
 
 @keyframes ev-cross {
   from { transform: translate(var(--x0), 0); }
@@ -115,10 +113,8 @@ export const EVENT_CSS = `
   100% { opacity: 0; transform: translateX(var(--d1)) scaleX(1); margin-top: .01px; }
 }
 @keyframes ev-streak-still { 0% { opacity: 0; } 30% { opacity: .8; } 100% { opacity: 0; } }
-@keyframes ev-moon { 0% { opacity: 0; } 14% { opacity: .95; } 84% { opacity: .95; } 100% { opacity: 0; } }
 /* 유성·정거장 키프레임의 margin-top은 눈에 띄지 않는 값이다. 합성 스레드 대신 메인 스레드에서 그리게 해서
    ?at= 로 시계를 돌린 장면이 헤드리스 스크린숏에도 그대로 찍히게 한다. */
-@keyframes ev-iss { from { transform: translate(-820px, 60px); margin-top: 0; } to { transform: translate(820px, -60px); margin-top: .01px; } }
 
 @media (prefers-reduced-motion: reduce) {
   .ev-loop, .ev-bob, .ev-rock, .ev-sway, .ev-hue, .ev-hop, .ev-spin, .ev-puff, .ev-float,

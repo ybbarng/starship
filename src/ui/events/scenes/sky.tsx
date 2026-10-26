@@ -221,84 +221,28 @@ export function MeteorsScene({ durationMs, rand, reduced }: SceneProps) {
   );
 }
 
-/* ───────────── 우주정거장이 달 앞을 빠르게 지나감 ───────────── */
+/* ───────────── 지구 둘레를 도는 우주정거장이 빠르게 지나감 ───────────── */
 
 export function StationScene({ durationMs, rand, reduced }: SceneProps) {
   const [cfg] = useState(() => ({
-    x: between(rand, 52, 74),
-    tilt: pick(rand, [1, -1] as const),
+    dir: pick(rand, ["ltr", "rtl"] as const),
+    y: between(rand, 0.08, 0.6),
+    drift: between(rand, -70, 70),
   }));
-  const id = useSvgId("moon");
-  const D = 210;
   return (
-    <div
-      className="absolute"
-      style={
-        {
-          "--dur": `${durationMs}ms`,
-          left: `calc(${cfg.x}% - ${D / 2}px)`,
-          top: 26,
-          width: D,
-          height: D,
-        } as CSSProperties
-      }
+    <Traveler
+      width={132}
+      height={66}
+      y={cfg.y}
+      dir={cfg.dir}
+      durationMs={durationMs}
+      drift={cfg.drift}
+      reduced={reduced}
     >
-      <svg
-        width={D}
-        height={D}
-        className="ev-moon"
-        viewBox="0 0 200 200"
-        style={{ filter: "drop-shadow(0 0 26px rgba(240,236,220,.22))" }}
-        aria-hidden
-      >
-        <defs>
-          <radialGradient id={id("disk")} cx="42%" cy="40%" r="62%">
-            <stop offset="0%" stopColor="#f6f4ee" />
-            <stop offset="70%" stopColor="#d9d5ca" />
-            <stop offset="100%" stopColor="#aaa596" />
-          </radialGradient>
-        </defs>
-        <circle cx="100" cy="100" r="98" fill={`url(#${id("disk")})`} />
-        <g fill="#9e998b" opacity="0.42">
-          <ellipse
-            cx="70"
-            cy="70"
-            rx="28"
-            ry="20"
-            transform="rotate(-20 70 70)"
-          />
-          <ellipse cx="112" cy="58" rx="20" ry="14" />
-          <ellipse
-            cx="128"
-            cy="96"
-            rx="26"
-            ry="18"
-            transform="rotate(15 128 96)"
-          />
-          <ellipse cx="86" cy="120" rx="18" ry="22" />
-          <ellipse cx="60" cy="140" rx="12" ry="9" />
-        </g>
-        <g fill="none" stroke="#bdb8aa" strokeWidth="1.2" opacity="0.7">
-          <circle cx="118" cy="156" r="7" />
-          <circle cx="146" cy="130" r="4" />
-          <circle cx="44" cy="96" r="5" />
-        </g>
-      </svg>
-
-      {/* 정거장은 달 한가운데를 지나가는 길을 탄다 */}
-      <div
-        className="absolute"
-        style={{ left: D / 2 - 66, top: D / 2 - 33, width: 132, height: 66 }}
-      >
-        <div style={{ transform: cfg.tilt < 0 ? "scaleY(-1)" : undefined }}>
-          <div className={reduced ? "ev-moon" : "ev-iss"}>
-            <div style={{ transform: cfg.tilt < 0 ? "scaleY(-1)" : undefined }}>
-              <StationSilhouette />
-            </div>
-          </div>
-        </div>
+      <div style={flip(cfg.dir)}>
+        <StationSilhouette />
       </div>
-    </div>
+    </Traveler>
   );
 }
 
