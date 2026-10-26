@@ -111,6 +111,7 @@ uniform float uTime;
 uniform vec3 uSunPos;
 uniform sampler2D uMap;
 uniform float uHasMap;
+uniform float uSunlight;
 uniform sampler2D uNight;
 varying vec3 vNormalW;
 varying vec3 vPosW;
@@ -176,14 +177,14 @@ void main() {
   if (uHasMap > 0.5) base = texture2D(uMap, vUv).rgb;
   float diff = max(dot(n, L), 0.0);
   float wrap = smoothstep(-0.08, 0.25, dot(n, L));
-  vec3 col = base * (0.035 + 1.05 * diff * wrap);
+  vec3 col = base * (0.035 + 1.05 * diff * wrap * uSunlight);
   if (uType == 2 && uHasMap > 0.5) {
     // 사진 지구: 밤 쪽에 도시 불빛, 바다에 햇빛 반짝임. 구름은 따로 한 겹 더 그린다.
     float dark = 1.0 - smoothstep(-0.15, 0.06, dot(n, L));
     col += texture2D(uNight, vUv).rgb * vec3(1.0, 0.85, 0.6) * dark * 1.3;
     float water = smoothstep(0.12, 0.02, base.g - base.b * 0.6);
     vec3 H = normalize(L + V);
-    col += vec3(1.0, 0.95, 0.85) * pow(max(dot(n, H), 0.0), 60.0) * water * 0.6 * wrap;
+    col += vec3(1.0, 0.95, 0.85) * pow(max(dot(n, H), 0.0), 60.0) * water * 0.6 * wrap * uSunlight;
   } else if (uType == 2) {
     float cl = smoothstep(0.55, 0.72, fbm(vLocal * 4.0 + vec3(uTime * 0.004, 0.0, 0.0)));
     col = mix(col, vec3(1.0) * (0.04 + diff), cl * 0.85);
@@ -191,7 +192,7 @@ void main() {
   }
   if (uHasAtmo > 0.5) {
     float rim = pow(1.0 - max(dot(n, V), 0.0), 3.0);
-    col += uAtmo * rim * smoothstep(-0.3, 0.4, dot(n, L)) * 0.9;
+    col += uAtmo * rim * smoothstep(-0.3, 0.4, dot(n, L)) * 0.9 * uSunlight;
   }
   gl_FragColor = vec4(col, 1.0);
 }
@@ -244,6 +245,7 @@ uniform vec3 uSunPos;
 uniform vec3 uPlanetPos;
 uniform float uPlanetRadius;
 uniform sampler2D uMap;
+uniform float uSunlight;
 uniform float uHasMap;
 varying vec3 vPosW;
 varying vec3 vLocal;
@@ -266,7 +268,7 @@ void main() {
   float along = dot(toP, L);
   float dist = length(toP - L * along);
   float shadow = along > 0.0 ? smoothstep(uPlanetRadius * 0.95, uPlanetRadius * 1.05, dist) : 1.0;
-  vec3 c = ringColor * (0.25 + 0.75 * shadow);
+  vec3 c = ringColor * (0.25 + 0.75 * shadow) * uSunlight;
   gl_FragColor = vec4(c, a);
 }
 `;
@@ -325,6 +327,7 @@ void main() {
 export const cloudFragment = /* glsl */ `
 uniform sampler2D uMap;
 uniform vec3 uSunPos;
+uniform float uSunlight;
 varying vec3 vNormalW;
 varying vec3 vPosW;
 varying vec3 vLocal;
@@ -334,6 +337,6 @@ void main() {
   vec3 L = normalize(uSunPos - vPosW);
   float lit = smoothstep(-0.1, 0.35, dot(n, L));
   float a = texture2D(uMap, vUv).r;
-  gl_FragColor = vec4(vec3(0.03 + 0.97 * lit), a * 0.92);
+  gl_FragColor = vec4(vec3(0.03 + 0.97 * lit * uSunlight), a * 0.92);
 }
 `;

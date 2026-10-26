@@ -470,6 +470,28 @@ export function bodyPosition(
   return [0, 0, 0];
 }
 
+/** 천체의 실제 태양 거리(AU). 위성은 모행성 거리. */
+export function sunDistanceAU(
+  body: BodyDef,
+  orbits: Record<string, Elements>,
+  ms: number,
+): number {
+  if (body.orbit) {
+    const el = orbits[body.orbit];
+    return el ? Math.hypot(...heliocentric(el, ms)) : 1;
+  }
+  const parent = body.parent ? BODY_BY_ID.get(body.parent.id) : undefined;
+  return parent ? sunDistanceAU(parent, orbits, ms) : 1;
+}
+
+/**
+ * 햇빛 세기(지구 = 1). 실제로는 거리 제곱에 반비례해 해왕성은 지구의 0.1%밖에 받지 않지만,
+ * 그대로면 바깥 행성이 보이지 않는다. 거리가 두 배가 될 때마다 10%씩만 어둡게 하고 절반 아래로는 내리지 않는다.
+ */
+export function sunlightFactor(au: number): number {
+  return Math.min(1.15, Math.max(0.5, 1 - 0.1 * Math.log2(au)));
+}
+
 export function halleyPosition(ms: number): Vec3 {
   return toThree(compress(halleyAt(ms)));
 }

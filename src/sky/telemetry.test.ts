@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { AU_KM, type Elements } from "./astro";
-import { DESTINATION_BY_ID, type Destination } from "./bodies";
+import { DESTINATION_BY_ID, type Destination, sunlightFactor } from "./bodies";
 import { distanceKm, formatLightTime, realPositionAU } from "./telemetry";
 
 const sky = JSON.parse(
@@ -48,5 +48,14 @@ describe("탐사선", () => {
 
   it("보이저 2호는 1호보다 가깝다", () => {
     expect(fromEarth("voyager2")).toBeLessThan(fromEarth("voyager1"));
+  });
+});
+
+describe("햇빛 세기", () => {
+  it("멀수록 어둡지만 절반 아래로는 내려가지 않는다", () => {
+    expect(sunlightFactor(1)).toBe(1);
+    expect(sunlightFactor(5.2)).toBeCloseTo(0.76, 2);
+    expect(sunlightFactor(30)).toBeGreaterThanOrEqual(0.5);
+    expect(sunlightFactor(0.39)).toBeLessThanOrEqual(1.15);
   });
 });

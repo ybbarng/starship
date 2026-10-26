@@ -34,10 +34,13 @@ import {
   PROBE_SIZE,
   PROBES,
   probePosition,
+  sunDistanceAU,
+  sunlightFactor,
 } from "./bodies";
 import { loadCatalog, type SkyCatalog } from "./catalog";
 import { projector } from "./projector";
 import { ScaleNote } from "./ScaleNote";
+import { SunGlare } from "./SunGlare";
 import { useScale } from "./scale";
 import * as S from "./shaders";
 import {
@@ -99,6 +102,7 @@ export function SpaceView({
   const onPick = clickToFly ? travelTo : undefined;
   const [catalog, setCatalog] = useState<SkyCatalog | null>(null);
   const labelRef = useRef<HTMLDivElement>(null);
+  const glareRef = useRef<HTMLDivElement>(null);
   const warpRef = useRef<HTMLCanvasElement>(null);
   const warp = useRef(0);
   const mode = useScale((s) => s.mode);
@@ -154,10 +158,23 @@ export function SpaceView({
                   constellations={constellations}
                 />
               )}
+              <SunGlare catalog={catalog} container={glareRef} />
             </group>
           </>
         )}
       </Canvas>
+      {/* 태양 눈부심: 유리창에 번지는 빛(이름표보다 아래) */}
+      <div
+        ref={glareRef}
+        style={{
+          position: "absolute",
+          inset: 0,
+          pointerEvents: "none",
+          mixBlendMode: "screen",
+          opacity: 0,
+          transition: "opacity .4s",
+        }}
+      />
       <div
         ref={labelRef}
         style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
@@ -426,6 +443,7 @@ function planetMaterial(body: BodyDef) {
       uSeed: { value: body.id.length * 3.7 },
       uTime: { value: 0 },
       uSunPos: { value: new THREE.Vector3() },
+      uSunlight: { value: 1 },
       uMap: { value: null },
       uHasMap: { value: 0 },
     },
@@ -781,6 +799,11 @@ function Planet({
   const group = useRef<THREE.Group>(null);
   const spin = useRef<THREE.Mesh>(null);
   const mat = useMemo(() => planetMaterial(body), [body]);
+  // 태양에서 멀수록 어둡게(햇빛 세기는 천천히 바뀌므로 처음 한 번 정한다).
+  const sunlight = useMemo(
+    () => sunlightFactor(sunDistanceAU(body, catalog.orbits, Date.now())),
+    [body, catalog],
+  );
   const ringMat = useMemo(
     () =>
       body.ring
@@ -794,6 +817,7 @@ function Planet({
               uSunPos: { value: new THREE.Vector3() },
               uPlanetPos: { value: new THREE.Vector3() },
               uPlanetRadius: { value: body.radius },
+              uSunlight: { value: 1 },
               uMap: { value: null },
               uHasMap: { value: 0 },
             },
@@ -818,6 +842,7 @@ function Planet({
             uniforms: {
               uMap: { value: null },
               uSunPos: { value: new THREE.Vector3() },
+              uSunlight: { value: 1 },
             },
             transparent: true,
             depthWrite: false,
@@ -839,6 +864,10 @@ function Planet({
         }
       });
   }, [cloudMat, ringMat, body.id]);
+  useEffect(() => {
+    for (const m of [mat, ringMat, cloudMat])
+      if (m?.uniforms.uSunlight) m.uniforms.uSunlight.value = sunlight;
+  }, [mat, ringMat, cloudMat, sunlight]);
   const basis = useMemo(() => new THREE.Matrix4(), []);
   const vx = useMemo(() => new THREE.Vector3(), []);
   const vy = useMemo(() => new THREE.Vector3(), []);
@@ -1372,6 +1401,20 @@ function fitClipRange(camera: THREE.PerspectiveCamera, viewDist: number) {
   }
 }
 
+/** 끌 때 1픽셀당 도는 각도 */
+const DRAG_RAD_PER_PX = 0.005;
+/** 고도각 한계(위아래로 너무 넘어가 화면이 뒤집히지 않게) */
+const MAX_ELEVATION = 1.35;
+
+/** 기본 고도각에 더할 값을 전체 고도각이 한계 안에 들도록 자른다. */
+function clampPitch(pitch: number, baseElevation: number): number {
+  return THREE.MathUtils.clamp(
+    pitch,
+    -MAX_ELEVATION - baseElevation,
+    MAX_ELEVATION - baseElevation,
+  );
+}
+
 const easeInOut = (t: number) =>
   t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 
@@ -1403,6 +1446,11 @@ function CameraRig({
   const camDir = useMemo(() => new THREE.Vector3(), []);
   const yaw = useRef(0);
   const pitch = useRef(0);
+  const dragging = useRef(false);
+  /** 놓은 뒤 이어서 도는 속도(라디안/초) */
+  const spin = useRef({ yaw: 0, pitch: 0 });
+  /** 목적지 기본 방향의 고도각. 끌어서 올리고 내릴 수 있는 범위를 정한다. */
+  const baseElevation = useRef(0);
   const first = useRef(true);
   const lastProgress = useRef(0);
 
@@ -1439,38 +1487,57 @@ function CameraRig({
     };
     yaw.current = 0;
     pitch.current = 0;
+    spin.current = { yaw: 0, pitch: 0 };
   }, [destinationId, orbits, camera, setPhase]);
 
-  // 끌어서 둘러보기
+  // 끌어서 둘러보기: 지구본을 손으로 잡아 돌리듯, 끄는 쪽으로 장면이 따라온다.
+  // 카메라 방향은 방위각(yaw)·고도각(pitch) 두 값으로만 다룬다. 회전을 겹쳐 쌓으면 돌린 정도에 따라
+  // 위아래가 뒤집히거나 비틀린다.
   useEffect(() => {
     if (!lookAround) return;
     const el = gl.domElement;
-    let down: { x: number; y: number } | null = null;
+    let last: { x: number; y: number; t: number } | null = null;
     const onDown = (e: PointerEvent) => {
-      down = { x: e.clientX, y: e.clientY };
+      last = { x: e.clientX, y: e.clientY, t: performance.now() };
+      dragging.current = true;
+      spin.current = { yaw: 0, pitch: 0 };
       lastInteract.current = performance.now();
       el.setPointerCapture(e.pointerId);
+      el.style.cursor = "grabbing";
     };
     const onMove = (e: PointerEvent) => {
-      if (!down) return;
-      yaw.current -= (e.clientX - down.x) * 0.005;
-      pitch.current = Math.max(
-        -1.2,
-        Math.min(1.2, pitch.current + (e.clientY - down.y) * 0.004),
-      );
-      down = { x: e.clientX, y: e.clientY };
+      if (!last) return;
+      const now = performance.now();
+      const dYaw = -(e.clientX - last.x) * DRAG_RAD_PER_PX;
+      const dPitch = (e.clientY - last.y) * DRAG_RAD_PER_PX;
+      yaw.current += dYaw;
+      pitch.current = clampPitch(pitch.current + dPitch, baseElevation.current);
+      // 놓았을 때 이어서 미끄러질 속도(라디안/초)
+      const dt = Math.max(1, now - last.t) / 1000;
+      spin.current = { yaw: dYaw / dt, pitch: dPitch / dt };
+      last = { x: e.clientX, y: e.clientY, t: now };
+      lastInteract.current = now;
     };
     const onUp = () => {
-      down = null;
+      // 멈춘 채 잠깐 있다 놓았으면 미끄러지지 않는다.
+      if (last && performance.now() - last.t > 80)
+        spin.current = { yaw: 0, pitch: 0 };
+      last = null;
+      dragging.current = false;
+      lastInteract.current = performance.now();
+      el.style.cursor = "grab";
     };
     el.addEventListener("pointerdown", onDown);
     el.addEventListener("pointermove", onMove);
     el.addEventListener("pointerup", onUp);
+    el.addEventListener("pointercancel", onUp);
     el.style.cursor = "grab";
     return () => {
       el.removeEventListener("pointerdown", onDown);
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerup", onUp);
+      el.removeEventListener("pointercancel", onUp);
+      el.style.cursor = "";
     };
   }, [lookAround, gl]);
 
@@ -1482,20 +1549,38 @@ function CameraRig({
     const dest = DESTINATION_BY_ID.get(destinationId);
     if (!dest) return;
     const p = poseFor(dest, orbits);
+    // 놓은 뒤에는 잠깐 미끄러지다 멈춘다.
+    if (!dragging.current) {
+      const s = spin.current;
+      if (Math.abs(s.yaw) + Math.abs(s.pitch) > 1e-3) {
+        yaw.current += s.yaw * dt;
+        pitch.current = clampPitch(
+          pitch.current + s.pitch * dt,
+          baseElevation.current,
+        );
+        const k = Math.exp(-dt * 5);
+        spin.current = { yaw: s.yaw * k, pitch: s.pitch * k };
+      }
+    }
     // 둘러본 뒤 몇 초는 저절로 돌지 않는다.
     if (
       drift &&
       !trip.current &&
+      !dragging.current &&
       performance.now() - lastInteract.current > 5000
     )
       yaw.current += dt * 0.012;
-    const dir = p.dir
-      .clone()
-      .applyAxisAngle(UP, yaw.current)
-      .applyAxisAngle(
-        new THREE.Vector3().crossVectors(p.dir, UP).normalize(),
-        pitch.current,
-      );
+    // 목적지가 정한 기본 방향을 방위각·고도각으로 나눠, 끈 만큼 더한다.
+    const baseAz = Math.atan2(p.dir.x, p.dir.z);
+    const baseEl = Math.asin(THREE.MathUtils.clamp(p.dir.y, -1, 1));
+    baseElevation.current = baseEl;
+    const az = baseAz + yaw.current;
+    const elev = baseEl + clampPitch(pitch.current, baseEl);
+    const dir = new THREE.Vector3(
+      Math.cos(elev) * Math.sin(az),
+      Math.sin(elev),
+      Math.cos(elev) * Math.cos(az),
+    );
     const target = p.center.clone().add(dir.multiplyScalar(p.dist));
 
     const t0 = trip.current;
@@ -1522,8 +1607,10 @@ function CameraRig({
         lastProgress.current = 0;
       }
     } else {
-      camera.position.lerp(target, Math.min(1, dt * 3));
-      look.current.lerp(p.center, Math.min(1, dt * 3));
+      // 끄는 동안은 손을 바짝 따라오고, 평소에는 부드럽게 자리를 잡는다.
+      const follow = Math.min(1, dt * (dragging.current ? 14 : 3));
+      camera.position.lerp(target, follow);
+      look.current.lerp(p.center, follow);
       warp.current = 0;
     }
     camera.lookAt(look.current);
