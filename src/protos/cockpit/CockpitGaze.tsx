@@ -97,6 +97,8 @@ export function CockpitGaze() {
   });
 
   const [grid, setGrid] = useState(false);
+  // 별자리 선(이름 포함). 유리창과 감상 모드가 함께 쓴다.
+  const [lines, setLines] = useState(true);
   const [drawer, setDrawer] = useState(false);
   const [modal, setModal] = useState<ModalState>(null);
 
@@ -241,6 +243,7 @@ export function CockpitGaze() {
           clickToFly
           drift
           grid={gaze && grid}
+          constellations={lines}
         />
       </div>
 
@@ -351,6 +354,8 @@ export function CockpitGaze() {
             hailOpen={!!currentHail}
             grid={grid}
             onGrid={() => setGrid((v) => !v)}
+            lines={lines}
+            onLines={() => setLines((v) => !v)}
             onHail={openHail}
             onExit={exitGaze}
           />

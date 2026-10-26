@@ -156,6 +156,8 @@ export function SpaceView({
                   container={labelRef}
                   amount={labels}
                   onPick={onPick}
+                  grid={grid}
+                  constellations={constellations}
                 />
               )}
             </group>
@@ -306,7 +308,7 @@ function SkyDome({
           <lineBasicMaterial
             color="#5fd4c4"
             transparent
-            opacity={0.13}
+            opacity={0.3}
             depthWrite={false}
           />
         </lineSegments>
@@ -316,7 +318,7 @@ function SkyDome({
           <lineBasicMaterial
             color="#6f8fd8"
             transparent
-            opacity={0.22}
+            opacity={0.32}
             depthWrite={false}
           />
         </lineSegments>
@@ -1620,7 +1622,7 @@ function CameraRig({
 type LabelSpec = {
   key: string;
   text: string;
-  kind: "star" | "constellation" | "body" | "sun";
+  kind: "star" | "constellation" | "body" | "sun" | "grid";
   /** 하늘 방향이면 dir, 장면 위치면 at() */
   dir?: THREE.Vector3;
   at?: () => THREE.Vector3;
@@ -1645,6 +1647,7 @@ const LABEL_STYLE: Record<LabelSpec["kind"], string> = {
     "font-size:11px;letter-spacing:.18em;color:rgba(140,170,255,.55);",
   body: "font-size:12.5px;color:rgba(255,236,200,.92);font-weight:600;",
   sun: "font-size:12px;color:rgba(255,220,160,.9);font-weight:600;",
+  grid: "font-size:10px;color:rgba(95,212,196,.8);font-family:ui-monospace,SF Mono,monospace;",
 };
 
 function LabelLayer({
@@ -1652,11 +1655,17 @@ function LabelLayer({
   container,
   amount,
   onPick,
+  grid,
+  constellations,
 }: {
   catalog: SkyCatalog;
   container: RefObject<HTMLDivElement | null>;
   amount: "few" | "all";
   onPick?: (id: string) => void;
+  /** 적도 좌표 격자 눈금 글 */
+  grid: boolean;
+  /** 별자리 이름 */
+  constellations: boolean;
 }) {
   const { camera, gl } = useThree();
   const nodes = useRef<Map<string, HTMLSpanElement>>(new Map());
@@ -1675,7 +1684,7 @@ function LabelLayer({
         dir: new THREE.Vector3(x, y, z),
       });
     }
-    for (const c of catalog.constellations) {
+    for (const c of constellations ? catalog.constellations : []) {
       if (amount === "few" && c.rank > 1) continue;
       const [x, y, z] = toThree(raDecToEcliptic(c.label[0], c.label[1]));
       out.push({
@@ -1723,8 +1732,30 @@ function LabelLayer({
         at: () => new THREE.Vector3(...probePosition(p.id, Date.now())),
       });
     }
+    if (grid) {
+      // 적경은 하늘의 적도를 따라 2시간마다, 적위는 적경 0시 선을 따라 15도마다.
+      for (let h = 0; h < 24; h += 2) {
+        const [x, y, z] = toThree(raDecToEcliptic(h * 15, 0));
+        out.push({
+          key: `g-ra-${h}`,
+          text: `${h}h`,
+          kind: "grid",
+          dir: new THREE.Vector3(x, y, z),
+        });
+      }
+      for (let d = -75; d <= 75; d += 15) {
+        if (d === 0) continue;
+        const [x, y, z] = toThree(raDecToEcliptic(0, d));
+        out.push({
+          key: `g-dec-${d}`,
+          text: `${d > 0 ? "+" : "−"}${Math.abs(d)}°`,
+          kind: "grid",
+          dir: new THREE.Vector3(x, y, z),
+        });
+      }
+    }
     return out;
-  }, [catalog, amount]);
+  }, [catalog, amount, grid, constellations]);
 
   useEffect(() => {
     const root = container.current;
@@ -1755,7 +1786,13 @@ function LabelLayer({
   const v = useMemo(() => new THREE.Vector3(), []);
   // 행성 이름표가 먼저 자리를 잡고, 별·별자리는 남는 자리에.
   const ordered = useMemo(() => {
-    const rank = { body: 0, sun: 0, star: 1, constellation: 2 } as const;
+    const rank = {
+      body: 0,
+      sun: 0,
+      star: 1,
+      constellation: 2,
+      grid: 3,
+    } as const;
     return [...specs].sort((a, b) => rank[a.kind] - rank[b.kind]);
   }, [specs]);
   const occluderBodies = useMemo(

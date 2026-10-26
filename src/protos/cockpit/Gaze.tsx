@@ -18,6 +18,8 @@ export function GazeLayer({
   hailOpen,
   grid,
   onGrid,
+  lines,
+  onLines,
   onHail,
   onExit,
 }: {
@@ -28,13 +30,20 @@ export function GazeLayer({
   hailOpen: boolean;
   grid: boolean;
   onGrid: () => void;
+  lines: boolean;
+  onLines: () => void;
   onHail: (id: string) => void;
   onExit: () => void;
 }) {
   return (
     <div className="absolute inset-0 text-white">
       <div className="absolute top-9 left-4">
-        <NavInstrument grid={grid} onGrid={onGrid} />
+        <NavInstrument
+          grid={grid}
+          onGrid={onGrid}
+          lines={lines}
+          onLines={onLines}
+        />
       </div>
 
       <button

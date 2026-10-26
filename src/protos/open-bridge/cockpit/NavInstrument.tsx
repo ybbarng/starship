@@ -48,10 +48,15 @@ function lon(deg: number): string {
 export function NavInstrument({
   grid,
   onGrid,
+  lines,
+  onLines,
 }: {
   /** 적도 좌표 격자가 켜져 있나 */
   grid: boolean;
   onGrid: () => void;
+  /** 별자리 선이 켜져 있나(onLines를 주면 단추가 생긴다) */
+  lines?: boolean;
+  onLines?: () => void;
 }) {
   const t = useTelemetry();
   const { date } = useKoreaTime(); // 1초마다 다시 그려 준다
@@ -171,20 +176,61 @@ export function NavInstrument({
             : "하늘 위에 올려 보세요"}
         </Row>
       </dl>
-      <button
-        type="button"
-        onClick={onGrid}
-        aria-pressed={grid}
-        className="mt-2 w-full rounded-md border border-white/10 px-2 py-1 text-left text-[11px] text-white/60 hover:border-white/25 hover:text-white"
-      >
-        <span
-          className="mr-1.5 inline-block h-1.5 w-1.5 rounded-full align-middle"
-          style={{ background: grid ? "#5fd4c4" : "rgba(255,255,255,.25)" }}
-        />
-        적도 좌표 격자 {grid ? "끄기" : "켜기"}
-        <span className="ml-1 text-white/35">(적경 2시간 · 적위 15°)</span>
-      </button>
+      <div className="mt-2 flex gap-1.5">
+        {onLines && (
+          <Toggle
+            on={Boolean(lines)}
+            onClick={onLines}
+            color="#8fa8ff"
+            title="밤하늘의 별을 별자리 모양으로 잇는 선과 별자리 이름"
+          >
+            별자리 선
+          </Toggle>
+        )}
+        <Toggle
+          on={grid}
+          onClick={onGrid}
+          color="#5fd4c4"
+          title="하늘의 위도·경도(적위·적경). 적경 2시간, 적위 15도마다"
+        >
+          적도 좌표 격자
+        </Toggle>
+      </div>
     </section>
+  );
+}
+
+function Toggle({
+  on,
+  onClick,
+  color,
+  title,
+  children,
+}: {
+  on: boolean;
+  onClick: () => void;
+  color: string;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      title={title}
+      className={`flex flex-1 items-center gap-1.5 rounded-md border px-2 py-1 text-left text-[11px] transition ${
+        on
+          ? "border-white/25 text-white/90"
+          : "border-white/10 text-white/50 hover:border-white/25 hover:text-white"
+      }`}
+    >
+      <span
+        className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+        style={{ background: on ? color : "rgba(255,255,255,.25)" }}
+      />
+      {children}
+    </button>
   );
 }
 
