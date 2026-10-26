@@ -422,6 +422,6 @@ export function buildSnapshot(
     hails,
     crew,
     gauges,
-    notice: "데모 데이터",
+    notice: "데모 데이터 · 지어낸 할 일이에요",
   };
 }

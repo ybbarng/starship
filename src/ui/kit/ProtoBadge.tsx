@@ -14,7 +14,11 @@ export function ProtoBadge({ name }: { name: string }) {
       <span>·</span>
       <span>{name}</span>
       {notice && (
-        <span className="rounded bg-white/10 px-1.5 py-px text-white/55">
+        <span
+          data-notice
+          className="flex items-center gap-1.5 rounded-full border border-signal-warn/60 bg-signal-warn/15 px-2 py-0.5 font-medium text-[12px] text-signal-warn"
+        >
+          <span className="size-1.5 animate-pulse rounded-full bg-signal-warn" />
           {notice}
         </span>
       )}
