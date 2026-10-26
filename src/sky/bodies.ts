@@ -8,6 +8,7 @@ import {
   moonOrbitRadii,
   SCENE_SCALE,
   sceneRadius,
+  sunShare,
   toThree,
   type Vec3,
 } from "./astro";
@@ -108,13 +109,17 @@ export const BODIES: BodyDef[] = [
   {
     id: "sun",
     ko: "태양",
-    radius: size("sun") * SCENE_SCALE.sunShare,
+    get radius() {
+      return size("sun") * sunShare();
+    },
     surface: { type: "star", color: "#ffd27a" },
   },
   {
     id: "mercury",
     ko: "수성",
-    radius: size("mercury"),
+    get radius() {
+      return size("mercury");
+    },
     orbit: "mer",
     surface: {
       type: "rocky",
@@ -126,7 +131,9 @@ export const BODIES: BodyDef[] = [
   {
     id: "venus",
     ko: "금성",
-    radius: size("venus"),
+    get radius() {
+      return size("venus");
+    },
     orbit: "ven",
     surface: {
       type: "gas",
@@ -139,7 +146,9 @@ export const BODIES: BodyDef[] = [
   {
     id: "earth",
     ko: "지구",
-    radius: size("earth"),
+    get radius() {
+      return size("earth");
+    },
     orbit: "ter",
     surface: {
       type: "earth",
@@ -155,10 +164,14 @@ export const BODIES: BodyDef[] = [
   {
     id: "moon",
     ko: "달",
-    radius: size("moon"),
+    get radius() {
+      return size("moon");
+    },
     parent: {
       id: "earth",
-      distance: moonDistance("moon", "earth"),
+      get distance() {
+        return moonDistance("moon", "earth");
+      },
       periodDays: 27.32,
       phase: 0.3,
     },
@@ -171,7 +184,9 @@ export const BODIES: BodyDef[] = [
   {
     id: "mars",
     ko: "화성",
-    radius: size("mars"),
+    get radius() {
+      return size("mars");
+    },
     orbit: "mar",
     surface: { type: "rocky", colors: ["#b5562f", "#d98a57", "#7a3a22"] },
     atmosphere: "#f0a77a",
@@ -181,10 +196,14 @@ export const BODIES: BodyDef[] = [
   {
     id: "phobos",
     ko: "포보스",
-    radius: size("phobos"),
+    get radius() {
+      return size("phobos");
+    },
     parent: {
       id: "mars",
-      distance: moonDistance("phobos", "mars"),
+      get distance() {
+        return moonDistance("phobos", "mars");
+      },
       periodDays: 0.32,
       phase: 0.1,
     },
@@ -197,7 +216,9 @@ export const BODIES: BodyDef[] = [
   {
     id: "ceres",
     ko: "세레스",
-    radius: size("ceres"),
+    get radius() {
+      return size("ceres");
+    },
     orbit: "cer",
     surface: {
       type: "rocky",
@@ -208,7 +229,9 @@ export const BODIES: BodyDef[] = [
   {
     id: "vesta",
     ko: "베스타",
-    radius: size("vesta"),
+    get radius() {
+      return size("vesta");
+    },
     orbit: "ves",
     surface: {
       type: "rocky",
@@ -219,7 +242,9 @@ export const BODIES: BodyDef[] = [
   {
     id: "jupiter",
     ko: "목성",
-    radius: size("jupiter"),
+    get radius() {
+      return size("jupiter");
+    },
     orbit: "jup",
     surface: {
       type: "gas",
@@ -233,10 +258,14 @@ export const BODIES: BodyDef[] = [
   {
     id: "io",
     ko: "이오",
-    radius: size("io"),
+    get radius() {
+      return size("io");
+    },
     parent: {
       id: "jupiter",
-      distance: moonDistance("io", "jupiter"),
+      get distance() {
+        return moonDistance("io", "jupiter");
+      },
       periodDays: 1.77,
       phase: 0.0,
     },
@@ -245,10 +274,14 @@ export const BODIES: BodyDef[] = [
   {
     id: "europa",
     ko: "유로파",
-    radius: size("europa"),
+    get radius() {
+      return size("europa");
+    },
     parent: {
       id: "jupiter",
-      distance: moonDistance("europa", "jupiter"),
+      get distance() {
+        return moonDistance("europa", "jupiter");
+      },
       periodDays: 3.55,
       phase: 0.35,
     },
@@ -257,10 +290,14 @@ export const BODIES: BodyDef[] = [
   {
     id: "ganymede",
     ko: "가니메데",
-    radius: size("ganymede"),
+    get radius() {
+      return size("ganymede");
+    },
     parent: {
       id: "jupiter",
-      distance: moonDistance("ganymede", "jupiter"),
+      get distance() {
+        return moonDistance("ganymede", "jupiter");
+      },
       periodDays: 7.15,
       phase: 0.6,
     },
@@ -273,10 +310,14 @@ export const BODIES: BodyDef[] = [
   {
     id: "callisto",
     ko: "칼리스토",
-    radius: size("callisto"),
+    get radius() {
+      return size("callisto");
+    },
     parent: {
       id: "jupiter",
-      distance: moonDistance("callisto", "jupiter"),
+      get distance() {
+        return moonDistance("callisto", "jupiter");
+      },
       periodDays: 16.69,
       phase: 0.85,
     },
@@ -289,7 +330,9 @@ export const BODIES: BodyDef[] = [
   {
     id: "saturn",
     ko: "토성",
-    radius: size("saturn"),
+    get radius() {
+      return size("saturn");
+    },
     orbit: "sat",
     surface: {
       type: "gas",
@@ -303,10 +346,14 @@ export const BODIES: BodyDef[] = [
   {
     id: "enceladus",
     ko: "엔켈라두스",
-    radius: size("enceladus"),
+    get radius() {
+      return size("enceladus");
+    },
     parent: {
       id: "saturn",
-      distance: moonDistance("enceladus", "saturn"),
+      get distance() {
+        return moonDistance("enceladus", "saturn");
+      },
       periodDays: 1.37,
       phase: 0.2,
     },
@@ -315,10 +362,14 @@ export const BODIES: BodyDef[] = [
   {
     id: "titan",
     ko: "타이탄",
-    radius: size("titan"),
+    get radius() {
+      return size("titan");
+    },
     parent: {
       id: "saturn",
-      distance: moonDistance("titan", "saturn"),
+      get distance() {
+        return moonDistance("titan", "saturn");
+      },
       periodDays: 15.95,
       phase: 0.55,
     },
@@ -332,7 +383,9 @@ export const BODIES: BodyDef[] = [
   {
     id: "uranus",
     ko: "천왕성",
-    radius: size("uranus"),
+    get radius() {
+      return size("uranus");
+    },
     orbit: "ura",
     surface: { type: "ice", colors: ["#9fd9e0", "#c4eef0", "#7cc4cf"] },
     ring: { inner: 1.5, outer: 1.75, color: "#9ab" },
@@ -342,7 +395,9 @@ export const BODIES: BodyDef[] = [
   {
     id: "neptune",
     ko: "해왕성",
-    radius: size("neptune"),
+    get radius() {
+      return size("neptune");
+    },
     orbit: "nep",
     surface: {
       type: "gas",
@@ -356,10 +411,14 @@ export const BODIES: BodyDef[] = [
   {
     id: "triton",
     ko: "트리톤",
-    radius: size("triton"),
+    get radius() {
+      return size("triton");
+    },
     parent: {
       id: "neptune",
-      distance: moonDistance("triton", "neptune"),
+      get distance() {
+        return moonDistance("triton", "neptune");
+      },
       periodDays: -5.88,
       phase: 0.4,
     },
@@ -368,7 +427,9 @@ export const BODIES: BodyDef[] = [
   {
     id: "pluto",
     ko: "명왕성",
-    radius: size("pluto"),
+    get radius() {
+      return size("pluto");
+    },
     orbit: "plu",
     surface: { type: "ice", colors: ["#d7bfa3", "#f1e6d6", "#8b6c55"] },
   },
@@ -506,7 +567,7 @@ export const DESTINATIONS: Destination[] = [
     ko: "태양계 전경",
     group: "전망",
     view: "overview",
-    fact: "위에서 내려다본 오늘의 행성 배치. 크기는 실제 비율, 거리는 두 배마다 한 칸씩(로그) 줄였다.",
+    fact: "위에서 내려다본 오늘의 행성 배치. 어떻게 줄였는지는 창 아래 '축척'에.",
   },
   {
     id: "inner",

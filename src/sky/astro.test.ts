@@ -15,6 +15,8 @@ import {
   SCENE_SCALE,
   sceneDistance,
   sceneRadius,
+  setScaleMode,
+  sunShare,
   toThree,
 } from "./astro";
 
@@ -137,5 +139,22 @@ describe("화면 축척", () => {
       sceneRadius(696_340) * SCENE_SCALE.sunShare * 1.5,
     );
     expect(moonOrbitRadii(60.3)).toBeGreaterThan(1);
+  });
+});
+
+describe("실제 축척", () => {
+  it("크기와 거리를 같은 비율로 줄인다", () => {
+    setScaleMode("real");
+    try {
+      // 1 AU = 지구 반지름의 23,481배
+      expect(sceneDistance(1) / sceneRadius(6_371)).toBeCloseTo(23_481, -1);
+      expect(sceneRadius(696_340) / sceneRadius(6_371)).toBeCloseTo(109.3, 1);
+      expect(sunShare()).toBe(1);
+      expect(moonOrbitRadii(60.3)).toBe(60.3);
+      // 아주 작은 위성도 키우지 않는다
+      expect(sceneRadius(11.3)).toBeLessThan(SCENE_SCALE.minRadius);
+    } finally {
+      setScaleMode("compressed");
+    }
   });
 });

@@ -254,8 +254,25 @@ export const SCENE_SCALE = {
   r0: 0.3,
 };
 
+/**
+ * 축척 모드. "compressed"는 위 규칙으로 줄인 것, "real"은 크기와 거리를 모두 같은 비율로 줄인 실제 축척
+ * (지구 반지름 0.5칸이면 1 AU는 약 11,740칸). 장면 전체가 한 모드를 쓰므로 모듈 상태로 둔다.
+ */
+export type ScaleMode = "compressed" | "real";
+let mode: ScaleMode = "compressed";
+export function setScaleMode(next: ScaleMode) {
+  mode = next;
+}
+export function scaleMode(): ScaleMode {
+  return mode;
+}
+/** 실제 축척에서 1 AU의 칸 수 */
+// AU_KM은 아래에서 정의되므로 값을 그대로 쓴다.
+export const REAL_UNITS_PER_AU = (SCENE_SCALE.earth * 149_597_870.7) / 6_371;
+
 /** 태양 중심 거리(AU) → 화면 거리 */
 export function sceneDistance(au: number): number {
+  if (mode === "real") return au * REAL_UNITS_PER_AU;
   return SCENE_SCALE.perDoubling * Math.log2(1 + au / SCENE_SCALE.r0);
 }
 
@@ -266,14 +283,21 @@ export function compress([x, y, z]: Vec3): Vec3 {
   return [x * s, y * s, z * s];
 }
 
-/** 실제 반지름(km) → 화면 반지름 */
+/** 실제 반지름(km) → 화면 반지름. 실제 축척에서는 키우지 않는다. */
 export function sceneRadius(km: number): number {
-  return Math.max(SCENE_SCALE.minRadius, (SCENE_SCALE.earth * km) / 6_371);
+  const r = (SCENE_SCALE.earth * km) / 6_371;
+  return mode === "real" ? r : Math.max(SCENE_SCALE.minRadius, r);
+}
+
+/** 태양 반지름에 곱하는 값(줄인 축척에서만 1/3) */
+export function sunShare(): number {
+  return mode === "real" ? 1 : SCENE_SCALE.sunShare;
 }
 
 /** 위성의 궤도 반지름(모행성 반지름 단위) → 화면에서 모행성 반지름 단위 */
 export function moonOrbitRadii(radii: number): number {
-  return radii <= 1 ? radii : 1 + Math.log2(radii);
+  if (mode === "real" || radii <= 1) return radii;
+  return 1 + Math.log2(radii);
 }
 
 /** 황도 좌표(x,y,z 북쪽) → three.js 좌표(y가 위) */

@@ -17,6 +17,7 @@ import {
   halleyPath,
   orbitPath,
   raDecToEcliptic,
+  scaleMode,
   sceneDistance,
   toThree,
   type Vec3,
@@ -37,6 +38,7 @@ import {
 import { loadCatalog, type SkyCatalog } from "./catalog";
 import { projector } from "./projector";
 import { ScaleNote } from "./ScaleNote";
+import { useScale } from "./scale";
 import * as S from "./shaders";
 import {
   distanceKm,
@@ -47,10 +49,19 @@ import {
 import { useVoyage } from "./voyage";
 
 const SKY_RADIUS = 9000;
-const STAR_DISTANCE = 6000;
+/** 유명한 별을 두는 거리. 실제 축척에서는 보이저보다 훨씬 바깥(그래도 실제보다는 가깝다). */
+const starDistance = () => (scaleMode() === "real" ? 4e6 : 6000);
+/** 이름표를 보여 주는 거리 배율(실제 축척은 줄인 축척보다 수십~수백 배 넓다) */
+const rangeScale = () => (scaleMode() === "real" ? 600 : 1);
+/** 위성 이름표를 보여 주는 거리(모행성 둘레만) */
+const moonLabelRange = () => (scaleMode() === "real" ? 600 : 80);
 const UP = new THREE.Vector3(0, 1, 0);
-/** 이보다 작게 보이는 천체는 원반 대신 빛점으로(픽셀 반지름) */
-const DISC_MIN_PX = 14;
+/**
+ * 이보다 작게 보이는 천체는 원반 대신 빛점으로(픽셀 반지름).
+ * 줄인 축척은 거리를 크게 줄여 먼 행성이 실제보다 크게 보이므로 기준을 높게 둔다.
+ * 실제 축척에서는 겉보기 크기가 이미 실제와 같아, 1픽셀 남짓보다 작을 때만 빛점으로.
+ */
+const discMinPx = () => (scaleMode() === "real" ? 1.5 : 14);
 /** 행성 사진 텍스처 폴더. 기본은 저장소의 /textures, "off"면 모두 코드로 그린다. */
 const DEFAULT_TEXTURES = "/textures";
 const TEXTURES =
@@ -94,6 +105,7 @@ export function SpaceView({
   const labelRef = useRef<HTMLDivElement>(null);
   const warpRef = useRef<HTMLCanvasElement>(null);
   const warp = useRef(0);
+  const mode = useScale((s) => s.mode);
 
   useEffect(() => {
     let alive = true;
@@ -131,17 +143,20 @@ export function SpaceView({
               starScale={starScale}
               grid={grid}
             />
-            <SolarSystem catalog={catalog} onPick={onPick} />
-            <StarTargets />
-            <CameraRig lookAround={lookAround} drift={drift} warp={warp} />
-            {labels !== "none" && (
-              <LabelLayer
-                catalog={catalog}
-                container={labelRef}
-                amount={labels}
-                onPick={onPick}
-              />
-            )}
+            {/* 축척이 바뀌면 크기·자리를 다시 계산하도록 통째로 다시 만든다. */}
+            <group key={mode}>
+              <SolarSystem catalog={catalog} onPick={onPick} />
+              <StarTargets />
+              <CameraRig lookAround={lookAround} drift={drift} warp={warp} />
+              {labels !== "none" && (
+                <LabelLayer
+                  catalog={catalog}
+                  container={labelRef}
+                  amount={labels}
+                  onPick={onPick}
+                />
+              )}
+            </group>
           </>
         )}
       </Canvas>
@@ -707,7 +722,9 @@ function Sun() {
   useFrame((state) => {
     if (mat.uniforms.uTime) mat.uniforms.uTime.value = state.clock.elapsedTime;
     glow.current?.quaternion.copy(camera.quaternion);
-    if (far.current) far.current.visible = camera.position.length() > 3000;
+    if (far.current)
+      far.current.visible =
+        camera.position.length() > (scaleMode() === "real" ? 30_000 : 3000);
   });
   return (
     <group>
@@ -846,7 +863,7 @@ function Planet({
       const focal =
         gl.domElement.clientHeight / 2 / Math.tan((cam.fov * Math.PI) / 360);
       const px = (reach / cam.position.distanceTo(g.position)) * focal;
-      g.visible = px > DISC_MIN_PX;
+      g.visible = px > discMinPx();
     }
     const m = spin.current;
     if (m && isEarth) {
@@ -1131,7 +1148,7 @@ function starTargetPosition(d: Destination): THREE.Vector3 {
   const s = d.star;
   if (!s) return new THREE.Vector3();
   const [x, y, z] = toThree(raDecToEcliptic(s.ra, s.dec));
-  return new THREE.Vector3(x, y, z).multiplyScalar(STAR_DISTANCE);
+  return new THREE.Vector3(x, y, z).multiplyScalar(starDistance());
 }
 
 function starSurface(color: string) {
@@ -1344,6 +1361,20 @@ function poseFor(dest: Destination, orbits: SkyCatalog["orbits"] | null): Pose {
   return { center, dir, dist: reach };
 }
 
+/**
+ * 카메라가 그리는 거리 범위. 가까운 면은 목적지를 보는 거리에 맞추고(작은 위성 앞에서는 아주 가깝게),
+ * 먼 면은 축척에 맞춘다. 실제 축척은 해왕성까지 35만 칸이 넘는다.
+ */
+function fitClipRange(camera: THREE.PerspectiveCamera, viewDist: number) {
+  const near = Math.min(0.5, Math.max(0.0005, viewDist * 0.01));
+  const far = scaleMode() === "real" ? 3e7 : 30_000;
+  if (Math.abs(camera.near - near) > camera.near * 0.2 || camera.far !== far) {
+    camera.near = near;
+    camera.far = far;
+    camera.updateProjectionMatrix();
+  }
+}
+
 const easeInOut = (t: number) =>
   t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
 
@@ -1406,7 +1437,7 @@ function CameraRig({
       fromLook: look.current.clone(),
       start: performance.now(),
       duration: Math.min(7, 2.4 + 1.1 * Math.log10(1 + d)) * 1000,
-      far: d > 3000,
+      far: d > (scaleMode() === "real" ? 200_000 : 3000),
       fromReal: [...telemetry.position] as Vec3,
     };
     yaw.current = 0;
@@ -1499,6 +1530,7 @@ function CameraRig({
       warp.current = 0;
     }
     camera.lookAt(look.current);
+    fitClipRange(camera as THREE.PerspectiveCamera, p.dist);
     updateTelemetry(dest, orbits, p, t0, dt);
   });
 
@@ -1781,7 +1813,9 @@ function LabelLayer({
         const apparent = r / d;
         if (s.kind === "body") {
           const isMoon = Boolean(s.body?.parent);
-          show = apparent < 0.08 && (isMoon ? d < 80 : d < 6000);
+          show =
+            apparent < 0.08 &&
+            (isMoon ? d < moonLabelRange() : d < 6000 * rangeScale());
           offsetY = Math.max(8, apparent * h * 0.6 + 6);
         } else {
           show = camDist > 25;
