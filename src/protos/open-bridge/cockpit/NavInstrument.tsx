@@ -7,6 +7,7 @@ import { DESTINATION_BY_ID } from "@/sky/bodies";
 import {
   formatDec,
   formatDistance,
+  formatNearDistance,
   formatRA,
   formatSpeed,
 } from "@/sky/telemetry";
@@ -76,6 +77,11 @@ export function NavInstrument({
         <span className="text-[12px] font-medium text-white/90">
           {t.traveling ? `→ ${dest.ko}` : dest.ko}
         </span>
+        {t.targetKm !== null && !atEarth && (
+          <span className={`${VALUE} text-white/80`} title="대상까지">
+            ↦ {formatNearDistance(t.targetKm)}
+          </span>
+        )}
         <span className={`${VALUE} text-white/60`}>{dist(t.earthKm)}</span>
         <span className={`${VALUE} text-white/60`}>
           ⟷ {lightTime(t.earthKm)}
@@ -146,8 +152,10 @@ export function NavInstrument({
 
       <dl className="mt-2.5 grid grid-cols-[64px_1fr] gap-x-2 gap-y-[5px] border-t border-white/[0.07] pt-2.5">
         <Row label={atEarth ? "지구 고도" : "지구까지"}>{dist(t.earthKm)}</Row>
-        {t.altitudeKm !== null && !atEarth && (
-          <Row label={`${dest.ko} 고도`}>{dist(t.altitudeKm)}</Row>
+        {t.targetKm !== null && !atEarth && !t.traveling && (
+          <Row label={`${dest.ko}까지`} title="지금 자리에서 대상 표면까지">
+            {formatNearDistance(t.targetKm)}
+          </Row>
         )}
         <Row label="교신 지연" title="지구까지 빛이 가는 시간(편도)">
           {lightTime(t.earthKm)}

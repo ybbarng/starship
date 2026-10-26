@@ -17,7 +17,7 @@ import { lightTime } from "@/protos/open-bridge/cockpit/ui";
 import { Interior } from "@/protos/open-bridge/interior/Interior";
 import { ScaleNote } from "@/sky/ScaleNote";
 import { SpaceView } from "@/sky/SpaceView";
-import { formatDistance } from "@/sky/telemetry";
+import { formatDistance, formatNearDistance } from "@/sky/telemetry";
 import { useKoreaTime, useTelemetry } from "@/sky/useTelemetry";
 import { useDestination } from "@/sky/voyage";
 import { EventLayer } from "@/ui/events";
@@ -529,6 +529,19 @@ function GlassReadout({ bottom }: { bottom: number }) {
         </span>
         <span className="font-sans text-white/85">{dest.ko}</span>
       </span>
+      {t.targetKm !== null && !atEarth && (
+        <>
+          <span className="text-white/20">·</span>
+          <span data-target-distance>
+            <span className="font-sans text-white/35">
+              {t.traveling ? "남은 거리 " : `${dest.ko}까지 `}
+            </span>
+            <span className="text-white/85">
+              {formatNearDistance(t.targetKm)}
+            </span>
+          </span>
+        </>
+      )}
       <span className="text-white/20">·</span>
       <span>
         <span className="font-sans text-white/35">

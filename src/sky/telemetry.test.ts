@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { AU_KM, type Elements } from "./astro";
 import { DESTINATION_BY_ID, type Destination, sunlightFactor } from "./bodies";
-import { distanceKm, formatLightTime, realPositionAU } from "./telemetry";
+import {
+  distanceKm,
+  formatLightTime,
+  formatNearDistance,
+  realPositionAU,
+} from "./telemetry";
 
 const sky = JSON.parse(
   readFileSync(new URL("../../public/sky/sky.json", import.meta.url), "utf8"),
@@ -57,5 +62,13 @@ describe("햇빛 세기", () => {
     expect(sunlightFactor(5.2)).toBeCloseTo(0.76, 2);
     expect(sunlightFactor(30)).toBeGreaterThanOrEqual(0.5);
     expect(sunlightFactor(0.39)).toBeLessThanOrEqual(1.15);
+  });
+});
+
+describe("가까운 거리 글", () => {
+  it("1km 아래는 m, 0.1 AU 아래는 km, 그 위는 AU", () => {
+    expect(formatNearDistance(0.027)).toBe("27 m");
+    expect(formatNearDistance(559_283.4)).toBe("559,283 km");
+    expect(formatNearDistance(5.2 * AU_KM)).toBe("5.2 AU");
   });
 });

@@ -20,6 +20,21 @@ import {
 export { REAL_RADIUS_KM } from "./bodies";
 
 /** 유명한 별까지 거리(광년) */
+/** 유명한 별의 반지름(태양 = 1). 베텔게우스·안타레스는 측정마다 차이가 크다. */
+export const STAR_RADIUS_SUN: Record<string, number> = {
+  "alpha-cen": 1.22,
+  sirius: 1.71,
+  vega: 2.36,
+  polaris: 37.5,
+  betelgeuse: 764,
+  antares: 680,
+};
+
+/** 보이저 접시 안테나 반지름(km). 화면의 PROBE_SIZE가 이 크기다. */
+export const PROBE_REAL_RADIUS_KM = 0.00183;
+/** 핼리 혜성 핵 반지름(km, 길이 15km의 감자 모양을 공으로 친 값) */
+export const HALLEY_NUCLEUS_KM = 5.5;
+
 export const STAR_LY: Record<string, number> = {
   "alpha-cen": 4.37,
   sirius: 8.6,
@@ -95,6 +110,13 @@ export function formatDistance(km: number): string {
   return `${Math.round(km).toLocaleString("ko-KR")} km`;
 }
 
+/** 가까운 거리까지 읽기 좋게: 1km 아래는 m, 0.1 AU 아래는 km를 다 적고, 그 위는 AU·광년 */
+export function formatNearDistance(km: number): string {
+  if (km < 1) return `${Math.round(km * 1000).toLocaleString("ko-KR")} m`;
+  if (km < 14_959_787) return `${Math.round(km).toLocaleString("ko-KR")} km`;
+  return formatDistance(km);
+}
+
 /** 빛이 그 거리를 가는 데 걸리는 시간 */
 export function formatLightTime(km: number): string {
   const s = km / LIGHT_KM_S;
@@ -148,6 +170,8 @@ export type Telemetry = {
   earthKm: number;
   /** 지금 목적지 천체 표면에서 고도(km), 천체가 없으면 null */
   altitudeKm: number | null;
+  /** 보고 있는 대상(목적지)의 표면까지 거리(km). 이동 중이면 남은 거리, 전망이면 null */
+  targetKm: number | null;
   /** 이동 중 속도(km/s), 순항 중 0 */
   speedKmS: number;
   /** 남은 거리(km), 순항 중 0 */
@@ -164,6 +188,7 @@ export const telemetry: Telemetry = {
   position: [1, 0, 0],
   earthKm: 0,
   altitudeKm: null,
+  targetKm: null,
   speedKmS: 0,
   remainingKm: 0,
   traveling: false,

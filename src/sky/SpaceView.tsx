@@ -45,8 +45,11 @@ import { useScale } from "./scale";
 import * as S from "./shaders";
 import {
   distanceKm,
+  HALLEY_NUCLEUS_KM,
+  PROBE_REAL_RADIUS_KM,
   REAL_RADIUS_KM,
   realPositionAU,
+  STAR_RADIUS_SUN,
   telemetry,
 } from "./telemetry";
 import { useVoyage } from "./voyage";
@@ -1072,6 +1075,9 @@ function Orbits({ catalog }: { catalog: SkyCatalog }) {
   );
 }
 
+/** 혜성 핵의 화면 반지름 */
+const COMET_NUCLEUS_SIZE = 0.04;
+
 /** 핼리 혜성(1986년 근일점 무렵 자리). 먼지 꼬리와 이온 꼬리. */
 function Comet() {
   const pos = useMemo(
@@ -1137,7 +1143,7 @@ function Comet() {
   return (
     <group position={pos}>
       <mesh>
-        <sphereGeometry args={[0.04, 16, 12]} />
+        <sphereGeometry args={[COMET_NUCLEUS_SIZE, 16, 12]} />
         <meshBasicMaterial color="#cfc6b8" />
       </mesh>
       <mesh ref={coma}>
@@ -1401,6 +1407,46 @@ function fitClipRange(camera: THREE.PerspectiveCamera, viewDist: number) {
   }
 }
 
+/**
+ * 카메라에서 목적지 표면까지의 실제 거리(km). 목적지 둘레는 크기와 거리를 같은 비율로 그렸으므로
+ * (화면 거리 ÷ 화면 반지름 − 1) × 실제 반지름으로 구한다. 전망처럼 대상이 없으면 null.
+ */
+function surfaceDistanceKm(
+  dest: Destination,
+  cam: THREE.Vector3,
+  orbits: SkyCatalog["orbits"],
+): number | null {
+  const fromSurface = (center: THREE.Vector3, r: number, realKm: number) =>
+    Math.max(0, (cam.distanceTo(center) / r - 1) * realKm);
+  const now = Date.now();
+  if (dest.probe)
+    return fromSurface(
+      new THREE.Vector3(...probePosition(dest.probe, now)),
+      PROBE_SIZE,
+      PROBE_REAL_RADIUS_KM,
+    );
+  if (dest.star)
+    return fromSurface(
+      starTargetPosition(dest),
+      dest.star.radius,
+      (REAL_RADIUS_KM.sun ?? 696_340) * (STAR_RADIUS_SUN[dest.id] ?? 1),
+    );
+  if (dest.id === "halley")
+    return fromSurface(
+      new THREE.Vector3(...halleyPosition(HALLEY.perihelion + 10 * 86_400_000)),
+      COMET_NUCLEUS_SIZE,
+      HALLEY_NUCLEUS_KM,
+    );
+  const body = dest.body ? BODY_BY_ID.get(dest.body) : undefined;
+  const realKm = body ? REAL_RADIUS_KM[body.id] : undefined;
+  if (!body || !realKm) return null;
+  return fromSurface(
+    new THREE.Vector3(...bodyPosition(body, orbits, now)),
+    body.radius,
+    realKm,
+  );
+}
+
 /** 끌 때 1픽셀당 도는 각도 */
 const DRAG_RAD_PER_PX = 0.005;
 /** 고도각 한계(위아래로 너무 넘어가 화면이 뒤집히지 않게) */
@@ -1659,6 +1705,9 @@ function CameraRig({
             (camera.position.distanceTo(p.center) / body.radius - 1) * realR,
           )
         : null;
+    telemetry.targetKm = t0
+      ? telemetry.remainingKm
+      : surfaceDistanceKm(dest, camera.position, orbits);
     telemetry.earthKm =
       dest.id === "earth" && !t0
         ? (telemetry.altitudeKm ?? 0)
