@@ -3,6 +3,7 @@
 // 행성 단추 줄(아래 가운데): 전경 · 수성~해왕성 · 더 먼 곳…(목적지 모달).
 // 천체를 직접 눌러도 날아간다는 것을 위에 작은 글로 알려 준다.
 import { useState } from "react";
+import { ScaleNote } from "@/sky/ScaleNote";
 import { useDestination, useVoyage } from "@/sky/voyage";
 import { DestinationPicker, Modal } from "@/ui/kit";
 
@@ -61,8 +62,10 @@ export function PlanetBar() {
     }`;
   return (
     <div className="pointer-events-auto flex flex-col items-center gap-1.5">
-      <p className="text-[10.5px] text-white/35">
+      <p className="flex items-center gap-2 text-[10.5px] text-white/35">
         끌어서 둘러보고, 천체나 이름을 눌러도 날아갑니다
+        <span className="text-white/20">·</span>
+        <ScaleNote />
       </p>
       <nav
         aria-label="행성으로 이동"

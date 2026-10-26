@@ -15,6 +15,7 @@ import { CrewDetail, CrewHeader } from "@/protos/classic/CrewDetail";
 import { HailScreen } from "@/protos/open-bridge/cockpit/Hails";
 import { lightTime } from "@/protos/open-bridge/cockpit/ui";
 import { Interior } from "@/protos/open-bridge/interior/Interior";
+import { ScaleNote } from "@/sky/ScaleNote";
 import { SpaceView } from "@/sky/SpaceView";
 import { formatDistance } from "@/sky/telemetry";
 import { useKoreaTime, useTelemetry } from "@/sky/useTelemetry";
@@ -540,6 +541,8 @@ function GlassReadout({ bottom }: { bottom: number }) {
         <span className="font-sans text-white/35">한국 </span>
         {time}
       </span>
+      <span className="text-white/20">·</span>
+      <ScaleNote />
     </div>
   );
 }

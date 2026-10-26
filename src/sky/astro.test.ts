@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import {
   bvToRgb,
+  compress,
   directionToCoords,
   type Elements,
   earthBasis,
@@ -9,7 +10,11 @@ import {
   gmstDeg,
   halleyAt,
   heliocentric,
+  moonOrbitRadii,
   raDecToEcliptic,
+  SCENE_SCALE,
+  sceneDistance,
+  sceneRadius,
   toThree,
 } from "./astro";
 
@@ -104,5 +109,33 @@ describe("서울의 낮과 밤", () => {
 
   it("한국 시각 새벽 3시면 밤", () => {
     expect(seoulFacesSun(Date.UTC(2026, 9, 24, 18, 0))).toBe(false);
+  });
+});
+
+describe("화면 축척", () => {
+  it("거리는 두 배마다 같은 간격(태양에서 멀리 갈수록)", () => {
+    const step = (a: number) => sceneDistance(2 * a) - sceneDistance(a);
+    expect(step(20)).toBeCloseTo(SCENE_SCALE.perDoubling, -1);
+    expect(step(80)).toBeCloseTo(SCENE_SCALE.perDoubling, -1);
+  });
+
+  it("행성 순서와 방향은 그대로", () => {
+    const r = [0.39, 0.72, 1, 1.52, 5.2, 9.5, 19.2, 30.1].map(sceneDistance);
+    expect([...r].sort((a, b) => a - b)).toEqual(r);
+    const [x, y, z] = compress([3, 4, 0]);
+    expect(y / x).toBeCloseTo(4 / 3);
+    expect(z).toBe(0);
+  });
+
+  it("크기는 실제 비율, 아주 작으면 최소 크기", () => {
+    expect(sceneRadius(69_911) / sceneRadius(6_371)).toBeCloseTo(10.97, 1);
+    expect(sceneRadius(11.3)).toBe(SCENE_SCALE.minRadius);
+  });
+
+  it("수성 궤도는 태양 바깥, 달은 지구 바깥", () => {
+    expect(sceneDistance(0.31)).toBeGreaterThan(
+      sceneRadius(696_340) * SCENE_SCALE.sunShare * 1.5,
+    );
+    expect(moonOrbitRadii(60.3)).toBeGreaterThan(1);
   });
 });

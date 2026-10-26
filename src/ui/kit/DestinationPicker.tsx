@@ -1,7 +1,14 @@
 "use client";
 
+import { AU_KM } from "@/sky/astro";
+import {
+  DESTINATIONS,
+  type Destination,
+  type DestinationGroup,
+  probePositionAU,
+} from "@/sky/bodies";
 // 여행 목적지 고르기(모달 안에 넣어 쓴다). 고르면 창밖이 그쪽으로 날아간다.
-import { DESTINATIONS, type DestinationGroup } from "@/sky/bodies";
+import { formatDistance } from "@/sky/telemetry";
 import { useVoyage } from "@/sky/voyage";
 
 const GROUPS: DestinationGroup[] = [
@@ -10,6 +17,7 @@ const GROUPS: DestinationGroup[] = [
   "위성",
   "작은 천체",
   "혜성",
+  "탐사선",
   "유명한 별",
 ];
 
@@ -45,9 +53,9 @@ export function DestinationPicker({
               >
                 <div className="text-sm font-medium">
                   {d.ko}
-                  {d.distance && (
+                  {distanceOf(d) && (
                     <span className="ml-1.5 text-xs text-white/50">
-                      {d.distance}
+                      {distanceOf(d)}
                     </span>
                   )}
                 </div>
@@ -61,4 +69,12 @@ export function DestinationPicker({
       ))}
     </div>
   );
+}
+
+/** 목적지 옆 거리. 탐사선은 지금 태양에서의 실제 거리. */
+function distanceOf(d: Destination): string | undefined {
+  if (d.distance) return d.distance;
+  if (!d.probe) return undefined;
+  const [x, y, z] = probePositionAU(d.probe, Date.now());
+  return formatDistance(Math.hypot(x, y, z) * AU_KM);
 }

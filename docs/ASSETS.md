@@ -9,6 +9,7 @@
 | 별자리 선·별자리 이름 | d3-celestial `constellations.lines.json`, `constellations.json` (원자료: IAU) | BSD-3-Clause | 같은 파일 |
 | 행성·소행성 궤도 요소 | d3-celestial `planets.json` (원자료: JPL "Keplerian Elements for Approximate Positions of the Major Planets") | BSD-3-Clause | 같은 파일 |
 | 행성·지구·달·태양 텍스처 13장(2K) | [Solar System Scope](https://www.solarsystemscope.com/textures/) (원자료: NASA 등) | CC BY 4.0 — 출처 표기 | `public/textures/` |
+| 보이저 1·2호 위치·속도(2026-01-01 한 시점의 숫자 12개) | [NASA JPL Horizons](https://ssd.jpl.nasa.gov/horizons/) 천문력(태양 중심, 황도 J2000, 벡터 표) | 미국 정부 공개 자료(저작권 없음) | `src/sky/bodies.ts` `PROBES` |
 | 글꼴 Pretendard | [orioncactus/pretendard](https://github.com/orioncactus/pretendard) 1.3.9 (npm) | SIL OFL 1.1 | 전체 화면 |
 
 `public/sky/sky.json`은 `pnpm sky:build`(`scripts/build-sky.mjs`)가 d3-celestial 패키지에서 만든다. d3-celestial 저작권 고지:

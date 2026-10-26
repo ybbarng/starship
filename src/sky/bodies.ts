@@ -1,13 +1,71 @@
-// 화면에 그리는 천체와 여행 목적지. 크기와 위성 거리는 보기 좋게 키우고 줄였다(실제 축척 아님).
-// 행성 위치는 실제 궤도 요소로 오늘 날짜에 맞춰 계산하고, 거리만 compress()로 줄인다.
+// 화면에 그리는 천체와 여행 목적지. 크기는 실제 반지름으로, 거리는 실제 궤도로 계산한 뒤
+// SCENE_SCALE 규칙(astro.ts, docs/scale.md)으로 줄인다.
 import {
   compress,
   type Elements,
   halleyAt,
   heliocentric,
+  moonOrbitRadii,
+  SCENE_SCALE,
+  sceneRadius,
   toThree,
   type Vec3,
 } from "./astro";
+
+/** 실제 반지름(km) */
+export const REAL_RADIUS_KM: Record<string, number> = {
+  sun: 696_340,
+  mercury: 2_439.7,
+  venus: 6_051.8,
+  earth: 6_371,
+  moon: 1_737.4,
+  mars: 3_389.5,
+  phobos: 11.3,
+  ceres: 469.7,
+  vesta: 262.7,
+  jupiter: 69_911,
+  io: 1_821.6,
+  europa: 1_560.8,
+  ganymede: 2_634.1,
+  callisto: 2_410.3,
+  saturn: 58_232,
+  enceladus: 252.1,
+  titan: 2_574.7,
+  uranus: 25_362,
+  neptune: 24_622,
+  triton: 1_353.4,
+  pluto: 1_188.3,
+};
+
+/** 위성의 실제 궤도 반지름(km) */
+export const MOON_DISTANCE_KM: Record<string, number> = {
+  moon: 384_400,
+  phobos: 9_376,
+  io: 421_700,
+  europa: 671_034,
+  ganymede: 1_070_412,
+  callisto: 1_882_709,
+  enceladus: 238_042,
+  titan: 1_221_870,
+  triton: 354_759,
+};
+
+const size = (id: string) => sceneRadius(REAL_RADIUS_KM[id] ?? 0);
+
+/** 위성의 화면 궤도 반지름: 모행성 반지름 단위로 줄인 뒤 화면 반지름을 곱한다. */
+function moonDistance(id: string, parentId: string): number {
+  const parentKm = REAL_RADIUS_KM[parentId] ?? 1;
+  const radii = (MOON_DISTANCE_KM[id] ?? parentKm * 4) / parentKm;
+  return moonOrbitRadii(radii) * size(parentId);
+}
+
+/** 실제보다 키워 그린 천체(너무 작아 보이지 않는 것) */
+export function isEnlarged(id: string): boolean {
+  const km = REAL_RADIUS_KM[id];
+  return (
+    km !== undefined && (SCENE_SCALE.earth * km) / 6_371 < SCENE_SCALE.minRadius
+  );
+}
 
 export type Surface =
   | { type: "star"; color: string }
@@ -50,13 +108,13 @@ export const BODIES: BodyDef[] = [
   {
     id: "sun",
     ko: "태양",
-    radius: 3.2,
+    radius: size("sun") * SCENE_SCALE.sunShare,
     surface: { type: "star", color: "#ffd27a" },
   },
   {
     id: "mercury",
     ko: "수성",
-    radius: 0.26,
+    radius: size("mercury"),
     orbit: "mer",
     surface: {
       type: "rocky",
@@ -68,7 +126,7 @@ export const BODIES: BodyDef[] = [
   {
     id: "venus",
     ko: "금성",
-    radius: 0.46,
+    radius: size("venus"),
     orbit: "ven",
     surface: {
       type: "gas",
@@ -81,7 +139,7 @@ export const BODIES: BodyDef[] = [
   {
     id: "earth",
     ko: "지구",
-    radius: 0.5,
+    radius: size("earth"),
     orbit: "ter",
     surface: {
       type: "earth",
@@ -97,8 +155,13 @@ export const BODIES: BodyDef[] = [
   {
     id: "moon",
     ko: "달",
-    radius: 0.15,
-    parent: { id: "earth", distance: 1.5, periodDays: 27.32, phase: 0.3 },
+    radius: size("moon"),
+    parent: {
+      id: "earth",
+      distance: moonDistance("moon", "earth"),
+      periodDays: 27.32,
+      phase: 0.3,
+    },
     surface: {
       type: "rocky",
       colors: ["#9a9a98", "#c8c7c2", "#6a6a6a"],
@@ -108,7 +171,7 @@ export const BODIES: BodyDef[] = [
   {
     id: "mars",
     ko: "화성",
-    radius: 0.36,
+    radius: size("mars"),
     orbit: "mar",
     surface: { type: "rocky", colors: ["#b5562f", "#d98a57", "#7a3a22"] },
     atmosphere: "#f0a77a",
@@ -118,8 +181,13 @@ export const BODIES: BodyDef[] = [
   {
     id: "phobos",
     ko: "포보스",
-    radius: 0.06,
-    parent: { id: "mars", distance: 0.62, periodDays: 0.32, phase: 0.1 },
+    radius: size("phobos"),
+    parent: {
+      id: "mars",
+      distance: moonDistance("phobos", "mars"),
+      periodDays: 0.32,
+      phase: 0.1,
+    },
     surface: {
       type: "rocky",
       colors: ["#6b5e52", "#857565", "#4c4239"],
@@ -129,7 +197,7 @@ export const BODIES: BodyDef[] = [
   {
     id: "ceres",
     ko: "세레스",
-    radius: 0.12,
+    radius: size("ceres"),
     orbit: "cer",
     surface: {
       type: "rocky",
@@ -140,7 +208,7 @@ export const BODIES: BodyDef[] = [
   {
     id: "vesta",
     ko: "베스타",
-    radius: 0.1,
+    radius: size("vesta"),
     orbit: "ves",
     surface: {
       type: "rocky",
@@ -151,7 +219,7 @@ export const BODIES: BodyDef[] = [
   {
     id: "jupiter",
     ko: "목성",
-    radius: 1.65,
+    radius: size("jupiter"),
     orbit: "jup",
     surface: {
       type: "gas",
@@ -165,22 +233,37 @@ export const BODIES: BodyDef[] = [
   {
     id: "io",
     ko: "이오",
-    radius: 0.14,
-    parent: { id: "jupiter", distance: 2.5, periodDays: 1.77, phase: 0.0 },
+    radius: size("io"),
+    parent: {
+      id: "jupiter",
+      distance: moonDistance("io", "jupiter"),
+      periodDays: 1.77,
+      phase: 0.0,
+    },
     surface: { type: "volcanic", colors: ["#e8d36a", "#c98a2f", "#f5efc0"] },
   },
   {
     id: "europa",
     ko: "유로파",
-    radius: 0.12,
-    parent: { id: "jupiter", distance: 3.1, periodDays: 3.55, phase: 0.35 },
+    radius: size("europa"),
+    parent: {
+      id: "jupiter",
+      distance: moonDistance("europa", "jupiter"),
+      periodDays: 3.55,
+      phase: 0.35,
+    },
     surface: { type: "cracked", colors: ["#e9e2d4", "#b48a6a", "#f7f3ea"] },
   },
   {
     id: "ganymede",
     ko: "가니메데",
-    radius: 0.2,
-    parent: { id: "jupiter", distance: 3.9, periodDays: 7.15, phase: 0.6 },
+    radius: size("ganymede"),
+    parent: {
+      id: "jupiter",
+      distance: moonDistance("ganymede", "jupiter"),
+      periodDays: 7.15,
+      phase: 0.6,
+    },
     surface: {
       type: "rocky",
       colors: ["#8e8679", "#b9b1a3", "#5d574e"],
@@ -190,8 +273,13 @@ export const BODIES: BodyDef[] = [
   {
     id: "callisto",
     ko: "칼리스토",
-    radius: 0.18,
-    parent: { id: "jupiter", distance: 5.0, periodDays: 16.69, phase: 0.85 },
+    radius: size("callisto"),
+    parent: {
+      id: "jupiter",
+      distance: moonDistance("callisto", "jupiter"),
+      periodDays: 16.69,
+      phase: 0.85,
+    },
     surface: {
       type: "rocky",
       colors: ["#5d564c", "#7d7468", "#3c3731"],
@@ -201,7 +289,7 @@ export const BODIES: BodyDef[] = [
   {
     id: "saturn",
     ko: "토성",
-    radius: 1.4,
+    radius: size("saturn"),
     orbit: "sat",
     surface: {
       type: "gas",
@@ -215,15 +303,25 @@ export const BODIES: BodyDef[] = [
   {
     id: "enceladus",
     ko: "엔켈라두스",
-    radius: 0.07,
-    parent: { id: "saturn", distance: 3.4, periodDays: 1.37, phase: 0.2 },
+    radius: size("enceladus"),
+    parent: {
+      id: "saturn",
+      distance: moonDistance("enceladus", "saturn"),
+      periodDays: 1.37,
+      phase: 0.2,
+    },
     surface: { type: "ice", colors: ["#f7fbff", "#dce9f5", "#ffffff"] },
   },
   {
     id: "titan",
     ko: "타이탄",
-    radius: 0.2,
-    parent: { id: "saturn", distance: 4.4, periodDays: 15.95, phase: 0.55 },
+    radius: size("titan"),
+    parent: {
+      id: "saturn",
+      distance: moonDistance("titan", "saturn"),
+      periodDays: 15.95,
+      phase: 0.55,
+    },
     surface: {
       type: "gas",
       colors: ["#d9a85a", "#e8c07a", "#b8863e"],
@@ -234,7 +332,7 @@ export const BODIES: BodyDef[] = [
   {
     id: "uranus",
     ko: "천왕성",
-    radius: 0.95,
+    radius: size("uranus"),
     orbit: "ura",
     surface: { type: "ice", colors: ["#9fd9e0", "#c4eef0", "#7cc4cf"] },
     ring: { inner: 1.5, outer: 1.75, color: "#9ab" },
@@ -244,7 +342,7 @@ export const BODIES: BodyDef[] = [
   {
     id: "neptune",
     ko: "해왕성",
-    radius: 0.92,
+    radius: size("neptune"),
     orbit: "nep",
     surface: {
       type: "gas",
@@ -258,14 +356,19 @@ export const BODIES: BodyDef[] = [
   {
     id: "triton",
     ko: "트리톤",
-    radius: 0.1,
-    parent: { id: "neptune", distance: 2.2, periodDays: -5.88, phase: 0.4 },
+    radius: size("triton"),
+    parent: {
+      id: "neptune",
+      distance: moonDistance("triton", "neptune"),
+      periodDays: -5.88,
+      phase: 0.4,
+    },
     surface: { type: "ice", colors: ["#e7d9d3", "#c9b2a8", "#f6efe9"] },
   },
   {
     id: "pluto",
     ko: "명왕성",
-    radius: 0.16,
+    radius: size("pluto"),
     orbit: "plu",
     surface: { type: "ice", colors: ["#d7bfa3", "#f1e6d6", "#8b6c55"] },
   },
@@ -310,6 +413,57 @@ export function halleyPosition(ms: number): Vec3 {
   return toThree(compress(halleyAt(ms)));
 }
 
+// ── 탐사선 ──────────────────────────────────────────────
+
+export type Probe = {
+  id: string;
+  ko: string;
+  /** 기준 시각(UTC ms) */
+  epoch: number;
+  /** 기준 시각의 태양 중심 황도(J2000) 위치(AU) */
+  pos: Vec3;
+  /** 속도(AU/일). 행성 중력에서 벗어나 거의 곧게 가므로 직선으로 늘린다. */
+  vel: Vec3;
+};
+
+// 출처: NASA JPL Horizons 천문력(2026-01-01 00:00 TDB, 태양 중심, 황도 J2000, 벡터 표).
+// 1년 사이 속도 변화가 0.1%도 안 되어 앞뒤 몇 년은 직선 외삽으로 충분하다.
+const PROBE_EPOCH = Date.UTC(2026, 0, 1);
+export const PROBES: Probe[] = [
+  {
+    id: "voyager1",
+    ko: "보이저 1호",
+    epoch: PROBE_EPOCH,
+    pos: [-31.836_413_96, -134.678_484_9, 97.444_806_2],
+    vel: [-1.197_151_94e-3, -7.861_077_92e-3, 5.680_005_85e-3],
+  },
+  {
+    id: "voyager2",
+    ko: "보이저 2호",
+    epoch: PROBE_EPOCH,
+    pos: [39.227_532_01, -103.991_549_7, -87.918_658_08],
+    vel: [2.427_683_34e-3, -5.395_071_89e-3, -6.538_419_57e-3],
+  },
+];
+
+export const PROBE_BY_ID = new Map(PROBES.map((p) => [p.id, p]));
+
+/** 탐사선의 실제 위치(AU) */
+export function probePositionAU(id: string, ms: number): Vec3 {
+  const p = PROBE_BY_ID.get(id);
+  if (!p) return [0, 0, 0];
+  const days = (ms - p.epoch) / 86_400_000;
+  return [0, 1, 2].map((i) => (p.pos[i] ?? 0) + (p.vel[i] ?? 0) * days) as Vec3;
+}
+
+/** 탐사선의 장면 좌표 */
+export function probePosition(id: string, ms: number): Vec3 {
+  return toThree(compress(probePositionAU(id, ms)));
+}
+
+/** 탐사선은 실제 크기로는 보이지 않아 이만큼으로 그린다(접시 반지름, 장면 단위). */
+export const PROBE_SIZE = 0.04;
+
 // ── 목적지 ──────────────────────────────────────────────
 
 export type DestinationGroup =
@@ -318,6 +472,7 @@ export type DestinationGroup =
   | "위성"
   | "작은 천체"
   | "혜성"
+  | "탐사선"
   | "유명한 별";
 
 export type StarTarget = {
@@ -339,6 +494,8 @@ export type Destination = {
   /** 거리 한 줄(예: "8.6광년") */
   distance?: string;
   body?: string;
+  /** PROBES의 id */
+  probe?: string;
   star?: StarTarget;
   view?: "overview" | "inner";
 };
@@ -349,7 +506,7 @@ export const DESTINATIONS: Destination[] = [
     ko: "태양계 전경",
     group: "전망",
     view: "overview",
-    fact: "위에서 내려다본 오늘의 행성 배치. 거리는 줄여서 그렸다.",
+    fact: "위에서 내려다본 오늘의 행성 배치. 크기는 실제 비율, 거리는 두 배마다 한 칸씩(로그) 줄였다.",
   },
   {
     id: "inner",
@@ -503,6 +660,20 @@ export const DESTINATIONS: Destination[] = [
     ko: "핼리 혜성",
     group: "혜성",
     fact: "76년마다 돌아온다. 1986년 근일점 무렵의 모습. 다음은 2061년.",
+  },
+  {
+    id: "voyager1",
+    ko: "보이저 1호",
+    group: "탐사선",
+    probe: "voyager1",
+    fact: "1977년에 떠나 2012년 태양권을 벗어났다. 사람이 만든 것 가운데 가장 멀리 간 물체. 화면에서는 아주 크게 그렸다.",
+  },
+  {
+    id: "voyager2",
+    ko: "보이저 2호",
+    group: "탐사선",
+    probe: "voyager2",
+    fact: "목성·토성·천왕성·해왕성을 모두 지나간 유일한 탐사선. 2018년 성간 공간에 들어섰다. 화면에서는 아주 크게 그렸다.",
   },
   {
     id: "alpha-cen",

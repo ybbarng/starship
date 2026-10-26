@@ -238,14 +238,42 @@ export function bvToRgb(bv: number): Vec3 {
   return [c(r), c(g), c(bl)];
 }
 
-/** 화면에 담으려고 태양에서의 거리를 줄인다. 방향은 그대로다. */
-export const SCENE_SCALE = { k: 18, p: 0.55 };
+/**
+ * 화면 축척. 실제 비율 그대로는 화면에 담기지 않아 크기와 거리를 따로 줄인다(docs/scale.md).
+ * - 크기: 지구 반지름을 `earth`칸으로 두고 모든 천체를 실제 비율로. 너무 작은 것만 `minRadius`로 키운다.
+ *   태양만 예외로 실제 비율의 `sunShare`.
+ * - 거리: 태양에서 거리가 두 배가 될 때마다 `perDoubling`칸씩(로그). 방향은 그대로다.
+ * - 위성 거리: 모행성 반지름 단위로 같은 방식(두 배마다 반지름 하나).
+ */
+export const SCENE_SCALE = {
+  earth: 0.5,
+  minRadius: 0.03,
+  sunShare: 1 / 3,
+  perDoubling: 100,
+  /** 로그가 태양 가까이에서 무너지지 않게 더하는 거리(AU) */
+  r0: 0.3,
+};
+
+/** 태양 중심 거리(AU) → 화면 거리 */
+export function sceneDistance(au: number): number {
+  return SCENE_SCALE.perDoubling * Math.log2(1 + au / SCENE_SCALE.r0);
+}
 
 export function compress([x, y, z]: Vec3): Vec3 {
   const r = Math.hypot(x, y, z);
   if (r === 0) return [0, 0, 0];
-  const s = (SCENE_SCALE.k * r ** SCENE_SCALE.p) / r;
+  const s = sceneDistance(r) / r;
   return [x * s, y * s, z * s];
+}
+
+/** 실제 반지름(km) → 화면 반지름 */
+export function sceneRadius(km: number): number {
+  return Math.max(SCENE_SCALE.minRadius, (SCENE_SCALE.earth * km) / 6_371);
+}
+
+/** 위성의 궤도 반지름(모행성 반지름 단위) → 화면에서 모행성 반지름 단위 */
+export function moonOrbitRadii(radii: number): number {
+  return radii <= 1 ? radii : 1 + Math.log2(radii);
 }
 
 /** 황도 좌표(x,y,z 북쪽) → three.js 좌표(y가 위) */

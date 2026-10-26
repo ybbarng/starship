@@ -38,3 +38,15 @@ describe("빛 시간 글", () => {
     expect(formatLightTime(7199.9 * 299_792.458)).toBe("2시간 0분");
   });
 });
+
+describe("탐사선", () => {
+  it("보이저 1호는 JPL Horizons 값(2026-10-25, 172.15 AU)과 맞는다", () => {
+    const au = Math.hypot(...realPositionAU(dest("voyager1"), sky.orbits, t));
+    expect(au).toBeCloseTo(172.15, 1);
+    expect(formatLightTime(fromEarth("voyager1"))).toMatch(/^2[23]시간/);
+  });
+
+  it("보이저 2호는 1호보다 가깝다", () => {
+    expect(fromEarth("voyager2")).toBeLessThan(fromEarth("voyager1"));
+  });
+});

@@ -17,6 +17,7 @@ import {
   halleyPath,
   orbitPath,
   raDecToEcliptic,
+  sceneDistance,
   toThree,
   type Vec3,
 } from "./astro";
@@ -29,9 +30,13 @@ import {
   DESTINATIONS,
   type Destination,
   halleyPosition,
+  PROBE_SIZE,
+  PROBES,
+  probePosition,
 } from "./bodies";
 import { loadCatalog, type SkyCatalog } from "./catalog";
 import { projector } from "./projector";
+import { ScaleNote } from "./ScaleNote";
 import * as S from "./shaders";
 import {
   distanceKm,
@@ -42,8 +47,10 @@ import {
 import { useVoyage } from "./voyage";
 
 const SKY_RADIUS = 9000;
-const STAR_DISTANCE = 2500;
+const STAR_DISTANCE = 6000;
 const UP = new THREE.Vector3(0, 1, 0);
+/** 이보다 작게 보이는 천체는 원반 대신 빛점으로(픽셀 반지름) */
+const DISC_MIN_PX = 14;
 /** 행성 사진 텍스처 폴더. 기본은 저장소의 /textures, "off"면 모두 코드로 그린다. */
 const DEFAULT_TEXTURES = "/textures";
 const TEXTURES =
@@ -66,6 +73,8 @@ export type SpaceViewProps = {
   clickToFly?: boolean;
   /** 적도 좌표 격자(적경 2시간, 적위 15도마다) */
   grid?: boolean;
+  /** 왼쪽 아래 축척 안내 */
+  scaleNote?: boolean;
 };
 
 export function SpaceView({
@@ -77,6 +86,7 @@ export function SpaceView({
   starScale = 1,
   clickToFly = true,
   grid = false,
+  scaleNote = false,
 }: SpaceViewProps) {
   const travelTo = useVoyage((s) => s.travelTo);
   const onPick = clickToFly ? travelTo : undefined;
@@ -149,6 +159,9 @@ export function SpaceView({
           pointerEvents: "none",
         }}
       />
+      {scaleNote && (
+        <ScaleNote className="absolute bottom-2 left-3 z-10 [&>span]:left-0 [&>span]:translate-x-0" />
+      )}
     </div>
   );
 }
@@ -472,6 +485,182 @@ function SolarSystem({
       <AsteroidBelt />
       <Orbits catalog={catalog} />
       <Comet />
+      {/* 탐사선(일반 재질)만 받는 빛. 행성은 셰이더가 직접 태양 쪽을 칠한다. */}
+      <ambientLight intensity={0.3} />
+      <pointLight position={[0, 0, 0]} intensity={2.4} decay={0} />
+      {PROBES.map((p) => (
+        <ProbeModel key={p.id} id={p.id} onPick={onPick} />
+      ))}
+      <BodyDots catalog={catalog} />
+    </group>
+  );
+}
+
+/**
+ * 실제 비율로 그리면 먼 행성은 한 점보다 작아진다. 밤하늘의 행성처럼 작은 빛점을 남겨
+ * "저기 있다"는 것만 보이게 한다. 가까우면 천체 자체가 이 점을 가린다.
+ */
+function BodyDots({ catalog }: { catalog: SkyCatalog }) {
+  const { gl } = useThree();
+  const list = useMemo(
+    () => [
+      ...BODIES.filter((b) => b.id !== "sun").map((b) => ({
+        at: (ms: number) => bodyPosition(b, catalog.orbits, ms),
+        color: dotColor(b),
+        size: b.parent ? 1.6 : 2.4,
+      })),
+      ...PROBES.map((p) => ({
+        at: (ms: number) => probePosition(p.id, ms),
+        color: [0.85, 0.92, 1] as Vec3,
+        size: 2,
+      })),
+    ],
+    [catalog],
+  );
+  const geo = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    const n = list.length;
+    g.setAttribute(
+      "position",
+      new THREE.BufferAttribute(new Float32Array(n * 3), 3),
+    );
+    g.setAttribute(
+      "aColor",
+      new THREE.BufferAttribute(
+        new Float32Array(list.flatMap((d) => d.color)),
+        3,
+      ),
+    );
+    g.setAttribute(
+      "aSize",
+      new THREE.BufferAttribute(new Float32Array(list.map((d) => d.size)), 1),
+    );
+    g.setAttribute(
+      "aSeed",
+      new THREE.BufferAttribute(new Float32Array(n).fill(0.5), 1),
+    );
+    return g;
+  }, [list]);
+  useFrame(() => {
+    const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+    const now = Date.now();
+    list.forEach((d, i) => {
+      pos.setXYZ(i, ...d.at(now));
+    });
+    pos.needsUpdate = true;
+  });
+  return (
+    <points geometry={geo} frustumCulled={false}>
+      <shaderMaterial
+        args={[
+          {
+            vertexShader: S.starVertex,
+            fragmentShader: S.starFragment,
+            uniforms: {
+              uPixelRatio: { value: gl.getPixelRatio() },
+              uTime: { value: 0 },
+              uScale: { value: 1 },
+            },
+            transparent: true,
+            depthWrite: false,
+          },
+        ]}
+      />
+    </points>
+  );
+}
+
+function dotColor(b: BodyDef): Vec3 {
+  const s = b.surface;
+  const hex =
+    s.type === "star" ? s.color : s.type === "earth" ? "#9cc4ff" : s.colors[1];
+  const c = new THREE.Color(hex);
+  return [c.r, c.g, c.b];
+}
+
+/**
+ * 보이저를 닮은 단순한 그림: 지구를 향한 큰 접시 안테나, 십각형 몸통,
+ * 긴 자력계 막대, 원자력 전지(RTG) 막대, 과학 장비 막대. 실제 크기로는 보이지 않아 크게 그렸다.
+ */
+function ProbeModel({
+  id,
+  onPick,
+}: {
+  id: string;
+  onPick?: (id: string) => void;
+}) {
+  const group = useRef<THREE.Group>(null);
+  const s = PROBE_SIZE;
+  const yAxis = useMemo(() => new THREE.Vector3(0, 1, 0), []);
+  const home = useMemo(() => new THREE.Vector3(), []);
+  useFrame(() => {
+    const g = group.current;
+    if (!g) return;
+    const [x, y, z] = probePosition(id, Date.now());
+    g.position.set(x, y, z);
+    // 접시는 늘 지구(거의 태양 쪽)를 본다.
+    home.set(-x, -y, -z).normalize();
+    g.quaternion.setFromUnitVectors(yAxis, home);
+  });
+  const metal = "#c9ccd2";
+  const dark = "#4a4f58";
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: three.js 그룹이라 HTML 접근성 규칙이 맞지 않는다(이름표 버튼이 같은 일을 한다)
+    <group
+      ref={group}
+      onClick={
+        onPick
+          ? (e) => {
+              if (e.delta > 5) return;
+              e.stopPropagation();
+              onPick(id);
+            }
+          : undefined
+      }
+    >
+      {/* 접시 안테나: 얕은 원뿔 + 앞면 원판 */}
+      <mesh position={[0, s * 0.42, 0]} rotation={[Math.PI, 0, 0]}>
+        <coneGeometry args={[s, s * 0.3, 40, 1, true]} />
+        <meshLambertMaterial color="#f2f2ee" side={THREE.DoubleSide} />
+      </mesh>
+      <mesh position={[0, s * 0.6, 0]}>
+        <cylinderGeometry args={[s * 0.035, s * 0.06, s * 0.4, 8]} />
+        <meshLambertMaterial color={metal} />
+      </mesh>
+      {/* 십각형 몸통 */}
+      <mesh position={[0, 0, 0]}>
+        <cylinderGeometry args={[s * 0.32, s * 0.32, s * 0.16, 10]} />
+        <meshLambertMaterial color={dark} />
+      </mesh>
+      {/* 자력계 막대(길게) */}
+      <mesh position={[-s * 2.1, -s * 0.05, 0]} rotation={[0, 0, Math.PI / 2]}>
+        <cylinderGeometry args={[s * 0.012, s * 0.012, s * 3.8, 6]} />
+        <meshLambertMaterial color={metal} />
+      </mesh>
+      {/* RTG 막대와 전지 세 통 */}
+      <group position={[s * 0.32, -s * 0.08, s * 0.3]} rotation={[0, -0.6, 0]}>
+        <mesh position={[s * 0.5, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[s * 0.015, s * 0.015, s, 6]} />
+          <meshLambertMaterial color={metal} />
+        </mesh>
+        {[0.55, 0.75, 0.95].map((k) => (
+          <mesh key={k} position={[s * k, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[s * 0.07, s * 0.07, s * 0.16, 12]} />
+            <meshLambertMaterial color="#6e6a63" />
+          </mesh>
+        ))}
+      </group>
+      {/* 과학 장비 막대와 끝의 관측대 */}
+      <group position={[s * 0.3, -s * 0.06, -s * 0.3]} rotation={[0, 0.7, 0]}>
+        <mesh position={[s * 0.55, 0, 0]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[s * 0.015, s * 0.015, s * 1.1, 6]} />
+          <meshLambertMaterial color={metal} />
+        </mesh>
+        <mesh position={[s * 1.1, s * 0.05, 0]}>
+          <boxGeometry args={[s * 0.18, s * 0.22, s * 0.16]} />
+          <meshLambertMaterial color="#8a8f99" />
+        </mesh>
+      </group>
     </group>
   );
 }
@@ -518,7 +707,7 @@ function Sun() {
   useFrame((state) => {
     if (mat.uniforms.uTime) mat.uniforms.uTime.value = state.clock.elapsedTime;
     glow.current?.quaternion.copy(camera.quaternion);
-    if (far.current) far.current.visible = camera.position.length() > 300;
+    if (far.current) far.current.visible = camera.position.length() > 3000;
   });
   return (
     <group>
@@ -642,10 +831,23 @@ function Planet({
   const earthBody = BODY_BY_ID.get("earth") as BodyDef;
   const pickable = Boolean(onPick && DESTINATION_BY_ID.has(body.id));
 
+  const { camera, gl } = useThree();
+  // 본체 반지름으로 판단한다(고리는 맨눈으로 보이지 않는다).
+  const reach = body.radius;
   useFrame((state, dt) => {
     const now = Date.now();
     const [x, y, z] = bodyPosition(body, catalog.orbits, now);
-    group.current?.position.set(x, y, z);
+    const g = group.current;
+    if (g) {
+      g.position.set(x, y, z);
+      // 맨눈으로 먼 행성은 원반이 아니라 빛점이다. 화면에서 몇 픽셀보다 작아지면 원반을 끄고
+      // BodyDots의 빛점만 남긴다(공기가 없어 흐려지지는 않지만, 원반 모양과 고리는 보이지 않는다).
+      const cam = camera as THREE.PerspectiveCamera;
+      const focal =
+        gl.domElement.clientHeight / 2 / Math.tan((cam.fov * Math.PI) / 360);
+      const px = (reach / cam.position.distanceTo(g.position)) * focal;
+      g.visible = px > DISC_MIN_PX;
+    }
     const m = spin.current;
     if (m && isEarth) {
       // 지금 이 순간의 실제 자전 각도: 그리니치가 가리키는 방향에 텍스처 경도 0을 맞춘다.
@@ -1046,15 +1248,29 @@ function poseFor(dest: Destination, orbits: SkyCatalog["orbits"] | null): Pose {
     return {
       center: new THREE.Vector3(),
       dir: new THREE.Vector3(0, 0.9, 0.44).normalize(),
-      dist: 300,
+      // 해왕성 궤도(태양에서 약 240)가 화면에 들어오게
+      dist: sceneDistance(30) * 2.3,
     };
   }
   if (dest.view === "inner") {
     return {
       center: new THREE.Vector3(),
       dir: new THREE.Vector3(0, 0.88, 0.47).normalize(),
-      dist: 82,
+      // 소행성대 바깥(3.3 AU)까지
+      dist: sceneDistance(3.3) * 2.2,
     };
+  }
+  if (dest.probe) {
+    const center = new THREE.Vector3(...probePosition(dest.probe, now));
+    // 햇빛 받는 옆쪽에서: 지구를 향한 접시 앞면이 보인다.
+    const home = center.clone().normalize().negate();
+    const side = new THREE.Vector3().crossVectors(home, UP).normalize();
+    const dir = side
+      .multiplyScalar(0.85)
+      .add(home.multiplyScalar(0.35))
+      .add(UP.clone().multiplyScalar(0.3))
+      .normalize();
+    return { center, dir, dist: PROBE_SIZE * 16 };
   }
   if (dest.star) {
     const center = starTargetPosition(dest);
@@ -1065,7 +1281,7 @@ function poseFor(dest: Destination, orbits: SkyCatalog["orbits"] | null): Pose {
       .add(perp.multiplyScalar(0.55))
       .add(UP.clone().multiplyScalar(0.12))
       .normalize();
-    return { center, dir, dist: dest.star.radius * 7 };
+    return { center, dir, dist: dest.star.radius * 12 };
   }
   if (dest.id === "halley") {
     const center = new THREE.Vector3(
@@ -1099,7 +1315,7 @@ function poseFor(dest: Destination, orbits: SkyCatalog["orbits"] | null): Pose {
     return {
       center: new THREE.Vector3(),
       dir: new THREE.Vector3(0.35, 0.22, 1).normalize(),
-      dist: 15,
+      dist: body.radius * 6,
     };
   }
   const center = new THREE.Vector3(...bodyPosition(body, orbits, now));
@@ -1115,7 +1331,7 @@ function poseFor(dest: Destination, orbits: SkyCatalog["orbits"] | null): Pose {
       .add(sunDir.multiplyScalar(0.45))
       .add(UP.clone().multiplyScalar(0.12))
       .normalize();
-    return { center, dir, dist: body.radius * 7 };
+    return { center, dir, dist: body.radius * 12 };
   }
   dir = sunDir
     .multiplyScalar(0.55)
@@ -1123,8 +1339,8 @@ function poseFor(dest: Destination, orbits: SkyCatalog["orbits"] | null): Pose {
     .add(UP.clone().multiplyScalar(0.2))
     .normalize();
   const reach = body.ring
-    ? body.radius * body.ring.outer * 2.2
-    : body.radius * 4.6;
+    ? body.radius * body.ring.outer * 5.5
+    : body.radius * 9;
   return { center, dir, dist: reach };
 }
 
@@ -1190,7 +1406,7 @@ function CameraRig({
       fromLook: look.current.clone(),
       start: performance.now(),
       duration: Math.min(7, 2.4 + 1.1 * Math.log10(1 + d)) * 1000,
-      far: d > 200,
+      far: d > 3000,
       fromReal: [...telemetry.position] as Vec3,
     };
     yaw.current = 0;
@@ -1464,6 +1680,15 @@ function LabelLayer({
           ...halleyPosition(HALLEY.perihelion + 10 * 86_400_000),
         ),
     });
+    for (const p of PROBES) {
+      out.push({
+        key: `p-${p.id}`,
+        text: p.ko,
+        kind: "body",
+        target: p.id,
+        at: () => new THREE.Vector3(...probePosition(p.id, Date.now())),
+      });
+    }
     return out;
   }, [catalog, amount]);
 
@@ -1474,6 +1699,8 @@ function LabelLayer({
     for (const s of specs) {
       const el = document.createElement("span");
       el.textContent = s.text;
+      // cssText가 앞서 넣은 스타일을 덮으므로 먼저 넣는다.
+      el.style.cssText = `position:absolute;left:0;top:0;white-space:nowrap;text-shadow:0 0 6px #000,0 0 2px #000;will-change:transform;transition:opacity .3s;${LABEL_STYLE[s.kind]}`;
       const target = s.target;
       if (onPick && target) {
         // 이름표를 눌러도 그곳으로 날아간다.
@@ -1482,7 +1709,6 @@ function LabelLayer({
         el.title = `${s.text}(으)로 가기`;
         el.addEventListener("click", () => onPick(target));
       }
-      el.style.cssText = `position:absolute;left:0;top:0;white-space:nowrap;text-shadow:0 0 6px #000,0 0 2px #000;will-change:transform;transition:opacity .3s;${LABEL_STYLE[s.kind]}`;
       root.appendChild(el);
       map.set(s.key, el);
     }
@@ -1555,7 +1781,7 @@ function LabelLayer({
         const apparent = r / d;
         if (s.kind === "body") {
           const isMoon = Boolean(s.body?.parent);
-          show = apparent < 0.08 && (isMoon ? d < 30 : d < 600);
+          show = apparent < 0.08 && (isMoon ? d < 80 : d < 6000);
           offsetY = Math.max(8, apparent * h * 0.6 + 6);
         } else {
           show = camDist > 25;

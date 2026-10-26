@@ -10,45 +10,14 @@ import {
   LY_AU,
   type Vec3,
 } from "./astro";
-import { BODY_BY_ID, type Destination } from "./bodies";
+import {
+  BODY_BY_ID,
+  type Destination,
+  MOON_DISTANCE_KM,
+  probePositionAU,
+} from "./bodies";
 
-/** 실제 반지름(km) */
-export const REAL_RADIUS_KM: Record<string, number> = {
-  sun: 696_340,
-  mercury: 2_439.7,
-  venus: 6_051.8,
-  earth: 6_371,
-  moon: 1_737.4,
-  mars: 3_389.5,
-  phobos: 11.3,
-  ceres: 469.7,
-  vesta: 262.7,
-  jupiter: 69_911,
-  io: 1_821.6,
-  europa: 1_560.8,
-  ganymede: 2_634.1,
-  callisto: 2_410.3,
-  saturn: 58_232,
-  enceladus: 252.1,
-  titan: 2_574.7,
-  uranus: 25_362,
-  neptune: 24_622,
-  triton: 1_353.4,
-  pluto: 1_188.3,
-};
-
-/** 위성의 실제 궤도 반지름(km) */
-const MOON_DISTANCE_KM: Record<string, number> = {
-  moon: 384_400,
-  phobos: 9_376,
-  io: 421_700,
-  europa: 671_034,
-  ganymede: 1_070_412,
-  callisto: 1_882_709,
-  enceladus: 238_042,
-  titan: 1_221_870,
-  triton: 354_759,
-};
+export { REAL_RADIUS_KM } from "./bodies";
 
 /** 유명한 별까지 거리(광년) */
 export const STAR_LY: Record<string, number> = {
@@ -72,6 +41,7 @@ export function realPositionAU(
   if (dest.view === "inner") return [0, 0, 6];
   if (dest.id === "halley")
     return halleyAt(HALLEY.perihelion + 10 * 86_400_000);
+  if (dest.probe) return probePositionAU(dest.probe, ms);
   if (dest.star) {
     const ly = STAR_LY[dest.id] ?? 10;
     const ra = (dest.star.ra * Math.PI) / 180;
