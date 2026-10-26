@@ -243,7 +243,7 @@ export function bvToRgb(bv: number): Vec3 {
  * - 크기: 지구 반지름을 `earth`칸으로 두고 모든 천체를 실제 비율로. 너무 작은 것만 `minRadius`로 키운다.
  *   태양만 예외로 실제 비율의 `sunShare`.
  * - 거리: 태양에서 거리가 두 배가 될 때마다 `perDoubling`칸씩(로그). 방향은 그대로다.
- * - 위성 거리: 모행성 반지름 단위로 같은 방식(두 배마다 반지름 하나).
+ * - 위성 거리: 모행성 반지름 단위 거리를 `moonPower`제곱(행성 사이보다 덜 줄인다).
  */
 export const SCENE_SCALE = {
   earth: 0.5,
@@ -252,6 +252,7 @@ export const SCENE_SCALE = {
   perDoubling: 100,
   /** 로그가 태양 가까이에서 무너지지 않게 더하는 거리(AU) */
   r0: 0.3,
+  moonPower: 0.75,
 };
 
 /**
@@ -297,7 +298,8 @@ export function sunShare(): number {
 /** 위성의 궤도 반지름(모행성 반지름 단위) → 화면에서 모행성 반지름 단위 */
 export function moonOrbitRadii(radii: number): number {
   if (mode === "real" || radii <= 1) return radii;
-  return 1 + Math.log2(radii);
+  // 0.75제곱: 달은 지구 반지름 60배 → 21.6배(실제의 약 1/3), 칼리스토는 목성 반지름 27배 → 11.8배.
+  return radii ** SCENE_SCALE.moonPower;
 }
 
 /** 황도 좌표(x,y,z 북쪽) → three.js 좌표(y가 위) */

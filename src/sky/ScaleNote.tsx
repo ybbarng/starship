@@ -69,8 +69,8 @@ export function ScaleNote({ className }: { className?: string }) {
               탐사선은 보이게 키웠다.
               <br />
               <b className="font-semibold text-white/90">거리</b> 태양에서
-              거리가 두 배가 될 때마다 같은 간격(로그). 위성 거리도 모행성
-              반지름을 기준으로 같은 방식.
+              거리가 두 배가 될 때마다 같은 간격(로그). 위성 거리는 덜
+              줄였다(달은 실제의 약 1/3).
             </>
           )}
           <br />

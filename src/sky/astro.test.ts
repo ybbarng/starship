@@ -138,7 +138,9 @@ describe("화면 축척", () => {
     expect(sceneDistance(0.31)).toBeGreaterThan(
       sceneRadius(696_340) * SCENE_SCALE.sunShare * 1.5,
     );
-    expect(moonOrbitRadii(60.3)).toBeGreaterThan(1);
+    // 달은 지구 반지름 60배 → 약 21.6배, 엔켈라두스(토성 반지름 4.1배)는 고리(2.27배) 바깥
+    expect(moonOrbitRadii(60.3)).toBeCloseTo(21.6, 1);
+    expect(moonOrbitRadii(4.09)).toBeGreaterThan(2.27 * 1.1);
   });
 });
 

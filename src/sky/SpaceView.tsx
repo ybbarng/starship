@@ -54,14 +54,16 @@ const starDistance = () => (scaleMode() === "real" ? 4e6 : 6000);
 /** 이름표를 보여 주는 거리 배율(실제 축척은 줄인 축척보다 수십~수백 배 넓다) */
 const rangeScale = () => (scaleMode() === "real" ? 600 : 1);
 /** 위성 이름표를 보여 주는 거리(모행성 둘레만) */
-const moonLabelRange = () => (scaleMode() === "real" ? 600 : 80);
+const moonLabelRange = () => (scaleMode() === "real" ? 600 : 150);
 const UP = new THREE.Vector3(0, 1, 0);
 /**
  * 이보다 작게 보이는 천체는 원반 대신 빛점으로(픽셀 반지름).
  * 줄인 축척은 거리를 크게 줄여 먼 행성이 실제보다 크게 보이므로 기준을 높게 둔다.
+ * 위성은 행성 사이보다 덜 줄였으므로 낮은 기준을 쓴다(지구에서 본 달은 원반으로 남는다).
  * 실제 축척에서는 겉보기 크기가 이미 실제와 같아, 1픽셀 남짓보다 작을 때만 빛점으로.
  */
-const discMinPx = () => (scaleMode() === "real" ? 1.5 : 14);
+const discMinPx = (isMoon: boolean) =>
+  scaleMode() === "real" ? 1.5 : isMoon ? 4 : 14;
 /** 행성 사진 텍스처 폴더. 기본은 저장소의 /textures, "off"면 모두 코드로 그린다. */
 const DEFAULT_TEXTURES = "/textures";
 const TEXTURES =
@@ -863,7 +865,7 @@ function Planet({
       const focal =
         gl.domElement.clientHeight / 2 / Math.tan((cam.fov * Math.PI) / 360);
       const px = (reach / cam.position.distanceTo(g.position)) * focal;
-      g.visible = px > discMinPx();
+      g.visible = px > discMinPx(Boolean(body.parent));
     }
     const m = spin.current;
     if (m && isEarth) {
