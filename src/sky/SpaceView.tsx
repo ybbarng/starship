@@ -56,14 +56,8 @@ const rangeScale = () => (scaleMode() === "real" ? 600 : 1);
 /** 위성 이름표를 보여 주는 거리(모행성 둘레만) */
 const moonLabelRange = () => (scaleMode() === "real" ? 600 : 150);
 const UP = new THREE.Vector3(0, 1, 0);
-/**
- * 이보다 작게 보이는 천체는 원반 대신 빛점으로(픽셀 반지름).
- * 줄인 축척은 거리를 크게 줄여 먼 행성이 실제보다 크게 보이므로 기준을 높게 둔다.
- * 위성은 행성 사이보다 덜 줄였으므로 낮은 기준을 쓴다(지구에서 본 달은 원반으로 남는다).
- * 실제 축척에서는 겉보기 크기가 이미 실제와 같아, 1픽셀 남짓보다 작을 때만 빛점으로.
- */
-const discMinPx = (isMoon: boolean) =>
-  scaleMode() === "real" ? 1.5 : isMoon ? 4 : 14;
+/** 화면에서 이보다 작은 천체(픽셀 반지름)는 원반을 그려도 보이지 않으므로 빛점만 남긴다. */
+const DISC_MIN_PX = 1.5;
 /** 행성 사진 텍스처 폴더. 기본은 저장소의 /textures, "off"면 모두 코드로 그린다. */
 const DEFAULT_TEXTURES = "/textures";
 const TEXTURES =
@@ -861,13 +855,12 @@ function Planet({
     const g = group.current;
     if (g) {
       g.position.set(x, y, z);
-      // 맨눈으로 먼 행성은 원반이 아니라 빛점이다. 화면에서 몇 픽셀보다 작아지면 원반을 끄고
-      // BodyDots의 빛점만 남긴다(공기가 없어 흐려지지는 않지만, 원반 모양과 고리는 보이지 않는다).
+      // 한 픽셀 남짓보다 작아지면 원반을 끄고 BodyDots의 빛점만 남긴다.
       const cam = camera as THREE.PerspectiveCamera;
       const focal =
         gl.domElement.clientHeight / 2 / Math.tan((cam.fov * Math.PI) / 360);
       const px = (reach / cam.position.distanceTo(g.position)) * focal;
-      g.visible = px > discMinPx(Boolean(body.parent));
+      g.visible = px > DISC_MIN_PX;
     }
     const m = spin.current;
     if (m && isEarth) {
