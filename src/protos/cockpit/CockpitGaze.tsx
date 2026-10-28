@@ -30,6 +30,7 @@ import {
   Toasts,
   useScrollStage,
 } from "@/ui/kit";
+import { LinkHud } from "@/ui/link/LinkHud";
 import styles from "./cockpit.module.css";
 import { GazeLayer } from "./Gaze";
 import { GlassFrame, type GlassShape } from "./Glass";
@@ -297,6 +298,14 @@ export function CockpitGaze() {
             </span>
             우주 감상하기
           </button>
+          {bridge.link && (
+            <div
+              className="pointer-events-auto absolute"
+              style={{ top: shape.topCorner + 10, left: shape.x0 + 16 }}
+            >
+              <LinkHud link={bridge.link} now={now} />
+            </div>
+          )}
           <GlassReadout bottom={h - shape.bottom + 30} />
         </div>
       )}
@@ -321,6 +330,7 @@ export function CockpitGaze() {
           crewById={bridge.crewById}
           warnings={warnings}
           connected={!bridge.error}
+          link={bridge.link}
           now={now}
           drawerOpen={drawer}
           push={push}

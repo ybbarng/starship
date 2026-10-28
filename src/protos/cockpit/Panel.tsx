@@ -5,11 +5,19 @@
 //   왼쪽 = 승무원 상태판(업무/개인 두 줄, 프로젝트마다 작은 등)
 //   가운데 = 주 표시창(지금 할 일 하나)
 //   오른쪽 = 교신 수신등·칩, 항법 소형 표시(행성 단추·더 먼 곳·이동 중 속도)
-import type { Context, Crew, CrewStatus, Hail, Task } from "@/protocol/v1";
+import type {
+  Context,
+  Crew,
+  CrewStatus,
+  Hail,
+  Link,
+  Task,
+} from "@/protocol/v1";
 import { formatSpeed } from "@/sky/telemetry";
 import { useTelemetry } from "@/sky/useTelemetry";
 import { useDestination, useVoyage } from "@/sky/voyage";
 import { ago, CONTEXT_COLOR, CONTEXT_LABEL, sourceLabel } from "@/ui/kit";
+import { VERDICT_LABEL } from "@/ui/link/model";
 import styles from "./cockpit.module.css";
 import { MainDisplay } from "./MainDisplay";
 import { type Lamp, PILE_WARN, selecting, type useWarnings } from "./util";
@@ -62,6 +70,7 @@ export function Annunciators({
   hails,
   warnings,
   connected,
+  link,
   onList,
   onHail,
 }: {
@@ -69,6 +78,7 @@ export function Annunciators({
   hails: Hail[];
   warnings: Warnings;
   connected: boolean;
+  link?: Link;
   onList: (k: ListKind) => void;
   onHail: () => void;
 }) {
@@ -120,6 +130,14 @@ export function Annunciators({
         label={connected ? "본부 연결 정상" : "본부 연결 끊김"}
         hint="상태를 5초마다 받아 와요"
       />
+      {link && link.verdict !== "ok" && (
+        <Tile
+          id="relay"
+          lamp={link.verdict === "down" ? "alert" : "warn"}
+          label={VERDICT_LABEL[link.verdict]}
+          hint={`관제 링크(회선). ${link.cause ?? ""} 유리창 왼쪽 위에 자세히 보여요`}
+        />
+      )}
     </div>
   );
 }
@@ -558,6 +576,7 @@ export function Dashboard({
   crewById,
   warnings,
   connected,
+  link,
   now,
   drawerOpen,
   push,
@@ -577,6 +596,7 @@ export function Dashboard({
   crewById: Map<string, Crew>;
   warnings: Warnings;
   connected: boolean;
+  link?: Link;
   now: number;
   drawerOpen: boolean;
   push: number;
@@ -599,6 +619,7 @@ export function Dashboard({
           hails={hails}
           warnings={warnings}
           connected={connected}
+          link={link}
           onList={onList}
           onHail={() => onHail()}
         />
