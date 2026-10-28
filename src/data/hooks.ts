@@ -6,6 +6,8 @@ import {
   type ActionRequest,
   ActionResult,
   type Crew,
+  type CrewMapResponse,
+  CrewMapResponse as CrewMapResponseSchema,
   type Snapshot,
   Snapshot as SnapshotSchema,
   type Task,
@@ -55,6 +57,23 @@ async function postAction(req: ActionRequest): Promise<ActionResult> {
   });
   const body = ActionResult.safeParse(await res.json().catch(() => null));
   return body.success ? body.data : { ok: false, note: `실패 (${res.status})` };
+}
+
+async function fetchCrewMap(crewId: string): Promise<CrewMapResponse> {
+  const res = await fetch(`/api/v1/crew/${encodeURIComponent(crewId)}/map`, {
+    cache: "no-store",
+  });
+  if (!res.ok) throw new Error(`map ${res.status}`);
+  return CrewMapResponseSchema.parse(await res.json());
+}
+
+/** 승무원 하나의 지도. 자주 바뀌지 않으니 30초마다 다시 읽는다. */
+export function useCrewMap(crewId: string) {
+  return useQuery({
+    queryKey: ["crew-map", crewId],
+    queryFn: () => fetchCrewMap(crewId),
+    refetchInterval: 30_000,
+  });
 }
 
 /** 5초마다 새로 읽는 전체 상태. */
