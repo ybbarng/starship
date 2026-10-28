@@ -1,11 +1,20 @@
 // 화면이 받는 데이터의 출처. 기본은 데모, STARSHIP_SERVER_URL이 있으면 그 서버(프로토콜 v1)를 쓴다.
+
+import { z } from "zod";
+import { buildDemoMap, DEMO_MAP_CREW } from "@/demo/map";
 import {
   buildSnapshot,
   createDemoState,
   type DemoState,
   type Scenario,
 } from "@/demo/scenario";
-import { type ActionRequest, ActionResult, Snapshot } from "@/protocol/v1";
+import { parseMap } from "@/protocol/map";
+import {
+  type ActionRequest,
+  ActionResult,
+  CrewMapResponse,
+  Snapshot,
+} from "@/protocol/v1";
 
 const HOUR = 3_600_000;
 
@@ -47,6 +56,40 @@ export async function getSnapshot(
   if (!res.ok) throw new Error(`snapshot ${res.status}`);
   return Snapshot.parse(await res.json());
 }
+
+/**
+ * 승무원 하나의 지도. 서버 연결 모드는 {base}/v1/crew/{id}/map 을 그대로 중계한다.
+ * 지도 형식이 이 화면이 아는 것과 다르면 응답 전체를 버리지 않고 map: null과 problems로 바꾼다.
+ */
+export async function getCrewMap(
+  crewId: string,
+  now = Date.now(),
+): Promise<CrewMapResponse> {
+  const info = sourceInfo();
+  if (info.mode === "demo") {
+    if (crewId !== DEMO_MAP_CREW) return { map: null };
+    return { map: buildDemoMap(now), stale: false, mapAt: now - 2 * HOUR };
+  }
+  const res = await fetch(
+    `${info.base}/v1/crew/${encodeURIComponent(crewId)}/map`,
+    { cache: "no-store" },
+  );
+  if (res.status === 404) return { map: null };
+  if (!res.ok) throw new Error(`map ${res.status}`);
+  const body = MapEnvelope.parse(await res.json());
+  if (body.map === null) return { ...body, map: null };
+  const parsed = parseMap(body.map);
+  return parsed.ok
+    ? { ...body, map: parsed.map }
+    : {
+        ...body,
+        map: null,
+        problems: [...(body.problems ?? []), ...parsed.problems],
+      };
+}
+
+/** 지도 응답에서 map만 아직 검사하지 않은 껍데기. */
+const MapEnvelope = CrewMapResponse.extend({ map: z.unknown() });
 
 export async function runAction(
   req: ActionRequest,

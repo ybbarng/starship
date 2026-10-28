@@ -49,6 +49,23 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
 - `note`는 화면에 잠깐 띄울 한 줄이다. 사람이 읽을 말로 쓴다.
 - `openUrl`이 있으면 Starship이 새 탭으로 연다(원래 서비스에서 답해야 할 때).
 
+### `GET {base}/v1/crew/{id}/map` → `CrewMapResponse`
+
+승무원(프로젝트) 하나의 지도. 선실(`/crew/{id}`) 화면이 읽는다. 지도 형식 `starship-map/1`의 원본은 [`src/protocol/map.ts`](../src/protocol/map.ts)이고, 뜻은 [`map.md`](map.md)에 있다.
+
+```jsonc
+{
+  "map": { "map": "starship-map/1", "title": "온라인 상점", "regions": [/* ... */] },
+  "problems": ["regions.3.status: ..."], // 선택. 형식 검사에 걸린 것
+  "stale": false,                        // 선택. 지도가 일보다 오래 뒤처졌나
+  "mapAt": 1792900000000                 // 선택. map.json을 마지막으로 고친 때(Unix 밀리초)
+}
+```
+
+- `map: null`은 지도가 아직 없다는 뜻이다. 선실에 "지도가 아직 없어요"를 보인다. 404도 같게 본다.
+- `problems`가 있으면 서버는 마지막으로 맞았던 지도를 `map`에 그대로 준다(없으면 `null`). 화면은 지도를 그리고 문제를 따로 알린다.
+- Starship은 받은 `map`을 다시 검사한다(id 중복, 없는 parent, 고리, 3단 넘김). 걸리면 `map: null`로 바꾸고 그 문제를 `problems`에 더한다.
+
 ## 개념
 
 ### Task — 할 일
@@ -86,6 +103,7 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
 | `onDeck` | 창(터미널)이 열려 있나. 열린 승무원은 크게, 나머지는 작게 |
 | `brief` | 요약·오늘·다음·위험 |
 | `actions` | `focus` 그 창으로 가기 · `brief` 브리핑 다시 만들기 |
+| `map` | 선택. 지도 요약 `{ progress, regions, found, forksForMe, stale }`. 진행률(0..1), 버림을 뺀 구역 수, 그 가운데 발견 구역 수, 내가 정할 열린 갈림길 수, 지도가 오래됐나. 계산 규칙은 `src/protocol/map.ts`의 `summarizeMap` |
 
 ### Gauge — 계기판 등
 

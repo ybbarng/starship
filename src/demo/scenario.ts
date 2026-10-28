@@ -1,5 +1,6 @@
 // 데모 모드의 지어낸 데이터. 실제 사람·회사·서비스 내용은 없다.
 // 시나리오: default(보통), empty(할 일 0개), busy(승무원 30명·할 일 많음).
+import { summarizeMap } from "@/protocol/map";
 import {
   type Crew,
   type Gauge,
@@ -10,6 +11,7 @@ import {
   type TaskAction,
   type TaskKind,
 } from "@/protocol/v1";
+import { buildDemoMap, DEMO_MAP_CREW } from "./map";
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -362,6 +364,10 @@ export function buildSnapshot(
         ]
       : CREW;
 
+  const demoMapSummary = {
+    ...summarizeMap(buildDemoMap(now)),
+    stale: false,
+  };
   const crew: Crew[] = seeds2.map((c, i) => {
     // 세션 할 일이 치워지면 그 승무원은 다시 일하러 간다.
     const status =
@@ -378,6 +384,7 @@ export function buildSnapshot(
       onDeck: c.onDeck,
       brief: brief ? { ...brief, at: now - 2 * HOUR } : undefined,
       actions: c.status === "off" ? ["brief"] : ["focus", "brief"],
+      map: c.id === DEMO_MAP_CREW ? demoMapSummary : undefined,
     };
   });
 

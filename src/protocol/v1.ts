@@ -1,7 +1,9 @@
 // Starship 프로토콜 v1. 화면(이 앱)과 데이터를 주는 서버 사이의 약속이다.
 // 서버는 GET {base}/v1/snapshot 으로 Snapshot을, POST {base}/v1/actions 로 ActionRequest를 받는다.
+// 승무원 지도는 GET {base}/v1/crew/{id}/map 으로 준다.
 // 자세한 설명은 docs/protocol.md.
 import { z } from "zod";
+import { ProjectMap } from "./map";
 
 export const PROTOCOL = "starship/1" as const;
 
@@ -159,8 +161,37 @@ export const Crew = z.object({
     })
     .optional(),
   actions: z.array(CrewAction),
+  /** 지도(map.json) 요약. 지도가 없으면 생략. 갑판에서 승무원 옆에 작게 보인다. */
+  map: z
+    .object({
+      /** 진행률 0..1 */
+      progress: z.number().min(0).max(1),
+      /** 버림을 뺀 구역 수 */
+      regions: z.number().int().nonnegative(),
+      /** 그 가운데 처음 계획에 없다가 생긴 구역 수 */
+      found: z.number().int().nonnegative(),
+      /** 내가 정할 열린 갈림길 수 */
+      forksForMe: z.number().int().nonnegative(),
+      /** 지도가 일보다 오래 뒤처졌나 */
+      stale: z.boolean(),
+    })
+    .optional(),
 });
 export type Crew = z.infer<typeof Crew>;
+
+/**
+ * GET {base}/v1/crew/{id}/map 응답. 지도 형식은 ./map.ts(starship-map/1).
+ * map이 null이면 지도가 아직 없다. problems는 형식 검사에 걸린 것이고,
+ * 그때 서버는 마지막으로 맞았던 지도를 map에 그대로 준다(없으면 null).
+ */
+export const CrewMapResponse = z.object({
+  map: ProjectMap.nullable(),
+  problems: z.array(z.string()).optional(),
+  stale: z.boolean().optional(),
+  /** map.json을 마지막으로 고친 때. */
+  mapAt: Millis.optional(),
+});
+export type CrewMapResponse = z.infer<typeof CrewMapResponse>;
 
 export const GaugeStatus = z.enum(["ok", "warn", "error", "off"]);
 export type GaugeStatus = z.infer<typeof GaugeStatus>;
