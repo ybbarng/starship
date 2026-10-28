@@ -157,6 +157,43 @@ export function CrewLamp({ status }: { status: CrewStatus }) {
   );
 }
 
+/** 승무원 이름 옆의 작은 지도 요약: 진행률과 내가 정할 갈림길 수. 지도가 없으면 비운다. */
+/** compact면 진행률을 글 대신 버튼 아래쪽 얇은 막대로 그린다(부모가 relative여야 한다). */
+export function MapBadge({
+  crew,
+  compact = false,
+}: {
+  crew: Crew;
+  compact?: boolean;
+}) {
+  const m = crew.map;
+  if (!m) return null;
+  const pct = Math.round(m.progress * 100);
+  return (
+    <span
+      data-map-badge
+      className="ml-auto flex shrink-0 items-center gap-1 text-[10px] tabular-nums"
+      title={`지도 진행 ${pct}% · 내가 정할 갈림길 ${m.forksForMe}${m.stale ? " · 지도가 오래됨" : ""}`}
+    >
+      {compact ? (
+        <span className="pointer-events-none absolute inset-x-1.5 bottom-0 h-[2px] overflow-hidden rounded-full bg-white/10">
+          <span
+            className={`absolute inset-y-0 left-0 ${m.stale ? "bg-[#ffd84a]/60" : "bg-[#5ee08a]/80"}`}
+            style={{ width: `${pct}%` }}
+          />
+        </span>
+      ) : (
+        <span className={m.stale ? "text-[#ffd84a]/70" : "text-white/45"}>
+          {pct}%
+        </span>
+      )}
+      {m.forksForMe > 0 && (
+        <span className="font-semibold text-[#ffd84a]">⑂{m.forksForMe}</span>
+      )}
+    </span>
+  );
+}
+
 /** 한 줄(업무·개인)에 보이는 등 수: 3칸 × 3줄. 넘치면 "+n 모두" */
 const ROW_SLOTS = 9;
 
@@ -204,7 +241,7 @@ function CrewRow({
               data-status={c.status}
               title={`${c.name} · ${c.activity ?? ""}`}
               onClick={() => onCrew(c.id)}
-              className={`flex min-w-0 items-center gap-1.5 rounded px-1.5 py-[3px] text-left text-[11px] transition hover:bg-white/[0.07] ${
+              className={`relative flex min-w-0 items-center gap-1.5 rounded px-1.5 py-[3px] text-left text-[11px] transition hover:bg-white/[0.07] ${
                 c.status === "needs-you"
                   ? "bg-[#ffcf5c]/[0.07] text-white"
                   : c.status === "off"
@@ -214,6 +251,7 @@ function CrewRow({
             >
               <CrewLamp status={c.status} />
               <span className="truncate">{c.name}</span>
+              <MapBadge crew={c} compact />
             </button>
           ))}
           {overflow && (

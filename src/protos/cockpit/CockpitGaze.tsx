@@ -8,9 +8,10 @@
 //
 // 창밖(SpaceView)은 하나만 두고 크기를 바꾸지 않는다. 화면 크기 캔버스를 위아래로 옮기고 그 위에 유리 모양만
 // 바꿔 그려서, 전환 중에도 매 프레임 다시 그리는 일이 없게 했다.
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useBridge } from "@/data/hooks";
-import type { Context, Task } from "@/protocol/v1";
+import type { Context, Crew, Task } from "@/protocol/v1";
 import { CrewDetail, CrewHeader } from "@/protos/classic/CrewDetail";
 import { HailScreen } from "@/protos/open-bridge/cockpit/Hails";
 import { lightTime } from "@/protos/open-bridge/cockpit/ui";
@@ -449,6 +450,7 @@ export function CockpitGaze() {
             now={now}
           />
         )}
+        {modalCrew && <CabinLink crew={modalCrew} />}
       </Modal>
       <Modal
         open={modal?.type === "bank"}
@@ -493,6 +495,30 @@ export function CockpitGaze() {
         </div>
       </Modal>
     </main>
+  );
+}
+
+/** 승무원 창 아래: 그 프로젝트의 선실(지도)로 들어가는 문 */
+function CabinLink({ crew }: { crew: Crew }) {
+  const m = crew.map;
+  return (
+    <Link
+      href={`/crew/${encodeURIComponent(crew.id)}`}
+      data-cabin-link={crew.id}
+      className="mt-4 flex items-center gap-3 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2.5 text-[13px] hover:bg-white/[0.08]"
+    >
+      <span className="font-semibold text-white">선실로 들어가기 →</span>
+      <span className="text-white/50">
+        {m
+          ? `지도 진행 ${Math.round(m.progress * 100)}% · 구역 ${m.regions}${m.found ? ` (+${m.found} 발견)` : ""}`
+          : "지도가 아직 없어요"}
+      </span>
+      {m && m.forksForMe > 0 && (
+        <span className="ml-auto font-semibold text-[#ffd84a]">
+          내가 정할 것 ⑂{m.forksForMe}
+        </span>
+      )}
+    </Link>
   );
 }
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CrewCabins } from "@/ui/map/CrewCabins";
 
 const PROTOS = [
   {
@@ -66,6 +67,10 @@ export default function Home() {
           </li>
         ))}
       </ul>
+      <h2 className="mt-12 text-sm font-semibold text-white/50">
+        선실 · 승무원을 누르면 그 프로젝트의 지도로 들어가요
+      </h2>
+      <CrewCabins />
       <h2 className="mt-12 text-sm font-semibold text-white/50">확인판</h2>
       <ul className="mt-2 flex gap-4 text-sm">
         {LABS.map((l) => (
