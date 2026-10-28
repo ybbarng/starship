@@ -1,6 +1,7 @@
 // 화면이 받는 데이터의 출처. 기본은 데모, STARSHIP_SERVER_URL이 있으면 그 서버(프로토콜 v1)를 쓴다.
 
 import { z } from "zod";
+import type { LinkMode } from "@/demo/link";
 import { buildDemoMap, DEMO_MAP_CREW } from "@/demo/map";
 import {
   buildSnapshot,
@@ -49,9 +50,11 @@ export function resetDemo(seat: string) {
 export async function getSnapshot(
   scenario: Scenario,
   seat = "default",
+  link: LinkMode = "ok",
 ): Promise<Snapshot> {
   const info = sourceInfo();
-  if (info.mode === "demo") return buildSnapshot(demoState(seat), scenario);
+  if (info.mode === "demo")
+    return buildSnapshot(demoState(seat), scenario, Date.now(), link);
   const res = await fetch(`${info.base}/v1/snapshot`, { cache: "no-store" });
   if (!res.ok) throw new Error(`snapshot ${res.status}`);
   return Snapshot.parse(await res.json());

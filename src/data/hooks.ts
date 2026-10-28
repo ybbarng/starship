@@ -14,12 +14,14 @@ import {
 } from "@/protocol/v1";
 import { useToast } from "./toast";
 
-/** 데모 시나리오(?demo=)와 자리(페이지 경로)를 서버에 넘긴다. */
+/** 데모 시나리오(?demo=, ?link=)와 자리(페이지 경로)를 서버에 넘긴다. */
 function scenarioParam(): string {
   if (typeof window === "undefined") return "";
   const q = new URLSearchParams({ seat: window.location.pathname });
   const demo = new URLSearchParams(window.location.search).get("demo");
   if (demo) q.set("demo", demo);
+  const link = new URLSearchParams(window.location.search).get("link");
+  if (link) q.set("link", link);
   return `?${q}`;
 }
 
@@ -110,6 +112,7 @@ export function useBridge() {
       crewById,
       tasksByCrew,
       gauges: snap?.gauges ?? [],
+      link: snap?.link,
       notice: snap?.notice,
     };
   }, [snap]);

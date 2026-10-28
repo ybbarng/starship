@@ -28,6 +28,7 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
   "hails": [/* Hail */],
   "crew": [/* Crew */],
   "gauges": [/* Gauge */],
+  "link": { /* Link, 선택 */ },
   "notice": "데모 데이터"          // 선택. 화면 구석에 작게 적는다
 }
 ```
@@ -108,6 +109,32 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
 ### Gauge — 계기판 등
 
 정기 작업, 서비스 상태처럼 늘 지켜보는 것. `status`는 `ok`·`warn`·`error`·`off`, `value`는 등 옆에 적을 짧은 값.
+
+### Link — 관제 링크(회선 상태)
+
+`Snapshot.link`, 선택. 우주선(이 컴퓨터) → 중계 위성(Wi-Fi) → 지상국(공유기) → 지구(인터넷) → 항법 신호(DNS)로 이어지는 통신 사슬이다. 측정은 서버가 하고, 화면은 조종석 유리창 왼쪽 위에 작게 그린다. `warn`·`down`이면 눈에 띄게 하고 경고등 줄에도 등을 켠다.
+
+```jsonc
+{
+  "at": 1792900000000,          // 마지막 측정
+  "place": "home",              // 선택. home 집 · office 회사 · other 기타(그 밖의 이름은 그대로 적는다)
+  "verdict": "ok",              // ok 정상 · warn 불안 · down 끊김 · off 측정이 멈춤("관제 신호 없음")
+  "cause": "공유기 너머 인터넷이 끊겼어요", // 선택. 원인 한 줄(사람 말)
+  "hops": [
+    { "id": "wifi", "status": "ok", "value": "SSID" },
+    { "id": "gateway", "status": "ok", "value": "2ms" },
+    { "id": "internet", "status": "error" },
+    { "id": "dns", "status": "off" }
+  ],
+  "drops": { "today": 1, "lastAt": 1792899000000, "lastSecs": 103 }, // 오늘 끊긴 횟수, 마지막 끊김 때와 길이(초)
+  "tunnel": "ok"                // 선택. 비밀 통로(VPN·터널) 상태
+}
+```
+
+- `hops[].status`는 `Gauge.status`와 같은 `ok`·`warn`·`error`·`off`다. 처음 `error`인 칸에서 사슬이 끊겨 보이고, 그 뒤 칸은 흐려진다.
+- 모르는 `hops[].id`는 id를 그대로 이름으로 그린다.
+- `link`의 형식이 틀리면 Starship은 스냅샷 전체를 버리지 않고 `link`만 뺀다.
+- 데모 모드에서는 주소 뒤 `?link=ok|warn|down|off`로 네 가지 모습을 볼 수 있다.
 
 ## 버전
 

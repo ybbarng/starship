@@ -11,6 +11,7 @@ import {
   type TaskAction,
   type TaskKind,
 } from "@/protocol/v1";
+import { buildDemoLink, type LinkMode } from "./link";
 import { buildDemoMap, DEMO_MAP_CREW } from "./map";
 
 const MIN = 60_000;
@@ -297,6 +298,7 @@ export function buildSnapshot(
   state: DemoState,
   scenario: Scenario,
   now = Date.now(),
+  link: LinkMode = "ok",
 ): Snapshot {
   const arrived = Math.min(
     INCOMING.length,
@@ -429,6 +431,7 @@ export function buildSnapshot(
     hails,
     crew,
     gauges,
+    link: buildDemoLink(link, now),
     notice: "데모 데이터 · 지어낸 할 일이에요",
   };
 }

@@ -208,6 +208,42 @@ export const Gauge = z.object({
 });
 export type Gauge = z.infer<typeof Gauge>;
 
+/**
+ * 관제 링크: 우주선(이 컴퓨터) → 중계 위성(Wi-Fi) → 지상국(공유기) → 지구(인터넷) → 항법 신호(DNS)로
+ * 이어지는 통신 사슬 하나하나의 상태. 측정은 서버가 하고 화면은 그리기만 한다.
+ */
+export const LinkHop = z.object({
+  /** wifi · gateway · internet · dns. 모르는 칸은 이름 그대로 그린다. */
+  id: z.string().min(1),
+  status: GaugeStatus,
+  /** 칸 옆에 적을 값. wifi는 SSID, gateway·internet은 지연("2ms"). */
+  value: z.string().optional(),
+});
+export type LinkHop = z.infer<typeof LinkHop>;
+
+export const Link = z.object({
+  /** 마지막 측정 때 */
+  at: Millis,
+  /** 어디서 재고 있나(home · office · other, 또는 서버가 붙인 이름) */
+  place: z.string().optional(),
+  /** 한마디로: ok 정상 · warn 불안 · down 끊김 · off 측정이 멈춤 */
+  verdict: z.enum(["ok", "warn", "down", "off"]),
+  /** 원인 한 줄(사람 말) */
+  cause: z.string().optional(),
+  hops: z.array(LinkHop),
+  drops: z.object({
+    /** 오늘 끊긴 횟수 */
+    today: z.number().int().nonnegative(),
+    /** 마지막으로 끊겼던 때 */
+    lastAt: Millis.optional(),
+    /** 마지막 끊김이 이어진 초 */
+    lastSecs: z.number().nonnegative().optional(),
+  }),
+  /** 비밀 통로(VPN·터널) 상태 */
+  tunnel: GaugeStatus.optional(),
+});
+export type Link = z.infer<typeof Link>;
+
 export const Snapshot = z.object({
   protocol: z.literal(PROTOCOL),
   generatedAt: Millis,
@@ -216,6 +252,8 @@ export const Snapshot = z.object({
   hails: z.array(Hail),
   crew: z.array(Crew),
   gauges: z.array(Gauge),
+  /** 관제 링크(회선 상태). 형식이 틀리면 스냅샷 전체를 버리지 않고 이것만 뺀다. */
+  link: Link.optional().catch(undefined),
   /** 화면 구석에 적을 안내(예: "데모 데이터"). */
   notice: z.string().optional(),
 });
