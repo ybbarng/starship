@@ -38,7 +38,7 @@ export function Cabin({ crewId }: { crewId: string }) {
           ← 갑판으로
         </Link>
         {crew ? (
-          <div className="min-w-0 shrink-0">
+          <div className="min-w-0 flex-1 overflow-hidden [&_.text-sm]:truncate">
             <CrewHeader crew={crew} now={now} />
           </div>
         ) : (
@@ -108,9 +108,9 @@ function TopLine({
   return (
     <div
       data-map-topline
-      className="ml-auto flex min-w-0 flex-wrap items-center justify-end gap-x-4 gap-y-1 text-[12.5px] text-white/60"
+      className="ml-auto flex shrink-0 items-center gap-x-4 text-[12.5px] whitespace-nowrap text-white/60"
     >
-      <span className="min-w-0 truncate font-semibold text-white/85">
+      <span className="max-w-[16rem] truncate font-semibold text-white/85">
         {map.title}
       </span>
       <span
