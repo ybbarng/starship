@@ -45,6 +45,7 @@ import {
   panBy,
   parseCamera,
   placeEdgeTags,
+  revealCamera,
   type Stage,
   stageFor,
   type Viewport,
@@ -62,6 +63,7 @@ import {
   hexKey,
   type LabelAsk,
   layoutFrontier,
+  overlaps,
   type PlacedLabel,
   placeLabels,
   type Rect,
@@ -235,6 +237,24 @@ export function FrontierView({
   );
   useEffect(() => stopFlight, [stopFlight]);
 
+  // 고른 구역이 바뀌었는데(오른쪽 판 목록에서 고를 때 등) 화면 밖이면 그리로 날아간다.
+  // 이미 보이면 움직이지 않는다. 처음 열 때 고른 구역(지금 여기)은 건드리지 않는다.
+  const prevSelected = useRef(selected);
+  const skipReveal = useRef(false);
+  const measured = size.w > 0 && size.h > 0;
+  useEffect(() => {
+    if (prevSelected.current === selected) return;
+    prevSelected.current = selected;
+    const skip = skipReveal.current;
+    skipReveal.current = false;
+    if (!selected || skip || !measured) return;
+    const c = worldCenterOf(layout, selected);
+    if (!c) return;
+    const { box: b, vp: v, s0: s } = geo.current;
+    const target = revealCamera(camRef.current, c, b, v, s);
+    if (target !== camRef.current) flyTo(target);
+  }, [selected, layout, measured, flyTo]);
+
   const local = (e: { clientX: number; clientY: number }): P => {
     const r = ref.current?.getBoundingClientRect();
     return { x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) };
@@ -358,7 +378,11 @@ export function FrontierView({
       ? Math.max(cam.zoom, Math.min(zoomRange(s0).max, VISIT_S / s0))
       : cam.zoom;
     flyTo(centerOn(cam, c, box, vp, s0, zoom));
-    if (selected !== id) onSelect(id);
+    if (selected !== id) {
+      // 여기서 이미 날아가니, 고르기가 바뀌어 다시 날지 않게
+      skipReveal.current = true;
+      onSelect(id);
+    }
   };
   const visible = (id: string) => showDropped || !dropped.has(id);
   const myForks = layout.leaves
@@ -964,16 +988,17 @@ function Scene({
     sub: string;
   })[] = terrAsks.map((a) => {
     const p = terrPlaced.find((x) => x.id === a.id);
-    return {
-      ...a,
-      ...(p ?? {
-        side: "up" as const,
-        x: a.anchor.x - a.w / 2,
-        y: a.anchor.y - a.h,
-        w: a.w,
-        h: a.h,
-      }),
+    if (p) return { ...a, ...p };
+    const at = {
+      side: "up" as const,
+      x: a.anchor.x - a.w / 2,
+      y: a.anchor.y - a.h,
+      w: a.w,
+      h: a.h,
     };
+    // 카메라 단추 밑에 숨지 않게 왼쪽으로 비킨다
+    if (overlaps(at, toolbar)) at.x = toolbar.x - a.w - 4;
+    return { ...a, ...at };
   });
 
   // 구역 이름표 후보: 보이는 잎과 2단 묶음 구역. 중요한 것부터
