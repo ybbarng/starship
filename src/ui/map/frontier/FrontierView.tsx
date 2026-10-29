@@ -1000,6 +1000,17 @@ function Scene({
     };
     // 카메라 단추 밑에 숨지 않게 왼쪽으로 비킨다
     if (overlaps(at, toolbar)) at.x = toolbar.x - a.w - 4;
+    // 화면 밖 표와 겹치면 위아래로 조금씩 비킨다(못 찾으면 제자리)
+    const hits = (y: number) =>
+      edgeTags.some((t) => overlaps({ ...at, y }, t, 2)) ||
+      overlaps({ ...at, y }, toolbar);
+    for (let k = 1; k <= 8 && hits(at.y); k++) {
+      const dy = Math.ceil(k / 2) * (k % 2 ? 1 : -1) * (a.h + 4);
+      const y = at.y + dy;
+      if (y < bounds.y || y + a.h > bounds.y + bounds.h || hits(y)) continue;
+      at.y = y;
+      break;
+    }
     return { ...a, ...at };
   });
 
