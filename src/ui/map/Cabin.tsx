@@ -47,8 +47,13 @@ export function Cabin({
           href={backHref}
           className="shrink-0 rounded px-2 py-1 text-[12px] text-white/55 hover:bg-white/[0.06] hover:text-white"
         >
-          ← 갑판으로
+          {backHref === "/proto/cockpit" ? "← 갑판으로" : "← 시안 목록"}
         </Link>
+        {label && (
+          <span className="shrink-0 rounded bg-white/[0.06] px-2 py-0.5 text-[11px] text-white/55">
+            시안 · {label}
+          </span>
+        )}
         {crew ? (
           <div className="min-w-0 flex-1 overflow-hidden [&_.text-sm]:truncate">
             <CrewHeader crew={crew} now={now} />
@@ -98,11 +103,6 @@ export function Cabin({
         </Center>
       )}
       <Toasts />
-      {label && (
-        <span className="pointer-events-none fixed bottom-2 left-3 rounded bg-black/50 px-2 py-0.5 text-[11px] text-white/55">
-          시안 · {label}
-        </span>
-      )}
     </main>
   );
 }
