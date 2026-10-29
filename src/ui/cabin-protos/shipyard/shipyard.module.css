@@ -1,0 +1,107 @@
+/* 조선소 시안의 움직임. 용접 불꽃, 엔진 불꽃, 도면 꼬리표 흔들림. 움직임 줄이기를 켜면 멈춘다. */
+
+.spark {
+  animation: spark 0.9s ease-out infinite;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.spark:nth-child(2) {
+  animation-delay: 0.3s;
+}
+.spark:nth-child(3) {
+  animation-delay: 0.6s;
+}
+@keyframes spark {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx, 6px), var(--dy, 7px)) scale(0.4);
+  }
+}
+
+.glow {
+  animation: glow 1.1s ease-in-out infinite alternate;
+}
+@keyframes glow {
+  from {
+    opacity: 0.55;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.flame {
+  animation: flame 0.18s ease-in-out infinite alternate;
+  transform-box: fill-box;
+  transform-origin: left center;
+}
+@keyframes flame {
+  from {
+    transform: scaleX(0.85);
+  }
+  to {
+    transform: scaleX(1.08);
+  }
+}
+
+/* 내가 정할 갈림길: 노란 도면 꼬리표 */
+.tag {
+  background: #ffd84a;
+  color: #2a2100;
+  box-shadow:
+    0 0 0 1px rgb(0 0 0 / 0.45),
+    0 0 12px rgb(255 216 74 / 0.55);
+  transform-origin: 50% -4px;
+  animation: swing 2.4s ease-in-out infinite;
+}
+.tag::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  width: 1px;
+  height: 5px;
+  background: #ffd84a;
+}
+.tag:hover {
+  filter: brightness(1.1);
+}
+@keyframes swing {
+  0%,
+  100% {
+    transform: rotate(-3deg);
+  }
+  50% {
+    transform: rotate(3deg);
+  }
+}
+
+.block {
+  transition: background-color 120ms;
+}
+.block:hover {
+  background-color: rgb(255 255 255 / 0.07);
+}
+.block:focus-visible,
+.plate:focus-visible,
+.tag:focus-visible {
+  outline: 2px solid #7ce0ff;
+  outline-offset: 1px;
+}
+
+.chip {
+  background: rgb(9 12 20 / 0.62);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spark,
+  .glow,
+  .flame,
+  .tag {
+    animation: none;
+  }
+}
