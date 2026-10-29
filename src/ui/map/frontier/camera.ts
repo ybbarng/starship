@@ -318,6 +318,18 @@ export function stageOf(s: number): Stage {
   return d < 28 ? "far" : d < 56 ? "mid" : "near";
 }
 
+/** 가까이 단계는 적어도 맞춤의 이만큼 확대했을 때만(맞춤 첫 화면이 빽빽해지지 않게) */
+export const NEAR_MIN_ZOOM = 1.25;
+
+/**
+ * 화면에 쓸 확대 단계. 칸 지름으로 정하되, 맞춤 근처(배율 1.25 미만)에서는 가운데까지만 쓴다.
+ * 구역이 적어 맞춤에서 이미 칸이 크면, 처음 한눈에 모든 이름표·상태 글자가 쏟아지기 때문이다.
+ */
+export function stageFor(s: number, zoom: number): Stage {
+  const st = stageOf(s);
+  return st === "near" && zoom < NEAR_MIN_ZOOM ? "mid" : st;
+}
+
 /** 단계마다 구역 이름을 몇 글자까지 보이나 */
 export const CLIP_BY_STAGE: Record<Stage, number> = {
   far: 8,

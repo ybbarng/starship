@@ -20,6 +20,7 @@ import {
   isNewFound,
   type Region,
   type RegionStatus,
+  type Sign,
 } from "@/protocol/map";
 import type { Crew } from "@/protocol/v1";
 import { Animal, animalFor, poseFor } from "@/ui/crew";
@@ -29,6 +30,7 @@ import {
   type Box,
   boxOf,
   type Camera,
+  CLIP_BY_STAGE,
   centerOn,
   clampCamera,
   DRAG_THRESHOLD,
@@ -40,7 +42,7 @@ import {
   panBy,
   parseCamera,
   type Stage,
-  stageOf,
+  stageFor,
   type Viewport,
   viewCenter,
   zoomAt,
@@ -422,7 +424,7 @@ export function FrontierView({
       ref={ref}
       data-map
       data-zoom={cam.zoom.toFixed(2)}
-      data-stage={stageOf(s)}
+      data-stage={stageFor(s, cam.zoom)}
       // biome-ignore lint/a11y/noNoninteractiveTabindex: 지도에 초점을 두고 키보드로 움직인다
       tabIndex={0}
       className="relative h-full w-full cursor-grab touch-none overflow-hidden rounded-lg outline-none focus-visible:ring-1 focus-visible:ring-white/30 active:cursor-grabbing"
@@ -453,7 +455,7 @@ export function FrontierView({
           s={s}
           ox={ox}
           oy={oy}
-          stage={stageOf(s)}
+          stage={stageFor(s, cam.zoom)}
           limb={limb}
           uid={uid}
           map={map}
@@ -780,8 +782,35 @@ function Scene({
     });
   }
 
-  /* ── 이름표: 지역 이름은 늘, 구역 이름은 자리가 날 때만 ── */
+  /* ── 나머지 표지 자리: 동물·내 깃발이 없는 칸에 차례로 ── */
+  const signSpots: { region: Region; sign: Sign; p: P }[] = [];
+  {
+    const taken = new Set<P>([
+      ...(hereCenter ? [hereCenter] : []),
+      ...flagSpots.map((f) => f.p),
+    ]);
+    for (const sp of spots.values()) {
+      const r = sp.leaf.region;
+      if (!visible(r.id)) continue;
+      const free = sp.slots.filter((x) => !taken.has(x));
+      let k = 0;
+      for (const sign of activeSigns(r)) {
+        if (isForkForMe(sign)) continue;
+        const p = free[k++ % Math.max(1, free.length)] ?? sp.slots[0];
+        if (p) signSpots.push({ region: r, sign, p });
+      }
+    }
+  }
+
+  /* ── 이름표: 지역 이름은 늘, 구역 이름은 확대 단계와 자리에 따라 ── */
+  const near = stage === "near";
   const bounds = { x: 4, y: 4, w: w - 8, h: h - CAPTION_H - 4 };
+  /** 화면(pad만큼 넉넉히) 안인가 */
+  const inView = (p: P, pad = 0) =>
+    p.x >= -pad && p.x <= w + pad && p.y >= -pad && p.y <= h + pad;
+  // 오른쪽 위 카메라 단추 자리
+  const toolbar: Rect = { x: w - 180, y: 0, w: 180, h: 96 };
+  obstacles.push(toolbar);
   const terrAsks: (LabelAsk & { text: string; color: string; sub: string })[] =
     [];
   for (const t of layout.territories) {
@@ -822,7 +851,7 @@ function Scene({
       color: colorOf(t.region.id),
     });
   }
-  const terrPlaced = placeLabels(terrAsks, bounds, [], 0);
+  const terrPlaced = placeLabels(terrAsks, bounds, [toolbar], 0);
   // 자리가 없던 지역 이름표도 버리지 않고 제자리에 둔다(늘 보여야 한다)
   const terrLabels: (PlacedLabel & {
     text: string;
@@ -843,7 +872,14 @@ function Scene({
   });
 
   // 구역 이름표 후보: 보이는 잎과 2단 묶음 구역. 중요한 것부터
-  type RegionAsk = LabelAsk & { text: string; tone: string; fresh: boolean };
+  type RegionAsk = LabelAsk & {
+    /** region: 구역 이름표, fork: 내 깃발의 갈림길 제목, talk: 안테나의 교신 상대 */
+    kind: "region" | "fork" | "talk";
+    text: string;
+    status?: string;
+    tone: string;
+    fresh: boolean;
+  };
   const regionAsks: (RegionAsk & { rank: number })[] = [];
   const cellDots = [...owner.keys()].map((key) => {
     const [q = 0, r = 0] = key.split(",").map(Number);
@@ -867,18 +903,42 @@ function Scene({
     if (mine) rank += 80;
     if (st === "blocked") rank += 60;
     if (r.id === selected) rank += 200;
-    const text = clip(r.title, r.id === selected ? 22 : 11);
+    // 화면 밖 구역은 이름표를 찾지 않는다(가장자리 표가 대신 알린다)
+    if (!inView(c, s)) continue;
+    const important = rank >= 60;
+    const text = clip(
+      r.title,
+      r.id === selected
+        ? Math.max(22, CLIP_BY_STAGE[stage])
+        : CLIP_BY_STAGE[stage],
+    );
+    // 가까이 단계에서만: 상태 글자와 "새"(멀리·가운데에서는 땅의 하늘색 점선으로만 보인다)
+    const status = near ? REGION_STATUS_LABEL[st] : undefined;
+    const showFresh = near && fresh;
     const own = new Set((layout.cellsOf.get(r.id) ?? []).map(hexKey));
     const fs = 11;
+    const lw =
+      textWidth(text, fs) +
+      (status ? textWidth(` ${status}`, 10) + 4 : 0) +
+      (showFresh ? 16 : 0) +
+      12;
+    // 멀리 단계: 꼭 보일 것이 아니면 땅이 이름표보다 넉넉히 넓을 때만
+    const cells = layout.cellsOf.get(r.id)?.length ?? 1;
+    if (stage === "far" && !important && cells * 2.6 * s * s < lw * 17 * 2)
+      continue;
     regionAsks.push({
+      kind: "region",
       id: r.id,
       anchor: { x: c.x, y: c.y - s * 0.15 },
-      w: textWidth(text, fs) + (fresh ? 16 : 0) + 12,
-      // 꼭 보일 것(지금 여기·내 갈림길·막힘·고른 구역)이 아니면 다른 구역 칸을 덮지 않는다
-      avoid: rank >= 60 ? undefined : cellDots.filter((d) => !own.has(d.key)),
+      w: lw,
+      // 꼭 보일 것(지금 여기·내 갈림길·막힘·고른 구역)이 아니면 다른 구역 칸을 덮지 않는다.
+      // 가까이 단계는 칸이 넉넉해 덮어도 땅이 보인다
+      avoid:
+        important || near ? undefined : cellDots.filter((d) => !own.has(d.key)),
       h: 17,
       text,
-      fresh,
+      status,
+      fresh: showFresh,
       tone: mine
         ? "#ffd84a"
         : st === "blocked"
@@ -889,16 +949,53 @@ function Scene({
       rank,
     });
   }
+  // 가까이 단계: 내 깃발에 갈림길 제목, 교신 안테나에 상대 이름
+  if (near) {
+    for (const f of flagSpots) {
+      const r = byId.get(f.id);
+      const sign = r ? activeSigns(r).find(isForkForMe) : undefined;
+      if (!sign || !inView(f.p)) continue;
+      const text = `⑂ ${clip(sign.title, 20)}`;
+      regionAsks.push({
+        kind: "fork",
+        id: `fork:${f.id}`,
+        anchor: { x: f.p.x + ks * 0.5, y: f.p.y - ks * 1.55 },
+        w: textWidth(text, 10.5) + 12,
+        h: 16,
+        text,
+        fresh: false,
+        tone: "#ffd84a",
+        rank: 90,
+      });
+    }
+    for (const { sign, p } of signSpots) {
+      if (sign.type !== "talk" || !inView(p)) continue;
+      const text = `📡 ${clip(sign.with, 10)}`;
+      regionAsks.push({
+        kind: "talk",
+        id: `talk:${sign.id}`,
+        anchor: { x: p.x, y: p.y - ds * 0.8 },
+        w: textWidth(text, 10.5) + 12,
+        h: 16,
+        text,
+        fresh: false,
+        tone: "rgba(214,236,255,0.45)",
+        rank: 1,
+      });
+    }
+  }
   regionAsks.sort((a, b) => b.rank - a.rank || a.id.localeCompare(b.id));
-  const regionLabels = placeLabels(
+  const placedAll = placeLabels(
     regionAsks,
     bounds,
     [...obstacles, ...terrLabels],
-    s * 0.45,
+    Math.min(12, s * 0.45),
   ).map((p) => ({
     ...p,
     ...(regionAsks.find((a) => a.id === p.id) as RegionAsk),
   }));
+  const regionLabels = placedAll.filter((l) => l.kind === "region");
+  const noteLabels = placedAll.filter((l) => l.kind !== "region");
   const shownIds = new Set(regionLabels.map((l) => l.id));
 
   // 마우스를 올린 구역: 숨은 이름표면 전체 이름을 맨 위에
@@ -1008,14 +1105,14 @@ function Scene({
         />
       ))}
       <circle
-        cx={w * 0.9}
+        cx={w - 220}
         cy={skyY * 0.55}
         r={Math.max(5, skyY * 0.32)}
         fill="#c9cfdc"
         opacity="0.7"
       />
       <circle
-        cx={w * 0.9 + 2.5}
+        cx={w - 220 + 2.5}
         cy={skyY * 0.55 - 1}
         r={Math.max(5, skyY * 0.32)}
         fill="#05070d"
@@ -1213,51 +1310,35 @@ function Scene({
 
       {/* 갈림길·교신·위험 표지 */}
       <g pointerEvents="none">
-        {[...spots.values()].map((sp) => {
-          const r = sp.leaf.region;
-          if (!visible(r.id)) return null;
-          const signs = activeSigns(r);
-          if (signs.length === 0) return null;
-          const taken = new Set<P>([
-            ...(hereCenter ? [hereCenter] : []),
-            ...flagSpots.map((f) => f.p),
-          ]);
-          const free = sp.slots.filter((x) => !taken.has(x));
-          let k = 0;
+        {/* 멀리 단계에서는 남의 깃발·안테나·균열을 그리지 않는다(땅 모습과 늘 보이는 것만) */}
+        {stage !== "far" &&
+          signSpots.map(({ region: r, sign, p }) => {
+            const key = `${r.id}/${sign.id}`;
+            if (sign.type === "fork")
+              return <OtherFlag key={key} x={p.x} y={p.y} s={ds} />;
+            if (sign.type === "talk")
+              return (
+                <Antenna
+                  key={key}
+                  x={p.x}
+                  y={p.y}
+                  s={ds}
+                  waiting={sign.status === "waiting" || sign.status === "sent"}
+                />
+              );
+            return <Crack key={key} x={p.x} y={p.y} s={ds} />;
+          })}
+        {flagSpots.map((f) => {
+          const r = byId.get(f.id);
+          const sign = r ? activeSigns(r).find(isForkForMe) : undefined;
           return (
-            <g key={r.id}>
-              {signs.map((sign) => {
-                if (isForkForMe(sign)) {
-                  const f = flagSpots.find((x) => x.id === r.id);
-                  return f ? (
-                    <MyFlag
-                      key={sign.id}
-                      x={f.p.x}
-                      y={f.p.y}
-                      s={ks}
-                      title={sign.title}
-                    />
-                  ) : null;
-                }
-                const p = free[k++ % Math.max(1, free.length)] ?? sp.slots[0];
-                if (!p) return null;
-                if (sign.type === "fork")
-                  return <OtherFlag key={sign.id} x={p.x} y={p.y} s={ds} />;
-                if (sign.type === "talk")
-                  return (
-                    <Antenna
-                      key={sign.id}
-                      x={p.x}
-                      y={p.y}
-                      s={ds}
-                      waiting={
-                        sign.status === "waiting" || sign.status === "sent"
-                      }
-                    />
-                  );
-                return <Crack key={sign.id} x={p.x} y={p.y} s={ds} />;
-              })}
-            </g>
+            <MyFlag
+              key={f.id}
+              x={f.p.x}
+              y={f.p.y}
+              s={ks}
+              title={sign?.title ?? ""}
+            />
           );
         })}
       </g>
@@ -1372,8 +1453,40 @@ function Scene({
           title={byId.get(l.id)?.title ?? l.id}
         />
       ))}
+      {/* 가까이 단계의 덧붙임: 갈림길 제목, 교신 상대 */}
+      {noteLabels.map((l) => (
+        <g key={l.id} pointerEvents="none" data-note-label={l.kind}>
+          <rect
+            x={l.x}
+            y={l.y}
+            width={l.w}
+            height={l.h}
+            rx="3"
+            fill={
+              l.kind === "fork" ? "rgba(40,32,4,0.92)" : "rgba(10,12,20,0.85)"
+            }
+            stroke={l.tone}
+            strokeWidth="1"
+          />
+          <text
+            x={l.x + 6}
+            y={l.y + 11.8}
+            fontSize="10.5"
+            fontWeight={l.kind === "fork" ? 600 : 400}
+            fill={l.kind === "fork" ? "#ffe58a" : "rgba(214,236,255,0.85)"}
+          >
+            {l.text}
+          </text>
+        </g>
+      ))}
       {hoverRegion && hoverC && !shownIds.has(hoverRegion.id) && (
-        <HoverTip region={hoverRegion} at={hoverC} s={s} w={w} />
+        <HoverTip
+          region={hoverRegion}
+          status={REGION_STATUS_LABEL[statusOf(hoverRegion)]}
+          at={hoverC}
+          s={s}
+          w={w}
+        />
       )}
     </svg>
   );
@@ -1723,7 +1836,12 @@ function Bubble({
   onHover,
   title,
 }: {
-  l: PlacedLabel & { text: string; tone: string; fresh: boolean };
+  l: PlacedLabel & {
+    text: string;
+    status?: string;
+    tone: string;
+    fresh: boolean;
+  };
   s: number;
   selected: boolean;
   onClick: () => void;
@@ -1773,6 +1891,11 @@ function Bubble({
         fill="rgba(255,255,255,0.9)"
       >
         {l.text}
+        {l.status && (
+          <tspan dx="5" fontSize="10" fill="rgba(255,255,255,0.5)">
+            {l.status}
+          </tspan>
+        )}
       </text>
       {l.fresh && (
         <text
@@ -1791,16 +1914,18 @@ function Bubble({
 
 function HoverTip({
   region,
+  status,
   at,
   s,
   w,
 }: {
   region: Region;
+  status: string;
   at: P;
   s: number;
   w: number;
 }) {
-  const text = clip(region.title, 30);
+  const text = `${clip(region.title, 30)} · ${status}`;
   const tw = textWidth(text, 11.5) + 14;
   const x = Math.min(w - tw - 4, Math.max(4, at.x - tw / 2));
   const y = Math.max(4, at.y - s * 0.6 - 20);

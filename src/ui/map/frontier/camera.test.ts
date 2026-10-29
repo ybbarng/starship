@@ -16,6 +16,7 @@ import {
   parseCamera,
   placeEdgeTags,
   revealCamera,
+  stageFor,
   stageOf,
   toScreen,
   toWorld,
@@ -179,6 +180,12 @@ describe("확대 단계와 기억", () => {
     expect(stageOf(14)).toBe("mid");
     expect(stageOf(27.9)).toBe("mid");
     expect(stageOf(28)).toBe("near");
+  });
+
+  it("맞춤 근처에서는 칸이 커도 가운데 단계까지만", () => {
+    expect(stageFor(40, 1)).toBe("mid");
+    expect(stageFor(40, 1.3)).toBe("near");
+    expect(stageFor(10, 3)).toBe("far");
   });
 
   it("저장한 카메라를 읽고, 깨진 글은 버린다", () => {
