@@ -1,4 +1,4 @@
-import { FrontierCabin } from "@/ui/cabin-protos/frontier/FrontierCabin";
+import { FrontierCabin } from "@/ui/map/frontier/FrontierCabin";
 
 export default async function Page({
   searchParams,
