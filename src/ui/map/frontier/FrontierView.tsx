@@ -546,7 +546,7 @@ export function FrontierView({
       </div>
       {map.goal && (
         <div
-          className="pointer-events-none absolute bottom-2 left-3 max-w-[46%] text-[11.5px] leading-snug"
+          className="pointer-events-none absolute bottom-2 left-3 max-w-[46%] rounded bg-black/60 px-2 py-0.5 text-[11.5px] leading-snug backdrop-blur-[2px]"
           title={map.goal}
         >
           <span className="text-white/45">착륙선 목표 · </span>
@@ -982,15 +982,31 @@ function Scene({
     [toolbar, { x: 0, y: h - CAPTION_H - 6, w: w * 0.5, h: CAPTION_H + 6 }],
   ) as (EdgeTag & EdgeItem)[];
   obstacles.push(...edgeTags);
-  const terrPlaced = placeLabels(terrAsks, bounds, [toolbar, ...edgeTags], 0);
+  // 아래 구석의 목표 글. 지역 이름표가 덮지 않게 한다
+  const caption: Rect = {
+    x: 0,
+    y: h - CAPTION_H - 6,
+    w: w * 0.5,
+    h: CAPTION_H + 6,
+  };
+  const terrPlaced = placeLabels(
+    terrAsks,
+    bounds,
+    [toolbar, caption, ...edgeTags],
+    0,
+  );
   // 자리가 없던 지역 이름표도 버리지 않고 제자리에 둔다(늘 보여야 한다)
   const terrLabels: (PlacedLabel & {
     text: string;
     color: string;
     sub: string;
-  })[] = terrAsks.map((a) => {
+  })[] = [];
+  for (const a of terrAsks) {
     const p = terrPlaced.find((x) => x.id === a.id);
-    if (p) return { ...a, ...p };
+    if (p) {
+      terrLabels.push({ ...a, ...p });
+      continue;
+    }
     const at = {
       side: "up" as const,
       x: a.anchor.x - a.w / 2,
@@ -1000,9 +1016,11 @@ function Scene({
     };
     // 카메라 단추 밑에 숨지 않게 왼쪽으로 비킨다
     if (overlaps(at, toolbar)) at.x = toolbar.x - a.w - 4;
-    // 화면 밖 표와 겹치면 위아래로 조금씩 비킨다(못 찾으면 제자리)
+    // 화면 밖 표·목표 글·앞서 놓인 지역 이름표와 겹치면 위아래로 조금씩 비킨다(못 찾으면 제자리)
     const hits = (y: number) =>
       edgeTags.some((t) => overlaps({ ...at, y }, t, 2)) ||
+      terrLabels.some((t) => overlaps({ ...at, y }, t, 2)) ||
+      overlaps({ ...at, y }, caption) ||
       overlaps({ ...at, y }, toolbar);
     for (let k = 1; k <= 8 && hits(at.y); k++) {
       const dy = Math.ceil(k / 2) * (k % 2 ? 1 : -1) * (a.h + 4);
@@ -1011,8 +1029,8 @@ function Scene({
       at.y = y;
       break;
     }
-    return { ...a, ...at };
-  });
+    terrLabels.push({ ...a, ...at });
+  }
 
   // 구역 이름표 후보: 보이는 잎과 2단 묶음 구역. 중요한 것부터
   type RegionAsk = LabelAsk & {
