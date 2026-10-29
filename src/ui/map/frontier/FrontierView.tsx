@@ -1,10 +1,19 @@
 "use client";
 
-// 시안 4. 퍼져 가는 육각 개척지: 프로젝트 하나를 우리 우주선이 내려앉은 행성의 개척지로 그린다.
+// 개척지 선실: 프로젝트 하나를 우리 우주선이 내려앉은 행성의 개척지로 그린다(설계: docs/frontier.md).
 // 가운데 착륙선(목표) 둘레로 구역마다 육각 칸 size개가 붙고, 맨 위 구역(지역)은 굵은 색 경계로 묶인다.
 // 상태는 땅 모습으로: 안개는 모래 폭풍, 공사중은 갈아엎은 흙과 장비, 완공은 초록 돔, 막힘은 붉은 울타리.
-// 배치는 hex.ts(순수 함수)가 정하고, 여기서는 칸 반지름만 화면에 맞춰 곱한다.
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+// 배치는 hex.ts, 카메라(끌기·확대)는 camera.ts가 순수 함수로 정한다. 여기서는 그 둘을 화면에 곱한다.
+// 처음에는 전체가 들어오게 맞추고, 끌고 확대해 다닐 수 있다. 이름표 글자는 크기가 그대로라
+// 확대할수록 더 많은 이름표가 자리를 얻는다.
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   droppedIds,
   isForkForMe,
@@ -16,6 +25,27 @@ import type { Crew } from "@/protocol/v1";
 import { Animal, animalFor, poseFor } from "@/ui/crew";
 import { REGION_STATUS_LABEL } from "@/ui/map/labels";
 import type { MapViewProps } from "@/ui/map/MapView";
+import {
+  type Box,
+  boxOf,
+  type Camera,
+  centerOn,
+  clampCamera,
+  DRAG_THRESHOLD,
+  ease,
+  FLY_MS,
+  fitCamera,
+  fitScale,
+  lerpCamera,
+  panBy,
+  parseCamera,
+  type Stage,
+  stageOf,
+  type Viewport,
+  viewCenter,
+  zoomAt,
+  zoomRange,
+} from "./camera";
 import styles from "./frontier.module.css";
 import {
   add,
@@ -55,6 +85,56 @@ const GROUND: Record<RegionStatus, string> = {
 
 type P = { x: number; y: number };
 
+const CAPTION_H = 26;
+/** 단추 한 번에 확대하는 배율 */
+const ZOOM_STEP = 1.5;
+/** 화살표 한 번에 옮기는 거리(px) */
+const PAN_STEP = 80;
+/** "지금 여기"·"다음 갈림길"로 갈 때 적어도 이만큼 가까이(칸 반지름 px, 가운데 단계) */
+const VISIT_S = 24;
+
+const storeKeyOf = (id: string) => `starship.frontier.camera.${id}`;
+function loadCamera(key: string): Camera | undefined {
+  try {
+    return parseCamera(window.sessionStorage.getItem(key));
+  } catch {
+    return undefined;
+  }
+}
+function saveCamera(key: string, cam: Camera) {
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify(cam));
+  } catch {
+    // 저장이 막힌 브라우저면 기억하지 않는다
+  }
+}
+function reducedMotion(): boolean {
+  try {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
+}
+
+/** 땅 좌표로 구역(자손 포함) 무게중심 */
+function worldCenterOf(
+  layout: ReturnType<typeof layoutFrontier>,
+  id: string,
+): P | undefined {
+  const cells = layout.cellsOf.get(id) ?? [];
+  if (cells.length === 0) return undefined;
+  const ps = cells.map((c) => toPixel(c));
+  return {
+    x: ps.reduce((a, p) => a + p.x, 0) / ps.length,
+    y: ps.reduce((a, p) => a + p.y, 0) / ps.length,
+  };
+}
+
+/** 누른 곳이 땅·이름표·단추가 아닌 빈 곳인가 */
+const isEmptySpot = (t: EventTarget | null) =>
+  !(t instanceof Element) ||
+  !t.closest("[data-region],[data-region-label],[data-camera],[data-edge-tag]");
+
 export function FrontierView({
   map,
   crew,
@@ -63,7 +143,7 @@ export function FrontierView({
   showDropped,
   now,
 }: MapViewProps) {
-  const ref = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   useEffect(() => {
     const el = ref.current;
@@ -83,19 +163,298 @@ export function FrontierView({
 
   const layout = useMemo(() => layoutFrontier(map), [map]);
   const dropped = useMemo(() => droppedIds(map), [map]);
+  // 숨긴 칸까지 넣어 맞춘다. "버린 구역 보기"를 껐다 켜도 크기가 그대로다
+  const box = useMemo<Box>(
+    () => boxOf(layout.leaves.flatMap((l) => l.cells.map((c) => toPixel(c)))),
+    [layout],
+  );
+  const vp: Viewport = {
+    w: size.w,
+    h: size.h,
+    top: 6,
+    bottom: CAPTION_H + 4,
+    side: 20,
+  };
+  const s0 = size.w > 0 ? fitScale(box, vp) : 1;
+
+  /* ── 카메라: 승무원마다 브라우저에 기억한다. 5초마다 지도가 다시 와도 이 상태는 그대로다 ── */
+  const storeKey = storeKeyOf(crew?.id ?? map.title);
+  const [rawCam, setRawCam] = useState<Camera | undefined>(() =>
+    typeof window === "undefined" ? undefined : loadCamera(storeKey),
+  );
+  const loadedKey = useRef(storeKey);
+  useEffect(() => {
+    // 승무원 정보가 늦게 와서 열쇠가 바뀌면, 그 열쇠로 기억한 자리가 있을 때만 옮긴다
+    if (loadedKey.current === storeKey) return;
+    loadedKey.current = storeKey;
+    const c = loadCamera(storeKey);
+    if (c) setRawCam(c);
+  }, [storeKey]);
+  const cam = clampCamera(rawCam ?? fitCamera(box), box, vp, s0);
+  const camRef = useRef(cam);
+  camRef.current = cam;
+  const geo = useRef({ box, vp, s0 });
+  geo.current = { box, vp, s0 };
+
+  const flight = useRef<number | null>(null);
+  const stopFlight = useCallback(() => {
+    if (flight.current !== null) cancelAnimationFrame(flight.current);
+    flight.current = null;
+  }, []);
+  const setCam = useCallback(
+    (c: Camera) => {
+      setRawCam(c);
+      saveCamera(storeKey, c);
+    },
+    [storeKey],
+  );
+  /** 부드럽게 날아간다(0.35초). 움직임을 줄이는 설정이면 바로 옮긴다 */
+  const flyTo = useCallback(
+    (target: Camera) => {
+      stopFlight();
+      const from = camRef.current;
+      if (reducedMotion()) {
+        setCam(target);
+        return;
+      }
+      const t0 = performance.now();
+      const step = (t: number) => {
+        const k = Math.min(1, (t - t0) / FLY_MS);
+        setCam(lerpCamera(from, target, ease(k)));
+        flight.current = k < 1 ? requestAnimationFrame(step) : null;
+      };
+      flight.current = requestAnimationFrame(step);
+    },
+    [setCam, stopFlight],
+  );
+  useEffect(() => stopFlight, [stopFlight]);
+
+  const local = (e: { clientX: number; clientY: number }): P => {
+    const r = ref.current?.getBoundingClientRect();
+    return { x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) };
+  };
+
+  /* ── 휠·트랙패드 핀치: 마우스 위치를 중심으로. 페이지가 스크롤되지 않게 직접 붙인다 ── */
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      stopFlight();
+      const { box: b, vp: v, s0: s } = geo.current;
+      // 핀치(ctrlKey)는 한 번에 작게 오니 더 세게 곱한다
+      const k = e.ctrlKey ? 0.012 : 0.0018;
+      const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      const r = el.getBoundingClientRect();
+      setCam(
+        zoomAt(
+          camRef.current,
+          Math.exp(-dy * k),
+          { x: e.clientX - r.left, y: e.clientY - r.top },
+          b,
+          v,
+          s,
+        ),
+      );
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [setCam, stopFlight]);
+
+  /* ── 끌기(4px 넘게 움직이면)와 두 손가락 핀치 ── */
+  const pointers = useRef(new Map<number, P>());
+  const drag = useRef<{
+    start: P;
+    cam: Camera;
+    moved: boolean;
+    pinch?: { dist: number; mid: P };
+  } | null>(null);
+  const suppressClick = useRef(false);
+  const onPointerDown = (e: React.PointerEvent) => {
+    if (e.button !== 0 || !isEmptyOrLand(e.target)) return;
+    const p = local(e);
+    pointers.current.set(e.pointerId, p);
+    stopFlight();
+    if (pointers.current.size === 1)
+      drag.current = { start: p, cam: camRef.current, moved: false };
+    else if (pointers.current.size === 2) {
+      const [a, b] = [...pointers.current.values()];
+      if (a && b)
+        drag.current = {
+          start: p,
+          cam: camRef.current,
+          moved: true,
+          pinch: {
+            dist: Math.hypot(a.x - b.x, a.y - b.y),
+            mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 },
+          },
+        };
+    }
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    const d = drag.current;
+    if (!d || !pointers.current.has(e.pointerId)) return;
+    const p = local(e);
+    pointers.current.set(e.pointerId, p);
+    const { box: b, vp: v, s0: s } = geo.current;
+    if (d.pinch && pointers.current.size >= 2) {
+      const [a, c] = [...pointers.current.values()];
+      if (!a || !c) return;
+      const dist = Math.hypot(a.x - c.x, a.y - c.y);
+      const mid = { x: (a.x + c.x) / 2, y: (a.y + c.y) / 2 };
+      const zoomed = zoomAt(
+        camRef.current,
+        dist / Math.max(1, d.pinch.dist),
+        mid,
+        b,
+        v,
+        s,
+      );
+      setCam(
+        panBy(zoomed, mid.x - d.pinch.mid.x, mid.y - d.pinch.mid.y, b, v, s),
+      );
+      d.pinch = { dist, mid };
+      return;
+    }
+    const dx = p.x - d.start.x;
+    const dy = p.y - d.start.y;
+    if (!d.moved && Math.hypot(dx, dy) <= DRAG_THRESHOLD) return;
+    if (!d.moved) {
+      d.moved = true;
+      ref.current?.setPointerCapture(e.pointerId);
+    }
+    setCam(panBy(d.cam, dx, dy, b, v, s));
+  };
+  const onPointerEnd = (e: React.PointerEvent) => {
+    pointers.current.delete(e.pointerId);
+    const d = drag.current;
+    if (d?.moved) suppressClick.current = true;
+    if (pointers.current.size === 0) drag.current = null;
+    else if (d?.pinch) {
+      // 한 손가락이 남으면 거기서 다시 끌기
+      const [rest] = [...pointers.current.values()];
+      if (rest)
+        drag.current = { start: rest, cam: camRef.current, moved: true };
+    }
+  };
+
+  /* ── 카메라 일 ── */
+  const zoomBy = (factor: number, at?: P) => {
+    const { box: b, vp: v, s0: s } = geo.current;
+    flyTo(zoomAt(camRef.current, factor, at ?? viewCenter(v), b, v, s));
+  };
+  const showAll = () => flyTo(fitCamera(box));
+  /** 구역으로 날아가 고른다. close면 적어도 가운데 단계까지 다가간다 */
+  const visit = (id: string, close: boolean) => {
+    const c = worldCenterOf(layout, id);
+    if (!c) return;
+    const zoom = close
+      ? Math.max(cam.zoom, Math.min(zoomRange(s0).max, VISIT_S / s0))
+      : cam.zoom;
+    flyTo(centerOn(cam, c, box, vp, s0, zoom));
+    if (selected !== id) onSelect(id);
+  };
+  const visible = (id: string) => showDropped || !dropped.has(id);
+  const myForks = layout.leaves
+    .map((l) => l.region)
+    .filter(
+      (r) =>
+        visible(r.id) &&
+        !dropped.has(r.id) &&
+        (r.signs ?? []).some(
+          (x) =>
+            isForkForMe(x) && !(x.type === "fork" && x.status === "decided"),
+        ),
+    )
+    .map((r) => r.id);
+  const [forkAt, setForkAt] = useState(-1);
+  const nextFork = () => {
+    if (myForks.length === 0) return;
+    const k = (forkAt + 1) % myForks.length;
+    setForkAt(k);
+    const id = myForks[k];
+    if (id) visit(id, true);
+  };
+  const goHere = () => {
+    if (map.here && visible(map.here)) visit(map.here, true);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    const k = e.key;
+    let done = true;
+    if (k === "+" || k === "=") zoomBy(ZOOM_STEP);
+    else if (k === "-" || k === "_") zoomBy(1 / ZOOM_STEP);
+    else if (k === "0") showAll();
+    else if (k === "h" || k === "H") goHere();
+    else if (k === "f" || k === "F") nextFork();
+    else if (k === "Escape") {
+      if (selected) onSelect(selected);
+    } else if (k.startsWith("Arrow")) {
+      const dx =
+        k === "ArrowLeft" ? PAN_STEP : k === "ArrowRight" ? -PAN_STEP : 0;
+      const dy = k === "ArrowUp" ? PAN_STEP : k === "ArrowDown" ? -PAN_STEP : 0;
+      flyTo(panBy(cam, dx, dy, box, vp, s0));
+    } else done = false;
+    if (done) e.preventDefault();
+  };
+
+  const s = s0 * cam.zoom;
+  const vc = viewCenter(vp);
+  const ox = vc.x - cam.x * s;
+  const oy = vc.y - cam.y * s;
+  // 맞춤에서 화면 위쪽(높이 7%)에 있던 지평선을 땅 좌표로 적어 두고 카메라를 따라 옮긴다
+  const fit = fitCamera(box);
+  const fitLimb = Math.max(14, size.h * 0.07);
+  const limb = {
+    x: vc.x + (fit.x - cam.x) * s,
+    y: vc.y + (fit.y + (fitLimb - vc.y) / s0 - cam.y) * s,
+    r: Math.max(size.w, size.h) * 2.2 * cam.zoom,
+  };
+  const { min: zMin, max: zMax } = zoomRange(s0);
+  const forkLabel =
+    myForks.length > 0
+      ? `다음 ${forkAt >= 0 ? (forkAt % myForks.length) + 1 : 0}/${myForks.length}`
+      : "";
 
   return (
     <section
       ref={ref}
       data-map
-      className="relative h-full w-full overflow-hidden rounded-lg"
-      aria-label={`${map.title} 개척지 지도`}
+      data-zoom={cam.zoom.toFixed(2)}
+      data-stage={stageOf(s)}
+      // biome-ignore lint/a11y/noNoninteractiveTabindex: 지도에 초점을 두고 키보드로 움직인다
+      tabIndex={0}
+      className="relative h-full w-full cursor-grab touch-none overflow-hidden rounded-lg outline-none focus-visible:ring-1 focus-visible:ring-white/30 active:cursor-grabbing"
+      aria-label={`${map.title} 개척지 지도. 끌어서 옮기고 휠로 확대해요. 키보드: + - 0 화살표 h f Esc`}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerEnd}
+      onPointerCancel={onPointerEnd}
+      onClickCapture={(e) => {
+        if (!suppressClick.current) return;
+        suppressClick.current = false;
+        e.stopPropagation();
+        e.preventDefault();
+      }}
+      onClick={(e) => {
+        // 빈 곳 누르기: 고르기 풀기
+        if (isEmptySpot(e.target) && selected) onSelect(selected);
+      }}
+      onDoubleClick={(e) => {
+        if (isEmptySpot(e.target)) zoomBy(ZOOM_STEP, local(e));
+      }}
+      onKeyDown={onKeyDown}
     >
       {size.w > 0 && size.h > 0 && (
         <Scene
-          key={`${size.w}x${size.h}`}
           w={size.w}
           h={size.h}
+          s={s}
+          ox={ox}
+          oy={oy}
+          stage={stageOf(s)}
+          limb={limb}
           uid={uid}
           map={map}
           crew={crew}
@@ -105,10 +464,54 @@ export function FrontierView({
           hover={hover}
           setHover={setHover}
           onSelect={onSelect}
+          onVisit={(id) => visit(id, false)}
           showDropped={showDropped}
           now={now}
         />
       )}
+      <div
+        role="toolbar"
+        aria-label="지도 카메라"
+        className="absolute top-2 right-2 flex flex-col items-end gap-1 text-[12px]"
+      >
+        <div className="flex overflow-hidden rounded-md border border-white/15 bg-[#0a0a10]/85">
+          <CamButton
+            name="zoom-in"
+            title="확대 (+)"
+            disabled={cam.zoom >= zMax - 1e-3}
+            onClick={() => zoomBy(ZOOM_STEP)}
+          >
+            +
+          </CamButton>
+          <CamButton
+            name="zoom-out"
+            title="축소 (-)"
+            disabled={cam.zoom <= zMin + 1e-3}
+            onClick={() => zoomBy(1 / ZOOM_STEP)}
+          >
+            −
+          </CamButton>
+          <CamButton name="fit" title="전체 보기 (0)" onClick={showAll}>
+            ⤢ 전체
+          </CamButton>
+        </div>
+        {map.here && visible(map.here) && (
+          <CamButton name="here" title="지금 여기로 (h)" boxed onClick={goHere}>
+            🐾 지금 여기
+          </CamButton>
+        )}
+        {myForks.length > 0 && (
+          <CamButton
+            name="next-fork"
+            title="내가 정할 갈림길 차례로 (f)"
+            boxed
+            tone="fork"
+            onClick={nextFork}
+          >
+            ⑂ {forkLabel}
+          </CamButton>
+        )}
+      </div>
       {map.goal && (
         <div
           className="pointer-events-none absolute bottom-2 left-3 max-w-[46%] text-[11.5px] leading-snug"
@@ -122,11 +525,57 @@ export function FrontierView({
   );
 }
 
-const CAPTION_H = 26;
+/** 땅이나 빈 곳(단추·화면 밖 표가 아닌 곳)인가: 여기서만 끌기를 시작한다 */
+const isEmptyOrLand = (t: EventTarget | null) =>
+  !(t instanceof Element) || !t.closest("[data-camera],[data-edge-tag]");
+
+function CamButton({
+  name,
+  title,
+  disabled,
+  boxed,
+  tone,
+  onClick,
+  children,
+}: {
+  name: string;
+  title: string;
+  disabled?: boolean;
+  boxed?: boolean;
+  tone?: "fork";
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      data-camera={name}
+      title={title}
+      aria-label={title}
+      disabled={disabled}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      className={`cursor-pointer px-2.5 py-1 leading-tight whitespace-nowrap tabular-nums hover:bg-white/10 disabled:cursor-default disabled:opacity-35 disabled:hover:bg-transparent ${
+        boxed
+          ? `rounded-md border bg-[#0a0a10]/85 ${tone === "fork" ? "border-[#ffd84a]/40 text-[#ffd84a]" : "border-white/15 text-white/80"}`
+          : "border-white/10 text-white/80 not-first:border-l"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
 
 function Scene({
   w,
   h,
+  s,
+  ox,
+  oy,
+  stage,
+  limb,
   uid,
   map,
   crew,
@@ -136,11 +585,20 @@ function Scene({
   hover,
   setHover,
   onSelect,
+  onVisit,
   showDropped,
   now,
 }: {
   w: number;
   h: number;
+  /** 칸 반지름(px). 맞춤 배율 × 카메라 배율 */
+  s: number;
+  /** 착륙선(땅 좌표 0,0)의 화면 자리 */
+  ox: number;
+  oy: number;
+  stage: Stage;
+  /** 지평선: 행성 원의 가운데 x, 맨 위 y, 반지름(화면 px) */
+  limb: { x: number; y: number; r: number };
   uid: string;
   map: MapViewProps["map"];
   crew?: Crew;
@@ -150,6 +608,8 @@ function Scene({
   hover: string | null;
   setHover: (id: string | null) => void;
   onSelect: (id: string) => void;
+  /** 화면 밖 표를 눌렀다: 그리로 날아가 고른다 */
+  onVisit: (id: string) => void;
   showDropped: boolean;
   now: number;
 }) {
@@ -161,32 +621,11 @@ function Scene({
   );
   const colorOf = (territory: string) =>
     TERRITORY_COLORS[(terrIndex.get(territory) ?? 0) % 6] ?? "#fff";
+  /** 땅 장식(돔·장비·표지)은 칸 크기를 따르되 너무 커지지 않게 */
+  const ds = Math.min(s, 30);
+  /** 늘 보여야 할 표(내 깃발·금지 표지)는 작아져도 이만큼은 지킨다 */
+  const ks = Math.max(14, Math.min(s, 30));
 
-  /* ── 크기 맞추기: 칸 전체(숨긴 칸 포함, 껐다 켜도 크기가 그대로)와 지역 이름표 띠 ── */
-  let minX = -2.8;
-  let maxX = 2.8;
-  let minY = -2.6;
-  let maxY = 2.6;
-  for (const l of layout.leaves)
-    for (const c of l.cells) {
-      const p = toPixel(c);
-      minX = Math.min(minX, p.x - 1);
-      maxX = Math.max(maxX, p.x + 1);
-      minY = Math.min(minY, p.y - 0.9);
-      maxY = Math.max(maxY, p.y + 0.9);
-    }
-  const band = 1.7;
-  const availH = h - CAPTION_H - 10;
-  const s = Math.max(
-    9,
-    Math.min(
-      44,
-      (w - 40) / (maxX - minX + 2 * band),
-      availH / (maxY - minY + 2 * band),
-    ),
-  );
-  const ox = w / 2 - (s * (minX + maxX)) / 2;
-  const oy = 6 + availH / 2 - (s * (minY + maxY)) / 2;
   const px = (hx: Hex): P => {
     const p = toPixel(hx, s);
     return { x: ox + p.x, y: oy + p.y };
@@ -333,7 +772,12 @@ function Scene({
       )[0] ?? sp.slots[0];
     if (!p) continue;
     flagSpots.push({ id: r.id, p });
-    obstacles.push({ x: p.x - 3, y: p.y - s * 1.6, w: s * 1.05, h: s * 1.7 });
+    obstacles.push({
+      x: p.x - 3,
+      y: p.y - ks * 1.6,
+      w: ks * 1.05,
+      h: ks * 1.7,
+    });
   }
 
   /* ── 이름표: 지역 이름은 늘, 구역 이름은 자리가 날 때만 ── */
@@ -477,8 +921,10 @@ function Scene({
       o: rnd() * 0.5 + 0.2,
     }));
   }, []);
-  const limbY = Math.max(14, h * 0.07);
-  const planetR = Math.max(w, h) * 2.2;
+  // 별과 달은 화면에 고정, 지평선과 행성 표면은 땅과 함께 움직인다
+  const skyY = Math.max(14, h * 0.07);
+  const limbY = limb.y;
+  const planetR = limb.r;
 
   const selectOf = (id: string) => () => onSelect(id);
   const keyOf = (id: string) => (e: React.KeyboardEvent) => {
@@ -540,7 +986,7 @@ function Scene({
           <circle cx="5" cy="4.6" r="0.7" fill="#d8dce8" opacity="0.25" />
         </pattern>
         <clipPath id={`planet${uid}`}>
-          <circle cx={w / 2} cy={limbY + planetR} r={planetR} />
+          <circle cx={limb.x} cy={limbY + planetR} r={planetR} />
         </clipPath>
         <filter id={`glow${uid}`} x="-50%" y="-50%" width="200%" height="200%">
           <feGaussianBlur stdDeviation="3" />
@@ -554,7 +1000,7 @@ function Scene({
           // biome-ignore lint/suspicious/noArrayIndexKey: 고정된 별 목록
           key={i}
           cx={st.x * w}
-          cy={st.y * limbY * 1.6}
+          cy={st.y * skyY * 1.6}
           r={st.r}
           fill="#fff"
           opacity={st.o}
@@ -563,20 +1009,20 @@ function Scene({
       ))}
       <circle
         cx={w * 0.9}
-        cy={limbY * 0.55}
-        r={Math.max(5, limbY * 0.32)}
+        cy={skyY * 0.55}
+        r={Math.max(5, skyY * 0.32)}
         fill="#c9cfdc"
         opacity="0.7"
       />
       <circle
         cx={w * 0.9 + 2.5}
-        cy={limbY * 0.55 - 1}
-        r={Math.max(5, limbY * 0.32)}
+        cy={skyY * 0.55 - 1}
+        r={Math.max(5, skyY * 0.32)}
         fill="#05070d"
         opacity="0.75"
       />
       <circle
-        cx={w / 2}
+        cx={limb.x}
         cy={limbY + planetR}
         r={planetR}
         fill={`url(#ground${uid})`}
@@ -585,7 +1031,7 @@ function Scene({
         x={0}
         y={limbY - 2}
         width={w}
-        height={limbY * 1.4}
+        height={skyY * 1.4}
         fill={`url(#air${uid})`}
         opacity="0.5"
       />
@@ -622,7 +1068,7 @@ function Scene({
           strokeOpacity="0.25"
           strokeWidth={s * 0.08}
         />
-        <Lander x={center.x} y={center.y} s={s} />
+        <Lander x={center.x} y={center.y} s={Math.min(s, 40)} />
       </g>
 
       {/* 구역 땅 */}
@@ -665,7 +1111,7 @@ function Scene({
                     fill={tint}
                     opacity={st === "fog" ? 0.16 : 0.1}
                   />
-                  <CellDecor st={st} p={p} s={s} uid={uid} />
+                  <CellDecor st={st} p={p} s={s} ds={ds} uid={uid} />
                   {fresh && (
                     <polygon
                       points={poly(p, 0.7)}
@@ -699,14 +1145,14 @@ function Scene({
         <path
           d={regionEdges.join("")}
           stroke="#120d12"
-          strokeWidth={Math.max(1.6, s * 0.08)}
+          strokeWidth={Math.min(3, Math.max(1.6, s * 0.08))}
         />
         {[...terrEdges.entries()].map(([t, list]) => (
           <path
             key={t}
             d={list.join("")}
             stroke={colorOf(t)}
-            strokeWidth={Math.max(2.2, s * 0.12)}
+            strokeWidth={Math.min(4.5, Math.max(2.2, s * 0.12))}
             opacity="0.95"
           />
         ))}
@@ -727,8 +1173,8 @@ function Scene({
                   d={outline(l.region.id, 0.8)}
                   fill="none"
                   stroke="#ff6b6b"
-                  strokeWidth={Math.max(2, s * 0.1)}
-                  strokeDasharray={`${s * 0.22} ${s * 0.12}`}
+                  strokeWidth={Math.min(4, Math.max(2, s * 0.1))}
+                  strokeDasharray={`${ds * 0.22} ${ds * 0.12}`}
                 />
                 {l.cells.flatMap((c) =>
                   corners(px(c).x, px(c).y, s * 0.8).map((v, i) => (
@@ -737,12 +1183,12 @@ function Scene({
                       key={`${hexKey(c)}-${i}`}
                       cx={v.x}
                       cy={v.y}
-                      r={Math.max(1.4, s * 0.06)}
+                      r={Math.min(2.6, Math.max(1.4, s * 0.06))}
                       fill="#ffc2c2"
                     />
                   )),
                 )}
-                {p && <NoEntry x={p.x} y={p.y} s={s} />}
+                {p && <NoEntry x={p.x} y={p.y} s={ks} />}
               </g>
             );
           })}
@@ -761,7 +1207,7 @@ function Scene({
               slots.find(
                 (x) => x !== hereCenter && !flagSpots.some((f) => f.p === x),
               ) ?? sp?.slots[l.cells.length];
-            return p ? <Rig key={l.region.id} x={p.x} y={p.y} s={s} /> : null;
+            return p ? <Rig key={l.region.id} x={p.x} y={p.y} s={ds} /> : null;
           })}
       </g>
 
@@ -788,7 +1234,7 @@ function Scene({
                       key={sign.id}
                       x={f.p.x}
                       y={f.p.y}
-                      s={s}
+                      s={ks}
                       title={sign.title}
                     />
                   ) : null;
@@ -796,20 +1242,20 @@ function Scene({
                 const p = free[k++ % Math.max(1, free.length)] ?? sp.slots[0];
                 if (!p) return null;
                 if (sign.type === "fork")
-                  return <OtherFlag key={sign.id} x={p.x} y={p.y} s={s} />;
+                  return <OtherFlag key={sign.id} x={p.x} y={p.y} s={ds} />;
                 if (sign.type === "talk")
                   return (
                     <Antenna
                       key={sign.id}
                       x={p.x}
                       y={p.y}
-                      s={s}
+                      s={ds}
                       waiting={
                         sign.status === "waiting" || sign.status === "sent"
                       }
                     />
                   );
-                return <Crack key={sign.id} x={p.x} y={p.y} s={s} />;
+                return <Crack key={sign.id} x={p.x} y={p.y} s={ds} />;
               })}
             </g>
           );
@@ -824,7 +1270,7 @@ function Scene({
             className={styles.breathe}
             d={outline(f.id, 0.93)}
             stroke="#ffd84a"
-            strokeWidth={Math.max(2, s * 0.11)}
+            strokeWidth={Math.min(4, Math.max(2, s * 0.11))}
           />
         ))}
       </g>
@@ -848,23 +1294,23 @@ function Scene({
         <g pointerEvents="none">
           <ellipse
             cx={hereCenter.x}
-            cy={hereCenter.y + s * 0.38}
-            rx={s * 0.75}
-            ry={s * 0.28}
+            cy={hereCenter.y + ds * 0.38}
+            rx={ds * 0.75}
+            ry={ds * 0.28}
             fill="#7ce0ff"
             opacity="0.25"
           />
           <ellipse
             className={styles.ping}
             cx={hereCenter.x}
-            cy={hereCenter.y + s * 0.38}
-            rx={s * 0.75}
-            ry={s * 0.28}
+            cy={hereCenter.y + ds * 0.38}
+            rx={ds * 0.75}
+            ry={ds * 0.28}
             fill="none"
             stroke="#7ce0ff"
           />
           <g
-            transform={`translate(${hereCenter.x - animalSize / 2} ${hereCenter.y + s * 0.45 - animalSize * 1.25})`}
+            transform={`translate(${hereCenter.x - animalSize / 2} ${hereCenter.y + ds * 0.45 - animalSize * 1.25})`}
           >
             <HereAnimal crew={crew} size={animalSize} />
           </g>
@@ -939,11 +1385,14 @@ function CellDecor({
   st,
   p,
   s,
+  ds,
   uid,
 }: {
   st: RegionStatus;
   p: P;
   s: number;
+  /** 장식 크기(칸이 커져도 상한이 있다) */
+  ds: number;
   uid: string;
 }) {
   const pts = corners(p.x, p.y, s)
@@ -975,7 +1424,7 @@ function CellDecor({
     return (
       <polygon points={pts} fill={`url(#soil${uid})`} pointerEvents="none" />
     );
-  if (st === "done") return <Dome x={p.x} y={p.y} s={s} />;
+  if (st === "done") return <Dome x={p.x} y={p.y} s={ds} />;
   if (st === "dropped")
     return (
       <polygon
