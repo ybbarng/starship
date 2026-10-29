@@ -10,8 +10,8 @@ describe("기다린 시간 글", () => {
     expect(ago(now - 23 * MIN, now)).toBe("23분");
   });
 
-  it("elapsed는 1분 안이면 '방금부터', 그 뒤로는 'n째'", () => {
-    expect(elapsed(now - 10_000, now)).toBe("방금부터");
+  it("elapsed는 1분 안이어도 '1분째', 그 뒤로는 'n째'", () => {
+    expect(elapsed(now - 10_000, now)).toBe("1분째");
     expect(elapsed(now - 23 * MIN, now)).toBe("23분째");
     expect(elapsed(now - 3 * 60 * MIN, now)).toBe("3시간째");
     expect(elapsed(now - 2 * 24 * 60 * MIN, now)).toBe("2일째");

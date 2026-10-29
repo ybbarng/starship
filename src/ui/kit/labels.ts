@@ -75,10 +75,10 @@ export function ago(since: number, now = Date.now()): string {
 }
 
 /**
- * 얼마나 이어졌나: "23분째", "2시간째". 1분이 안 됐으면 "방금부터".
- * ago() 뒤에 "째"를 바로 붙이면 "방금째"가 되므로 이것을 쓴다.
+ * 얼마나 이어졌나: "23분째", "2시간째". 1분이 안 됐어도 "1분째"로 적는다.
+ * "방금째"·"방금부터 기다림"은 어색해서, 뒤에 "기다림" 등이 붙는 자리에서도 자연스럽게 읽히게 한다.
  */
 export function elapsed(since: number, now = Date.now()): string {
   const a = ago(since, now);
-  return a === "방금" ? "방금부터" : `${a}째`;
+  return a === "방금" ? "1분째" : `${a}째`;
 }
