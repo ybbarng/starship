@@ -2,7 +2,12 @@
 
 import { z } from "zod";
 import type { LinkMode } from "@/demo/link";
-import { buildDemoMap, DEMO_MAP_CREW } from "@/demo/map";
+import {
+  buildBigDemoMap,
+  buildDemoMap,
+  DEMO_BIG_MAP_CREW,
+  DEMO_MAP_CREW,
+} from "@/demo/map";
 import {
   buildSnapshot,
   createDemoState,
@@ -70,6 +75,8 @@ export async function getCrewMap(
 ): Promise<CrewMapResponse> {
   const info = sourceInfo();
   if (info.mode === "demo") {
+    if (crewId === DEMO_BIG_MAP_CREW)
+      return { map: buildBigDemoMap(now), stale: false, mapAt: now - HOUR };
     if (crewId !== DEMO_MAP_CREW) return { map: null };
     return { map: buildDemoMap(now), stale: false, mapAt: now - 2 * HOUR };
   }

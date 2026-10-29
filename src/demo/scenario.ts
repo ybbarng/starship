@@ -12,7 +12,12 @@ import {
   type TaskKind,
 } from "@/protocol/v1";
 import { buildDemoLink, type LinkMode } from "./link";
-import { buildDemoMap, DEMO_MAP_CREW } from "./map";
+import {
+  buildBigDemoMap,
+  buildDemoMap,
+  DEMO_BIG_MAP_CREW,
+  DEMO_MAP_CREW,
+} from "./map";
 
 const MIN = 60_000;
 const HOUR = 60 * MIN;
@@ -370,6 +375,10 @@ export function buildSnapshot(
     ...summarizeMap(buildDemoMap(now)),
     stale: false,
   };
+  const bigMapSummary = {
+    ...summarizeMap(buildBigDemoMap(now)),
+    stale: false,
+  };
   const crew: Crew[] = seeds2.map((c, i) => {
     // 세션 할 일이 치워지면 그 승무원은 다시 일하러 간다.
     const status =
@@ -386,7 +395,12 @@ export function buildSnapshot(
       onDeck: c.onDeck,
       brief: brief ? { ...brief, at: now - 2 * HOUR } : undefined,
       actions: c.status === "off" ? ["brief"] : ["focus", "brief"],
-      map: c.id === DEMO_MAP_CREW ? demoMapSummary : undefined,
+      map:
+        c.id === DEMO_MAP_CREW
+          ? demoMapSummary
+          : c.id === DEMO_BIG_MAP_CREW
+            ? bigMapSummary
+            : undefined,
     };
   });
 

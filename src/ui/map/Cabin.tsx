@@ -3,7 +3,7 @@
 // 선실: 승무원(프로젝트) 하나의 방. 가운데 지도 한 장, 위쪽 줄에 진행률·늘어난 구역·갱신 시각,
 // 오른쪽 판에 고른 구역의 자세한 내용. 설계: docs/map.md "화면: 선실".
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { type ComponentType, useEffect, useMemo, useState } from "react";
 import { useBridge, useCrewMap } from "@/data/hooks";
 import {
   droppedIds,
@@ -17,10 +17,22 @@ import type { Crew } from "@/protocol/v1";
 import { CrewHeader } from "@/protos/classic/CrewDetail";
 import { Toasts } from "@/ui/kit";
 import { agoLabel, SIGN_ICON } from "./labels";
-import { MapView } from "./MapView";
+import { MapView, type MapViewProps } from "./MapView";
 import { RegionPanel } from "./RegionPanel";
 
-export function Cabin({ crewId }: { crewId: string }) {
+export function Cabin({
+  crewId,
+  View = MapView,
+  label,
+  backHref = "/proto/cockpit",
+}: {
+  crewId: string;
+  /** 가운데 지도 그림. 시안마다 바꿔 끼운다. */
+  View?: ComponentType<MapViewProps>;
+  /** 시안 이름(화면 구석에 작게) */
+  label?: string;
+  backHref?: string;
+}) {
   const bridge = useBridge();
   const query = useCrewMap(crewId);
   const crew = bridge.crewById.get(crewId);
@@ -32,7 +44,7 @@ export function Cabin({ crewId }: { crewId: string }) {
     <main className="flex h-dvh min-h-[560px] flex-col bg-hull-950 text-white">
       <header className="flex items-center gap-4 border-b border-white/[0.07] px-4 py-2.5">
         <Link
-          href="/proto/cockpit"
+          href={backHref}
           className="shrink-0 rounded px-2 py-1 text-[12px] text-white/55 hover:bg-white/[0.06] hover:text-white"
         >
           ← 갑판으로
@@ -73,7 +85,7 @@ export function Cabin({ crewId }: { crewId: string }) {
           지도를 받아 오지 못했어요 · {String(query.error.message)}
         </Center>
       ) : map ? (
-        <MapRoom key={crewId} map={map} crew={crew} now={now} />
+        <MapRoom key={crewId} map={map} crew={crew} now={now} View={View} />
       ) : (
         <Center>
           <div className="text-center">
@@ -86,6 +98,11 @@ export function Cabin({ crewId }: { crewId: string }) {
         </Center>
       )}
       <Toasts />
+      {label && (
+        <span className="pointer-events-none fixed bottom-2 left-3 rounded bg-black/50 px-2 py-0.5 text-[11px] text-white/55">
+          시안 · {label}
+        </span>
+      )}
     </main>
   );
 }
@@ -151,10 +168,12 @@ function MapRoom({
   map,
   crew,
   now,
+  View,
 }: {
   map: ProjectMap;
   crew?: Crew;
   now: number;
+  View: ComponentType<MapViewProps>;
 }) {
   const [selected, setSelected] = useState<string | null>(map.here ?? null);
   const [showDropped, setShowDropped] = useState(false);
@@ -176,7 +195,7 @@ function MapRoom({
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 p-3">
-          <MapView
+          <View
             map={map}
             crew={crew}
             selected={visibleSelected?.id ?? null}
@@ -197,7 +216,7 @@ function MapRoom({
           <span>
             막힘 ⛔ <b className="text-[#ff8f8f]">{blocked.length}</b>
           </span>
-          <Legend />
+          {View === MapView && <Legend />}
           {dropped.size > 0 && (
             <label className="ml-auto flex cursor-pointer items-center gap-1.5">
               <input

@@ -23,6 +23,20 @@ import styles from "./map.module.css";
 
 const HEADER = 22;
 
+/** 선실 가운데 지도 그림이 받는 것. 시안(`src/ui/cabin-protos/`)도 같은 모양을 받는다. */
+export type MapViewProps = {
+  map: ProjectMap;
+  /** 이 지도의 승무원. here 구역에 앉힐 동물 선원 */
+  crew?: Crew;
+  /** 고른 구역 id. 오른쪽 판이 이 구역을 보인다 */
+  selected: string | null;
+  /** 구역을 누르면 부른다. 같은 구역을 다시 누르면 고르기가 풀린다 */
+  onSelect: (id: string) => void;
+  /** 버린 구역도 그릴까(아래쪽 "버린 구역 보기") */
+  showDropped: boolean;
+  now: number;
+};
+
 export function MapView({
   map,
   crew,
@@ -30,14 +44,7 @@ export function MapView({
   onSelect,
   showDropped,
   now,
-}: {
-  map: ProjectMap;
-  crew?: Crew;
-  selected: string | null;
-  onSelect: (id: string) => void;
-  showDropped: boolean;
-  now: number;
-}) {
+}: MapViewProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
   useEffect(() => {

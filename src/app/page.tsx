@@ -40,6 +40,7 @@ const PROTOS = [
 ];
 
 const LABS = [
+  { href: "/proto/cabin", name: "선실 지도 시안" },
   { href: "/lab/sky", name: "창밖 우주 확인판" },
   { href: "/lab/crew", name: "동물 선원 확인판" },
   { href: "/lab/events", name: "이벤트 확인판" },

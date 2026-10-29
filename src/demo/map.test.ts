@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isNewFound, parseMap, summarizeMap } from "@/protocol/map";
 import { CrewMapResponse } from "@/protocol/v1";
-import { buildDemoMap, DEMO_MAP_CREW } from "./map";
+import { buildBigDemoMap, buildDemoMap, DEMO_MAP_CREW } from "./map";
 import { buildSnapshot, createDemoState } from "./scenario";
 
 describe("데모 지도", () => {
@@ -36,6 +36,14 @@ describe("데모 지도", () => {
     const snap = buildSnapshot(createDemoState(now), "default", now);
     const crew = snap.crew.find((c) => c.id === DEMO_MAP_CREW);
     expect(crew?.map).toEqual({ ...summarizeMap(map), stale: false });
-    expect(snap.crew.filter((c) => c.map).length).toBe(1);
+    expect(snap.crew.filter((c) => c.map).length).toBe(2);
+  });
+
+  it("큰 데모 지도는 40구역, 3단, 긴 이름, 절반 넘게 발견", () => {
+    const big = buildBigDemoMap(now);
+    expect(parseMap(JSON.parse(JSON.stringify(big))).ok).toBe(true);
+    expect(big.regions).toHaveLength(40);
+    expect(big.regions.some((r) => r.title.length >= 18)).toBe(true);
+    expect(big.regions.filter((r) => r.found).length).toBeGreaterThan(20);
   });
 });

@@ -260,3 +260,152 @@ export function buildDemoMap(now = Date.now()): ProjectMap {
     regions,
   };
 }
+
+/** 구역이 많은 데모 지도가 있는 승무원 */
+export const DEMO_BIG_MAP_CREW = "star-atlas";
+
+/**
+ * 구역 40개짜리 데모 지도: 지어낸 별자리 앱. 실제 지도처럼 3단, 25자 넘는 긴 이름,
+ * 절반 넘게 발견 구역이 섞여 있어 시안이 많은 구역에서 무너지지 않는지 본다.
+ */
+export function buildBigDemoMap(now = Date.now()): ProjectMap {
+  const d = (n: number) => daysAgo(now, n);
+  type Seed = [
+    id: string,
+    title: string,
+    parent: string | undefined,
+    status: Region["status"],
+    size: number,
+    foundDaysAgo?: number,
+  ];
+  const seeds: Seed[] = [
+    ["sky", "하늘 그리기", undefined, "building", 1],
+    ["sky-stars", "별 목록 읽기", "sky", "done", 2],
+    ["sky-lines", "별자리 선", "sky", "done", 2],
+    ["sky-names", "별 이름표 겹침 피하기", "sky", "building", 2, 6],
+    ["sky-milky", "은하수 띠", "sky", "fog", 1, 3],
+    ["sky-planets", "행성 위치 계산", "sky", "building", 1],
+    ["planet-orbit", "궤도 요소로 위치 구하기", "sky-planets", "done", 2],
+    ["planet-moon", "달의 위상", "sky-planets", "building", 1, 4],
+    ["planet-rings", "토성 고리 기울기", "sky-planets", "fog", 1, 2],
+    ["view", "보는 방법", undefined, "building", 1],
+    ["view-drag", "끌어서 둘러보기", "view", "done", 1],
+    ["view-zoom", "확대·축소", "view", "done", 1],
+    ["view-time", "시간 되감기와 빨리 감기", "view", "building", 2],
+    ["view-place", "관측 장소 고르기", "view", "fog", 2],
+    ["view-ar", "휴대폰을 하늘에 들면 그 방향 보이기", "view", "fog", 3, 5],
+    ["view-a11y", "화면 읽기 프로그램으로 별자리 듣기", "view", "fog", 2, 1],
+    ["learn", "배우기", undefined, "fog", 1],
+    ["learn-cards", "별자리 이야기 카드", "learn", "building", 2],
+    ["learn-quiz", "별자리 맞히기 놀이", "learn", "fog", 2, 6],
+    ["learn-tour", "오늘 밤 볼 것 안내", "learn", "fog", 1, 2],
+    ["learn-kids", "어린이용 쉬운 말 설명", "learn", "dropped", 1, 9],
+    ["data", "자료", undefined, "building", 1],
+    ["data-catalog", "별 목록 출처와 라이선스 정리", "data", "done", 1],
+    ["data-size", "별 목록 크기 줄이기", "data", "blocked", 2, 5],
+    ["data-offline", "인터넷 없이 쓰기", "data", "fog", 2, 3],
+    ["data-sync", "즐겨찾기 기기 사이 동기화", "data", "fog", 2, 1],
+    ["ship", "내보내기", undefined, "fog", 1],
+    ["ship-web", "웹으로 배포", "ship", "done", 1],
+    ["ship-app", "앱 스토어", "ship", "fog", 1],
+    ["app-review", "앱 심사 준비", "ship-app", "fog", 1, 2],
+    ["app-icon", "앱 아이콘과 첫 화면 그림", "ship-app", "building", 1, 4],
+    [
+      "app-store-text",
+      "스토어 소개 글과 스크린샷 다섯 장",
+      "ship-app",
+      "fog",
+      1,
+      4,
+    ],
+    ["ship-perf", "느린 휴대폰에서 초당 60장", "ship", "blocked", 2, 6],
+    ["ship-crash", "오류 알림 모으기", "ship", "fog", 1, 5],
+    ["ship-beta", "시험 사용자 모으기", "ship", "fog", 1, 1],
+    ["ops", "운영", undefined, "fog", 1, 6],
+    ["ops-cost", "지도 타일 비용 살피기", "ops", "fog", 1, 6],
+    ["ops-backup", "사용자 자료 백업", "ops", "fog", 1, 6],
+    ["ops-feedback", "의견 받는 창구", "ops", "building", 1, 3],
+    ["ops-status", "서비스 상태 쪽", "ops", "dropped", 1, 6],
+  ];
+  const regions: Region[] = seeds.map(
+    ([id, title, parent, status, size, f]) => ({
+      id,
+      title,
+      parent,
+      status,
+      size,
+      found: f === undefined ? undefined : d(f),
+      since: status === "fog" ? undefined : d(Math.max(1, (f ?? 14) - 1)),
+    }),
+  );
+  const byId = new Map(regions.map((r) => [r.id, r]));
+  const sign = (id: string, s: NonNullable<Region["signs"]>[number]) => {
+    const r = byId.get(id);
+    if (r) r.signs = [...(r.signs ?? []), s];
+  };
+  sign("sky-names", {
+    id: "label-rule",
+    type: "fork",
+    title: "이름표가 겹치면 밝은 별을 먼저",
+    owner: "me",
+    options: ["밝은 별 먼저", "가까운 별 먼저"],
+    recommend: "밝은 별 먼저",
+    status: "open",
+  });
+  sign("view-ar", {
+    id: "ar-sensor",
+    type: "fork",
+    title: "방향 센서 권한을 처음부터 물을까",
+    owner: "me",
+    options: ["처음부터", "처음 쓸 때"],
+    recommend: "처음 쓸 때",
+    status: "open",
+  });
+  sign("data-size", {
+    id: "catalog-mirror",
+    type: "talk",
+    title: "작은 별 목록 나눠 받기",
+    with: "자료 관리자",
+    status: "waiting",
+  });
+  sign("ship-perf", {
+    id: "gpu-old",
+    type: "risk",
+    title: "오래된 휴대폰 그래픽 칩에서 셰이더가 안 돈다",
+  });
+  sign("learn-cards", {
+    id: "card-tone",
+    type: "fork",
+    title: "이야기 카드 말투",
+    owner: "편집자",
+    options: ["다정하게", "담백하게"],
+    status: "open",
+  });
+  sign("app-store-text", {
+    id: "store-copy",
+    type: "talk",
+    title: "소개 글 검토",
+    with: "편집자",
+    status: "draft",
+  });
+  const planetOrbit = byId.get("planet-orbit");
+  if (planetOrbit) {
+    planetOrbit.summary = "궤도 요소 표로 오늘 날짜의 행성 위치를 계산한다";
+    planetOrbit.links = [{ label: "계산 메모", path: "docs/orbit.md" }];
+  }
+  const here = byId.get("view-time");
+  if (here) {
+    here.summary =
+      "시간 막대를 끌면 하늘이 그 시각으로 돈다. 빨리 감기 속도 단계를 고르는 중";
+    here.next = "하루를 10초에 도는 속도 확인";
+  }
+  return {
+    map: "starship-map/1",
+    title: "별자리 앱",
+    goal: "처음 쓰는 사람이 오늘 밤 하늘에서 별자리 하나를 찾는다",
+    baselineAt: d(15),
+    updatedAt: new Date(now - 40 * 60_000).toISOString(),
+    here: "view-time",
+    regions,
+  };
+}
