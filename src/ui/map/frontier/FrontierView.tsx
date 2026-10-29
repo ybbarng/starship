@@ -444,7 +444,9 @@ export function FrontierView({
   const { min: zMin, max: zMax } = zoomRange(s0);
   const forkLabel =
     myForks.length > 0
-      ? `다음 ${forkAt >= 0 ? (forkAt % myForks.length) + 1 : 0}/${myForks.length}`
+      ? forkAt >= 0
+        ? `다음 ${(forkAt % myForks.length) + 1}/${myForks.length}`
+        : `다음 · ${myForks.length}개`
       : "";
 
   return (

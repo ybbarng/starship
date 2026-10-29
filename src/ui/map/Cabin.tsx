@@ -2,6 +2,8 @@
 
 // 선실: 승무원(프로젝트) 하나의 방. 가운데 지도 한 장, 위쪽 줄에 진행률·늘어난 구역·갱신 시각,
 // 오른쪽 판에 고른 구역의 자세한 내용. 설계: docs/map.md "화면: 선실".
+// 가운데 그림은 기본이 개척지(FrontierView, 끌고 확대해 다니는 육각 행성 지도. 설계: docs/frontier.md)다.
+// 처음 treemap(MapView)은 /proto/cabin/treemap에 비교용으로 남아 있다.
 import Link from "next/link";
 import { type ComponentType, useEffect, useMemo, useState } from "react";
 import { useBridge, useCrewMap } from "@/data/hooks";
@@ -16,13 +18,14 @@ import {
 import type { Crew } from "@/protocol/v1";
 import { CrewHeader } from "@/protos/classic/CrewDetail";
 import { Toasts } from "@/ui/kit";
+import { FrontierView } from "./frontier/FrontierView";
 import { agoLabel, SIGN_ICON } from "./labels";
 import { MapView, type MapViewProps } from "./MapView";
 import { RegionPanel } from "./RegionPanel";
 
 export function Cabin({
   crewId,
-  View = MapView,
+  View = FrontierView,
   label,
   backHref = "/proto/cockpit",
 }: {
@@ -216,6 +219,7 @@ function MapRoom({
           <span>
             막힘 ⛔ <b className="text-[#ff8f8f]">{blocked.length}</b>
           </span>
+          {/* 범례는 treemap에서만. 개척지는 땅 모습이 곧 범례다 */}
           {View === MapView && <Legend />}
           {dropped.size > 0 && (
             <label className="ml-auto flex cursor-pointer items-center gap-1.5">

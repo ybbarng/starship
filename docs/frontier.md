@@ -1,6 +1,6 @@
 # 개척지 선실 — 설계
 
-2026-10-29. 상태: **확정, 구현 중**. 앞선 문서: [`map.md`](map.md)(지도 형식과 선실), [`ideas/cabin/scores.md`](ideas/cabin/scores.md)(시안 다섯 가운데 4번을 골랐다).
+2026-10-29. 상태: **확정, 구현됨**(`src/ui/map/frontier/`, `/crew/[id]` 선실의 기본 그림). 앞선 문서: [`map.md`](map.md)(지도 형식과 선실), [`ideas/cabin/scores.md`](ideas/cabin/scores.md)(시안 다섯 가운데 4번을 골랐다).
 
 ## 왜
 
