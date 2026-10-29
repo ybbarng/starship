@@ -8,6 +8,7 @@ import {
   ago,
   CONTEXT_COLOR,
   CONTEXT_LABEL,
+  elapsed,
   KIND_LABEL,
   Modal,
   TaskActions,
@@ -87,7 +88,7 @@ export function HatchModal({
                     .join(" · ")}
                 </div>
                 <div className="mt-1 text-xs" style={{ color: c }}>
-                  {ago(b.since, clock)}째 포트에 붙어 있음
+                  {elapsed(b.since, clock)} 포트에 붙어 있음
                 </div>
               </div>
             </div>

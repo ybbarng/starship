@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useAct, useBridge } from "@/data/hooks";
 import type { Task } from "@/protocol/v1";
 import { Animal, animalFor, poseFor } from "@/ui/crew";
-import { ago, KIND_LABEL, sourceLabel } from "@/ui/kit";
+import { ago, elapsed, KIND_LABEL, sourceLabel } from "@/ui/kit";
 import { CrewDetail } from "./CrewDetail";
 import { ContextChip } from "./common";
 import {
@@ -502,7 +502,7 @@ export function RingView({
             <span className="block text-[11px] text-[#ffcf5c]">
               1 · {first.crew.name}
               {first.top ? ` · ${KIND_LABEL[first.top.kind]}` : ""}
-              {first.waitSince ? ` · ${ago(first.waitSince)}째` : ""}
+              {first.waitSince ? ` · ${elapsed(first.waitSince)}` : ""}
             </span>
             <span className="line-clamp-2 block text-[13px] leading-snug text-white/90">
               {first.top?.title ?? "나를 기다리고 있어요"}

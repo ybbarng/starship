@@ -8,6 +8,7 @@ import {
   ago,
   CONTEXT_COLOR,
   CONTEXT_LABEL,
+  elapsed,
   isHail,
   KIND_LABEL,
   sourceLabel,
@@ -139,7 +140,7 @@ export function MainDisplay({
                 · {sourceLabel(task.source)}
               </span>
               <span className="ml-auto shrink-0 rounded bg-[#ffd84a]/10 px-1.5 font-semibold text-[#ffd84a] tabular-nums">
-                {ago(task.since, now)}째 기다림
+                {elapsed(task.since, now)} 기다림
               </span>
             </div>
             <h2 className="mt-1.5 line-clamp-2 text-[26px] leading-[1.28] font-semibold tracking-[-0.01em] text-white">
@@ -333,7 +334,9 @@ export function TaskDetail({
         <span>· {task.from}</span>
         <span>· {KIND_LABEL[task.kind]}</span>
         <span>· {sourceLabel(task.source)}</span>
-        <span className="ml-auto text-[#ffd84a]">{ago(task.since, now)}째</span>
+        <span className="ml-auto text-[#ffd84a]">
+          {elapsed(task.since, now)}
+        </span>
       </div>
       <p className="text-[18px] leading-snug font-semibold text-white">
         {task.title}

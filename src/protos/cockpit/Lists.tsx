@@ -2,7 +2,7 @@
 
 // 경고등을 눌렀을 때 뜨는 목록: 할 일(전체·오래 기다린 것), 정기 작업 계기.
 import type { Crew, Gauge, GaugeStatus, Task } from "@/protocol/v1";
-import { ago, KIND_LABEL, sourceLabel, TaskActions } from "@/ui/kit";
+import { ago, elapsed, KIND_LABEL, sourceLabel, TaskActions } from "@/ui/kit";
 import styles from "./cockpit.module.css";
 import { ContextTag, crewName, KEY_SMALL } from "./MainDisplay";
 
@@ -33,7 +33,7 @@ export function TaskList({
             <span>· {KIND_LABEL[t.kind]}</span>
             <span>· {sourceLabel(t.source)}</span>
             <span className="ml-auto text-[#ffd84a]">
-              {ago(t.since, now)}째
+              {elapsed(t.since, now)}
             </span>
           </div>
           <div className="mt-1 pl-6 font-medium">{t.title}</div>

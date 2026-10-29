@@ -5,7 +5,12 @@
 // 칸을 누르면 오른쪽 패널에 브리핑·할 일 체크.
 import type { Context, Crew, Task } from "@/protocol/v1";
 import { Animal, animalFor } from "@/ui/crew";
-import { ago, CONTEXT_COLOR, CONTEXT_LABEL, CREW_STATUS_LABEL } from "@/ui/kit";
+import {
+  CONTEXT_COLOR,
+  CONTEXT_LABEL,
+  CREW_STATUS_LABEL,
+  elapsed,
+} from "@/ui/kit";
 import { CrewDetail, CrewHeader } from "./CrewDetail";
 import styles from "./classic.module.css";
 
@@ -281,7 +286,7 @@ function Room({
           {crew.status === "needs-you" ? (
             <Bubble
               text={task?.title ?? crew.activity ?? "불러요"}
-              wait={crew.since ? ago(crew.since, now) : ""}
+              wait={crew.since ? elapsed(crew.since, now) : ""}
               narrow={narrow}
             />
           ) : (
@@ -354,7 +359,7 @@ function Bubble({
       </span>
       {wait && (
         <span className="mt-0.5 block text-[9.5px] font-semibold text-[#b07a00]">
-          {wait}째 기다림
+          {wait} 기다림
         </span>
       )}
       <span className="absolute -bottom-[5px] left-1/2 h-2.5 w-2.5 -translate-x-1/2 rotate-45 bg-[#fffbea]" />

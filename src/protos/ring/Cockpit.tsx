@@ -3,7 +3,7 @@
 // 계기판: 왼쪽 고리 표시기, 가운데 주 표시창(지금 할 일), 오른쪽 교신 안테나와 계기 등.
 import { useBridge } from "@/data/hooks";
 import type { Crew, Task } from "@/protocol/v1";
-import { ago, isHail, sourceLabel, TaskActions } from "@/ui/kit";
+import { ago, elapsed, isHail, sourceLabel, TaskActions } from "@/ui/kit";
 import { ContextChip, kindLine, Lamp, whoOf } from "./common";
 import { freeU, planRing, waitAngle } from "./model";
 
@@ -239,7 +239,7 @@ function NowDisplay({
           className="ml-auto shrink-0 font-semibold"
           style={{ color: accent }}
         >
-          {ago(now.since)}째 기다림
+          {elapsed(now.since)} 기다림
         </span>
       </div>
       <div

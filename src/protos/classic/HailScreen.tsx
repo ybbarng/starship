@@ -4,9 +4,9 @@
 // 출처마다 다른 함교 그림 + 보낸 사람 · 한 줄 · 기다린 시간 + 응답(창으로 가기) · 1시간 뒤 · 치우기.
 import type { Hail, Task } from "@/protocol/v1";
 import {
-  ago,
   CONTEXT_COLOR,
   CONTEXT_LABEL,
+  elapsed,
   sourceLabel,
   useTaskButtons,
 } from "@/ui/kit";
@@ -124,7 +124,7 @@ export function HailScreen({
           <span className="font-semibold text-white/90">{hail.from.name}</span>
           <span>· {service}</span>
           <span className="ml-auto tabular-nums text-[#ffd84a]">
-            {ago(hail.since, now)}째
+            {elapsed(hail.since, now)}
           </span>
         </div>
         <p className="mt-1 line-clamp-2 text-[15px] leading-snug font-medium text-white">

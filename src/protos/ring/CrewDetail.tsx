@@ -8,6 +8,7 @@ import {
   ago,
   CONTEXT_LABEL,
   CREW_STATUS_LABEL,
+  elapsed,
   KIND_LABEL,
   sourceLabel,
   TaskActions,
@@ -50,7 +51,7 @@ export function CrewDetail({ crew }: { crew: Crew }) {
           </div>
           <div className="mt-0.5 text-xs text-white/60">
             {CREW_STATUS_LABEL[crew.status]}
-            {crew.since ? ` · ${ago(crew.since)}째` : ""}
+            {crew.since ? ` · ${elapsed(crew.since)}` : ""}
             {crew.activity ? ` · ${crew.activity}` : ""}
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -102,7 +103,7 @@ export function CrewDetail({ crew }: { crew: Crew }) {
                   <span className="min-w-0">
                     <span className="block text-[11px] text-white/50">
                       {KIND_LABEL[t.kind]} · {sourceLabel(t.source)} ·{" "}
-                      {ago(t.since)}째
+                      {elapsed(t.since)}
                     </span>
                     <span className="block leading-snug">{t.title}</span>
                   </span>
@@ -193,7 +194,7 @@ export function HailList({ focusId }: { focusId?: string }) {
                 <span>· {h.from.where}</span>
               )}
               <span>· {sourceLabel(h.source)}</span>
-              <span className="ml-auto">{ago(h.since)}째</span>
+              <span className="ml-auto">{elapsed(h.since)}</span>
             </div>
             <div className="mt-1.5 text-[15px] leading-snug">{h.line}</div>
             {task ? (

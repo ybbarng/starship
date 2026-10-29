@@ -11,6 +11,7 @@ import {
   CONTEXT_COLOR,
   CONTEXT_LABEL,
   CREW_STATUS_LABEL,
+  elapsed,
   KIND_LABEL,
   sourceLabel,
 } from "@/ui/kit";
@@ -133,7 +134,7 @@ function CrewHeader({ crew, clock }: { crew: Crew; clock: number }) {
             style={{ background: STATUS_DOT[crew.status] }}
           />
           {CREW_STATUS_LABEL[crew.status]}
-          {crew.since ? ` · ${ago(crew.since, clock)}째` : ""}
+          {crew.since ? ` · ${elapsed(crew.since, clock)}` : ""}
         </div>
         {crew.activity && (
           <div className="text-[13px] text-white/55">{crew.activity}</div>
@@ -264,7 +265,7 @@ function CheckItem({ task, clock }: { task: Task; clock: number }) {
       >
         <div className="text-[11px] text-white/50">
           {KIND_LABEL[task.kind]} · {sourceLabel(task.source)} · {task.from} ·{" "}
-          {ago(task.since, clock)}째
+          {elapsed(task.since, clock)}
         </div>
         <div className="leading-snug" data-task-title>
           {task.title}

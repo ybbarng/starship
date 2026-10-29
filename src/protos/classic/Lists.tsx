@@ -6,6 +6,7 @@ import {
   ago,
   CONTEXT_COLOR,
   CONTEXT_LABEL,
+  elapsed,
   isHail,
   KIND_LABEL,
   sourceLabel,
@@ -58,7 +59,7 @@ export function AllTasksList({
               {sourceLabel(t.source)}
             </span>
             <span className="ml-auto text-[#ffd84a]">
-              {ago(t.since, now)}째
+              {elapsed(t.since, now)}
             </span>
           </div>
           <div className="mt-1 pl-6 font-medium">{t.title}</div>
@@ -148,7 +149,7 @@ export function HailsList({
               <span>· {sourceLabel(h.source)}</span>
               <span>· {BRIDGE_NAME[b]}</span>
               <span className="ml-auto text-[#ffd84a]">
-                {ago(h.since, now)}째
+                {elapsed(h.since, now)}
               </span>
             </div>
             <div className="mt-1 font-medium">“{h.line}”</div>

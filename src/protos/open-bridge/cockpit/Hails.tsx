@@ -12,6 +12,7 @@ import {
   ago,
   CONTEXT_COLOR,
   CONTEXT_LABEL,
+  elapsed,
   sourceLabel,
   TaskActions,
 } from "@/ui/kit";
@@ -205,7 +206,7 @@ export function HailScreen({
           <span className="font-semibold text-white/90">{hail.from.name}</span>
           <span className="truncate">· {hail.from.where ?? service}</span>
           <span className="ml-auto shrink-0 font-mono tabular-nums text-[#ffd98a]/80">
-            {ago(hail.since, now)}째
+            {elapsed(hail.since, now)}
           </span>
         </div>
         <p className="mt-1.5 text-[15px] leading-snug font-medium text-white">

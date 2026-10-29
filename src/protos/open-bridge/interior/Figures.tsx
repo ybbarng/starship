@@ -6,7 +6,7 @@
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import type { Crew, Task } from "@/protocol/v1";
 import { Animal, animalFor, type Pose } from "@/ui/crew";
-import { ago, CONTEXT_COLOR, CREW_STATUS_LABEL } from "@/ui/kit";
+import { CONTEXT_COLOR, CREW_STATUS_LABEL, elapsed } from "@/ui/kit";
 import { type Deck, FIXTURES, SLAB } from "./geometry";
 import type { ModuleLayout } from "./layout";
 
@@ -153,7 +153,7 @@ function Bubble({
         </div>
         {wait && (
           <div className="text-[9px] leading-tight font-semibold text-[#a06e00]">
-            {wait}째 기다림
+            {wait} 기다림
           </div>
         )}
         <span
@@ -388,7 +388,7 @@ export function ModuleCrew({
               bottom={headTop - 4}
               tailX={d.standX ?? d.deskX}
               text={t?.title ?? d.crew.activity ?? "불러요"}
-              wait={d.crew.since ? ago(d.crew.since, clock) : ""}
+              wait={d.crew.since ? elapsed(d.crew.since, clock) : ""}
               onOpen={() => onSelect(d.crew.id)}
             />
           );

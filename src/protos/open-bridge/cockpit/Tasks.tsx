@@ -9,6 +9,7 @@ import {
   ago,
   CONTEXT_COLOR,
   CONTEXT_LABEL,
+  elapsed,
   KIND_LABEL,
   sourceLabel,
   TaskActions,
@@ -244,7 +245,7 @@ function Meta({ task, crew, now }: { task: Task; crew: string; now: number }) {
       <span>· {KIND_LABEL[task.kind]}</span>
       <span className="truncate">· {sourceLabel(task.source)}</span>
       <span className="ml-auto shrink-0 font-mono tabular-nums text-[#ffd98a]/80">
-        {ago(task.since, now)}째
+        {elapsed(task.since, now)}
       </span>
     </div>
   );

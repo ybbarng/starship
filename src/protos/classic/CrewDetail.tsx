@@ -11,6 +11,7 @@ import {
   CONTEXT_COLOR,
   CONTEXT_LABEL,
   CREW_STATUS_LABEL,
+  elapsed,
   KIND_LABEL,
   sourceLabel,
 } from "@/ui/kit";
@@ -38,7 +39,7 @@ export function CrewHeader({ crew, now }: { crew: Crew; now: number }) {
         </div>
         <div className="mt-0.5 text-sm text-white/65">
           <StatusDot status={crew.status} /> {CREW_STATUS_LABEL[crew.status]}
-          {crew.since ? ` · ${ago(crew.since, now)}째` : ""}
+          {crew.since ? ` · ${elapsed(crew.since, now)}` : ""}
           {crew.activity ? ` · ${crew.activity}` : ""}
         </div>
       </div>
@@ -178,7 +179,7 @@ function CheckItem({ task, now }: { task: Task; now: number }) {
       >
         <div className="text-[11px] text-white/50">
           {KIND_LABEL[task.kind]} · {sourceLabel(task.source)} ·{" "}
-          {ago(task.since, now)}째
+          {elapsed(task.since, now)}
         </div>
         <div className="leading-snug">{task.title}</div>
       </div>

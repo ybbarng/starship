@@ -73,3 +73,12 @@ export function ago(since: number, now = Date.now()): string {
   if (h < 24) return `${h}시간`;
   return `${Math.floor(h / 24)}일`;
 }
+
+/**
+ * 얼마나 이어졌나: "23분째", "2시간째". 1분이 안 됐으면 "방금부터".
+ * ago() 뒤에 "째"를 바로 붙이면 "방금째"가 되므로 이것을 쓴다.
+ */
+export function elapsed(since: number, now = Date.now()): string {
+  const a = ago(since, now);
+  return a === "방금" ? "방금부터" : `${a}째`;
+}

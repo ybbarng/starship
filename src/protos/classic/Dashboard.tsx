@@ -6,6 +6,7 @@ import {
   ago,
   CONTEXT_COLOR,
   CONTEXT_LABEL,
+  elapsed,
   isHail,
   KIND_LABEL,
   sourceLabel,
@@ -242,7 +243,7 @@ function MainDisplay({
                 · {sourceLabel(task.source)}
               </span>
               <span className="ml-auto shrink-0 rounded bg-[#ffd84a]/12 px-1.5 font-semibold text-[#ffd84a] tabular-nums">
-                {ago(task.since, now)}째 기다림
+                {elapsed(task.since, now)} 기다림
               </span>
             </div>
             <h2 className="mt-1.5 line-clamp-2 text-[27px] leading-[1.25] font-semibold tracking-[-0.01em] text-white">
