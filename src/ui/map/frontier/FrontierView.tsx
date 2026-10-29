@@ -34,13 +34,17 @@ import {
   centerOn,
   clampCamera,
   DRAG_THRESHOLD,
+  type EdgeAsk,
+  type EdgeTag,
   ease,
   FLY_MS,
   fitCamera,
   fitScale,
+  isOnScreen,
   lerpCamera,
   panBy,
   parseCamera,
+  placeEdgeTags,
   type Stage,
   stageFor,
   type Viewport,
@@ -811,6 +815,67 @@ function Scene({
   // 오른쪽 위 카메라 단추 자리
   const toolbar: Rect = { x: w - 180, y: 0, w: 180, h: 96 };
   obstacles.push(toolbar);
+
+  /* ── 화면 밖 표: 확대해서 지금 여기·내 갈림길·막힌 땅·지역이 화면 밖이면 가장자리에 ── */
+  type EdgeItem = EdgeAsk & {
+    regionId: string;
+    kind: "here" | "fork" | "blocked" | "terr";
+    text: string;
+    sub?: string;
+    color: string;
+  };
+  const edgeAsks: EdgeItem[] = [];
+  const screenRect: Rect = { x: 0, y: 0, w, h: h - CAPTION_H };
+  const offScreen = (p: P) => !isOnScreen(p, screenRect, 6);
+  const edgeItem = (
+    kind: EdgeItem["kind"],
+    regionId: string,
+    target: P,
+    text: string,
+    color: string,
+  ): EdgeItem => ({
+    id: `${kind}:${regionId}`,
+    regionId,
+    kind,
+    target,
+    text,
+    color,
+    w: textWidth(text, 11) + 30,
+    h: 20,
+  });
+  if (map.here && hereCenter && offScreen(hereCenter))
+    edgeAsks.push(
+      edgeItem("here", map.here, hereCenter, "🐾 지금 여기", "#7ce0ff"),
+    );
+  for (const f of flagSpots) {
+    if (!offScreen(f.p)) continue;
+    const r = byId.get(f.id);
+    const sign = r ? activeSigns(r).find(isForkForMe) : undefined;
+    edgeAsks.push(
+      edgeItem(
+        "fork",
+        f.id,
+        f.p,
+        `⑂ ${clip(sign?.title ?? r?.title ?? f.id, 12)}`,
+        "#ffd84a",
+      ),
+    );
+  }
+  for (const l of layout.leaves) {
+    if (!visible(l.region.id) || statusOf(l.region) !== "blocked") continue;
+    const c = spots.get(l.region.id)?.center;
+    if (!c || !offScreen(c)) continue;
+    edgeAsks.push(
+      edgeItem(
+        "blocked",
+        l.region.id,
+        c,
+        `⛔ ${clip(l.region.title, 10)}`,
+        "#ff6b6b",
+      ),
+    );
+  }
+
   const terrAsks: (LabelAsk & { text: string; color: string; sub: string })[] =
     [];
   for (const t of layout.territories) {
@@ -820,22 +885,56 @@ function Scene({
     if (cells.length === 0) continue;
     const a = (t.angle * Math.PI) / 180;
     const dir = { x: Math.cos(a), y: Math.sin(a) };
-    let far = 0;
-    for (const c of cells) {
-      const p = toPixel(c);
-      far = Math.max(far, p.x * dir.x + p.y * dir.y);
-    }
     const doneCells = layout.leaves
       .filter((l) => l.territory === t.region.id && visible(l.region.id))
       .filter((l) => statusOf(l.region) === "done")
       .reduce((n, l) => n + l.cells.length, 0);
-    const text = clip(t.region.title, 10);
     const sub = `완공 ${doneCells}/${cells.length}`;
+    // 지역이 통째로 화면 밖이면 가장자리 표로 방향을 알린다
+    const shown = cells.map(px).filter((p) => inView(p));
+    if (shown.length === 0) {
+      const ps = cells.map(px);
+      const text = clip(t.region.title, 8);
+      edgeAsks.push({
+        id: `terr:${t.region.id}`,
+        regionId: t.region.id,
+        kind: "terr",
+        target: {
+          x: ps.reduce((n, p) => n + p.x, 0) / ps.length,
+          y: ps.reduce((n, p) => n + p.y, 0) / ps.length,
+        },
+        text,
+        sub,
+        color: colorOf(t.region.id),
+        w: textWidth(text, 12) + textWidth(sub, 10) + 36,
+        h: 20,
+      });
+      continue;
+    }
+    // 이름표는 지역 끝 너머에. 확대해서 끝이 화면 밖이면 보이는 칸 가운데 가장 먼 칸 너머에
+    let far = 0;
+    let farShown = Number.NEGATIVE_INFINITY;
+    let farShownP: P | undefined;
+    for (const c of cells) {
+      const p = toPixel(c);
+      const k = p.x * dir.x + p.y * dir.y;
+      far = Math.max(far, k);
+      const sp = px(c);
+      if (inView(sp) && k > farShown) {
+        farShown = k;
+        farShownP = sp;
+      }
+    }
+    const text = clip(t.region.title, 10);
     const fs = 13;
     const tw = textWidth(text, fs) + textWidth(sub, 10.5) + 22;
     const d = (far + 1.05) * s;
     let ax = center.x + dir.x * d;
     let ay = center.y + dir.y * d;
+    if (!inView({ x: ax, y: ay }) && farShownP) {
+      ax = farShownP.x + dir.x * s * 0.9;
+      ay = farShownP.y + dir.y * s * 0.9;
+    }
     ax = Math.min(
       bounds.x + bounds.w - tw / 2 - 2,
       Math.max(bounds.x + tw / 2 + 2, ax),
@@ -851,7 +950,13 @@ function Scene({
       color: colorOf(t.region.id),
     });
   }
-  const terrPlaced = placeLabels(terrAsks, bounds, [toolbar], 0);
+  const edgeTags = placeEdgeTags(
+    edgeAsks,
+    { x: 6, y: 6, w: w - 12, h: h - CAPTION_H - 10 },
+    [toolbar, { x: 0, y: h - CAPTION_H - 6, w: w * 0.5, h: CAPTION_H + 6 }],
+  ) as (EdgeTag & EdgeItem)[];
+  obstacles.push(...edgeTags);
+  const terrPlaced = placeLabels(terrAsks, bounds, [toolbar, ...edgeTags], 0);
   // 자리가 없던 지역 이름표도 버리지 않고 제자리에 둔다(늘 보여야 한다)
   const terrLabels: (PlacedLabel & {
     text: string;
@@ -1476,6 +1581,64 @@ function Scene({
             fill={l.kind === "fork" ? "#ffe58a" : "rgba(214,236,255,0.85)"}
           >
             {l.text}
+          </text>
+        </g>
+      ))}
+      {/* 화면 밖 표: 누르면 그리로 날아가 고른다 */}
+      {edgeTags.map((t) => (
+        // biome-ignore lint/a11y/useSemanticElements: SVG 안이라 button을 쓸 수 없다
+        <g
+          key={t.id}
+          data-edge-tag={t.id}
+          role="button"
+          tabIndex={0}
+          aria-label={`${t.text}${t.sub ? ` ${t.sub}` : ""}, 화면 밖. 누르면 그리로 가요`}
+          className="cursor-pointer"
+          onClick={(e) => {
+            e.stopPropagation();
+            onVisit(t.regionId);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              e.stopPropagation();
+              onVisit(t.regionId);
+            }
+          }}
+        >
+          <title>{byId.get(t.regionId)?.title ?? t.regionId}</title>
+          <rect
+            x={t.x}
+            y={t.y}
+            width={t.w}
+            height={t.h}
+            rx={t.h / 2}
+            fill="rgba(8,8,14,0.9)"
+            stroke={t.color}
+            strokeWidth={t.kind === "terr" ? 1.4 : 1.2}
+            strokeDasharray={t.kind === "terr" ? "4 2" : undefined}
+          />
+          <text
+            x={t.x + 9}
+            y={t.y + 14}
+            fontSize={t.kind === "terr" ? 12 : 11}
+            fontWeight={t.kind === "terr" ? 700 : 600}
+            fill={t.color}
+          >
+            {t.text}
+            {t.sub && (
+              <tspan
+                dx="5"
+                fontSize="10"
+                fontWeight="500"
+                fill="rgba(255,255,255,0.55)"
+              >
+                {t.sub}
+              </tspan>
+            )}
+            <tspan dx="5" fill="#fff">
+              {t.arrow}
+            </tspan>
           </text>
         </g>
       ))}
