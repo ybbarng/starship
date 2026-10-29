@@ -32,7 +32,6 @@ import {
   ringOf,
   textWidth,
   toPixel,
-  wedgeAngle,
 } from "./hex";
 
 /** 지역 색. 지도에 적힌 차례대로 고른다. 상태 색(초록·빨강·노랑)과 겹치지 않게 골랐다 */
@@ -346,7 +345,7 @@ function Scene({
       owner.has(hexKey(c)),
     );
     if (cells.length === 0) continue;
-    const a = (wedgeAngle(t.wedge) * Math.PI) / 180;
+    const a = (t.angle * Math.PI) / 180;
     const dir = { x: Math.cos(a), y: Math.sin(a) };
     let far = 0;
     for (const c of cells) {

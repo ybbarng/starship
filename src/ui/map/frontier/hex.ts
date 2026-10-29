@@ -3,15 +3,15 @@
 //
 // 규칙
 // - 칸은 위아래가 납작한 육각형(flat-top). 가운데 칸과 그 둘레 첫 고리(7칸)는 착륙장이다.
-// - 둘레를 여섯 부채꼴로 나눈다. 고리 n에서 부채꼴 하나는 칸 n개를 가진다(고리를 따라 도는 변 하나).
-// - 맨 위 구역(지역)은 지도에 적힌 차례대로 부채꼴을 하나씩 맡는다: 왼쪽, 오른쪽, 오른쪽 위, 왼쪽 아래, 왼쪽 위, 오른쪽 아래.
-//   마주 보는 쪽부터 채워 지역이 적어도 한쪽으로 쏠리지 않고, 지역을 더해도 앞 지역의 부채꼴은 그대로다.
+// - 맨 위 구역(지역) n개가 둘레를 같은 각도(360/n도)로 나눠 부채꼴 하나씩 맡는다.
+//   첫 지역은 왼쪽(180도)을 가운데로 두고, 지도에 적힌 차례대로 시계 방향으로 이어 간다.
+//   칸은 그 가운데의 방향 각도로 부채꼴이 정해진다. 그래서 지역 수와 상관없이 빈 부채꼴이 없다.
 // - 지역 안에서는 처음 계획한 구역(found 없음)을 지도 차례대로, 그다음 발견 구역을 발견한 날 차례대로 놓는다.
 //   앞 구역부터 착륙장에 가까운 칸을 차지하니 계획은 안쪽, 발견은 바깥에 붙는다.
 //   새 구역은 늘 맨 뒤에 오므로 이미 놓인 칸은 움직이지 않는다.
 // - 칸을 받는 것은 자식이 없는 구역(잎)뿐이다. 자식이 있는 구역은 자손 칸을 모은 덩어리로 본다.
 // - 버린 구역도 칸을 받는다(그리는 쪽이 숨긴다). 그래야 "버린 구역 보기"를 켜고 꺼도 다른 칸이 그대로다.
-// 맨 위 구역이 일곱 개를 넘으면 부채꼴을 나눠 쓰고, 이때는 앞 지역이 커질 때 뒤 지역이 밀릴 수 있다.
+// 맨 위 구역을 더하거나 빼면 모든 지역의 부채꼴 각도가 다시 나뉜다(드문 일). 설계: docs/frontier.md "배치".
 import { childrenOf, type ProjectMap, type Region } from "@/protocol/map";
 
 export type Hex = { q: number; r: number };
@@ -68,59 +68,47 @@ export const EDGE_DIRS: readonly Hex[] = Array.from({ length: 6 }, (_, i) => {
 
 /** 착륙장 고리(가운데 + 첫 고리) */
 export const PAD_RINGS = 1;
-/** 부채꼴을 미리 펼쳐 둘 고리 수. 칸 합이 수천이 되어도 넉넉하다 */
+/** 땅이 뻗을 수 있는 가장 바깥 고리. 칸 합이 수천이 되어도 넉넉하다 */
 const MAX_RING = 48;
 
-/** 고리 n을 도는 칸들. side는 고리의 몇 번째 변인가(= 부채꼴 번호) */
-function ringCells(n: number): { hex: Hex; side: number }[] {
-  const out: { hex: Hex; side: number }[] = [];
+/** 고리 n을 도는 칸들 */
+function ringCells(n: number): Hex[] {
+  const out: Hex[] = [];
   let cur: Hex = { q: (DIRS[4]?.q ?? 0) * n, r: (DIRS[4]?.r ?? 0) * n };
   for (let side = 0; side < 6; side++) {
     for (let j = 0; j < n; j++) {
-      out.push({ hex: cur, side });
+      out.push(cur);
       cur = add(cur, DIRS[side] ?? { q: 0, r: 0 });
     }
   }
   return out;
 }
 
-let wedgeCache: Map<string, number> | null = null;
-/** 칸 → 부채꼴 번호(0..5). 착륙장은 -1 */
-export function wedgeOf(h: Hex): number {
-  if (!wedgeCache) {
-    wedgeCache = new Map();
-    for (let n = 1; n <= MAX_RING; n++)
-      for (const c of ringCells(n)) wedgeCache.set(hexKey(c.hex), c.side);
-  }
+/** 첫 지역 부채꼴의 가운데 방향(도). 화면 좌표라 y가 아래로 가고, 각도가 늘면 시계 방향이다 */
+const FIRST_ANGLE = 180;
+
+/** 지역 i의 부채꼴 가운데 방향(화면 좌표, 도 단위 -180 초과 180 이하). 지역 n개가 360/n도씩 나눠 갖는다 */
+export function wedgeAngle(index: number, count: number): number {
+  const a = FIRST_ANGLE + (index * 360) / Math.max(1, count);
+  const n = ((a % 360) + 360) % 360;
+  return n > 180 ? n - 360 : n;
+}
+
+/**
+ * 칸 → 부채꼴 번호(0..count-1). 착륙장은 -1.
+ * 칸 가운데의 방향 각도로 정한다. 경계에 딱 걸친 칸은 내림해 시계 방향 앞쪽 부채꼴에 든다.
+ */
+export function wedgeOf(h: Hex, count: number): number {
   if (ringOf(h) <= PAD_RINGS) return -1;
-  return wedgeCache.get(hexKey(h)) ?? -1;
+  const n = Math.max(1, count);
+  const step = 360 / n;
+  const p = toPixel(h);
+  const a = (Math.atan2(p.y, p.x) * 180) / Math.PI;
+  // 첫 부채꼴의 시작 경계에서 시계 방향으로 몇 도인가
+  const from = (((a - (FIRST_ANGLE - step / 2)) % 360) + 360) % 360;
+  // 부동소수 오차로 경계 칸이 흔들리지 않게 아주 조금 더한다
+  return Math.floor(from / step + 1e-9) % n;
 }
-
-/** 부채꼴 가운데 방향(화면 좌표, y 아래로). 도 단위 -180..180 */
-export function wedgeAngle(side: number): number {
-  const cells = ringCells(1);
-  const a = cells[side]?.hex ?? { q: 0, r: 0 };
-  const b = cells[(side + 1) % 6]?.hex ?? { q: 0, r: 0 };
-  const pa = toPixel(a);
-  const pb = toPixel(b);
-  return (Math.atan2(pa.y + pb.y, pa.x + pb.x) * 180) / Math.PI;
-}
-
-/** 맨 위 구역이 맡을 부채꼴 차례: 왼쪽, 오른쪽, 오른쪽 위, 왼쪽 아래, 왼쪽 위, 오른쪽 아래 */
-const SLOT_ANGLES = [180, 0, -60, 120, -120, 60];
-export const WEDGE_SLOTS: readonly number[] = SLOT_ANGLES.map((want) => {
-  let best = 0;
-  let bestD = Number.POSITIVE_INFINITY;
-  for (let side = 0; side < 6; side++) {
-    let d = Math.abs(wedgeAngle(side) - want);
-    if (d > 180) d = 360 - d;
-    if (d < bestD) {
-      bestD = d;
-      best = side;
-    }
-  }
-  return best;
-});
 
 /* ───────────── 배치 ───────────── */
 
@@ -138,7 +126,10 @@ export type FrontierTerritory = {
   region: Region;
   /** 지도에 적힌 차례(색을 고를 때 쓴다) */
   index: number;
+  /** 부채꼴 번호. 지도에 적힌 차례와 같다 */
   wedge: number;
+  /** 부채꼴 가운데 방향(화면 좌표, 도) */
+  angle: number;
 };
 
 export type FrontierLayout = {
@@ -197,12 +188,16 @@ export function layoutFrontier(map: ProjectMap): FrontierLayout {
   const owner = new Map<string, string>();
   const leaves: FrontierLeaf[] = [];
   const territories: FrontierTerritory[] = [];
+  const count = tops.length;
   const isFree = (h: Hex, wedge: number) =>
-    !occupied.has(hexKey(h)) && wedgeOf(h) === wedge && ringOf(h) <= MAX_RING;
+    !occupied.has(hexKey(h)) &&
+    wedgeOf(h, count) === wedge &&
+    ringOf(h) <= MAX_RING;
 
   tops.forEach((top, index) => {
-    const wedge = WEDGE_SLOTS[index % 6] ?? 0;
-    territories.push({ region: top, index, wedge });
+    const wedge = index;
+    const angle = wedgeAngle(index, count);
+    territories.push({ region: top, index, wedge, angle });
     const list = [...(leavesByTop.get(top.id) ?? [])].sort((a, b) => {
       const fa = foundAt(a.r, byId);
       const fb = foundAt(b.r, byId);
@@ -211,12 +206,18 @@ export function layoutFrontier(map: ProjectMap): FrontierLayout {
       if (fa !== undefined && fb !== undefined && fa !== fb) return fa - fb;
       return (order.get(a.r.id) ?? 0) - (order.get(b.r.id) ?? 0);
     });
-    // 이 부채꼴에서 이미 땅이 된 칸(앞 지역 것도). 새 덩어리는 여기나 착륙장에 붙는다.
+    // 이 부채꼴에서 이미 땅이 된 칸. 새 덩어리는 여기나 착륙장에 붙는다.
     const groupCells = new Map<string, Hex[]>();
     const wedgeTaken: Hex[] = [];
+    // 처음 계획 땅의 가장 바깥 고리. 발견 구역은 이보다 바깥에서 시작해 "바깥에 붙는다"
+    let plannedFar = PAD_RINGS;
 
     for (const { r, depth, group } of list) {
       const size = Math.max(1, Math.round(r.size));
+      const isFound = foundAt(r, byId) !== undefined;
+      // 발견 구역이 들어갈 수 있는 가장 안쪽 고리. 자리가 없으면 풀어 준다
+      let minRing = isFound ? plannedFar + 1 : 0;
+      const free = (h: Hex) => isFree(h, wedge) && ringOf(h) >= minRing;
       const mine = groupCells.get(group) ?? [];
       const touches = (h: Hex, set: Hex[]) => {
         const keys = new Set(set.map(hexKey));
@@ -229,13 +230,13 @@ export function layoutFrontier(map: ProjectMap): FrontierLayout {
         for (const b of base)
           for (const n of neighbors(b)) {
             const k = hexKey(n);
-            if (seen.has(k) || !isFree(n, wedge)) continue;
+            if (seen.has(k) || !free(n)) continue;
             seen.add(k);
             out.push(n);
           }
         return out;
       };
-      const padEdge = ringCells(PAD_RINGS).map((c) => c.hex);
+      const padEdge = ringCells(PAD_RINGS);
       const fits = (start: Hex) => {
         // 빈 칸을 따라 size칸까지 닿는가(막힌 주머니에 들어가지 않게)
         const seen = new Set([hexKey(start)]);
@@ -244,7 +245,7 @@ export function layoutFrontier(map: ProjectMap): FrontierLayout {
           const h = queue.shift() as Hex;
           for (const n of neighbors(h)) {
             const k = hexKey(n);
-            if (seen.has(k) || !isFree(n, wedge)) continue;
+            if (seen.has(k) || !free(n)) continue;
             seen.add(k);
             queue.push(n);
           }
@@ -254,7 +255,7 @@ export function layoutFrontier(map: ProjectMap): FrontierLayout {
       const startCost = (h: Hex) => {
         const p = toPixel(h);
         const a = (Math.atan2(p.y, p.x) * 180) / Math.PI;
-        let dev = Math.abs(a - wedgeAngle(wedge));
+        let dev = Math.abs(a - angle);
         if (dev > 180) dev = 360 - dev;
         return Math.hypot(p.x, p.y) + dev * 0.004;
       };
@@ -265,19 +266,28 @@ export function layoutFrontier(map: ProjectMap): FrontierLayout {
             (a, b) => cost(a) - cost(b) || hexKey(a).localeCompare(hexKey(b)),
           )[0];
 
-      let start: Hex | undefined;
-      if (mine.length > 0) start = pick(frontierOf(mine), startCost);
-      if (!start)
-        start = pick(frontierOf([...wedgeTaken, ...padEdge]), startCost);
-      if (!start) {
-        // 둘레가 모두 막혔다: 부채꼴에서 가장 가까운 빈 칸
-        for (let n = PAD_RINGS + 1; n <= MAX_RING && !start; n++)
-          start = pick(
-            ringCells(n)
-              .filter((c) => c.side === wedge)
-              .map((c) => c.hex),
-            startCost,
-          );
+      const findStart = () => {
+        let st: Hex | undefined;
+        if (mine.length > 0) st = pick(frontierOf(mine), startCost);
+        if (!st) st = pick(frontierOf([...wedgeTaken, ...padEdge]), startCost);
+        if (!st) {
+          // 둘레가 모두 막혔다: 부채꼴에서 가장 가까운 빈 칸
+          for (
+            let n = Math.max(PAD_RINGS + 1, minRing);
+            n <= MAX_RING && !st;
+            n++
+          )
+            st = pick(
+              ringCells(n).filter((c) => wedgeOf(c, count) === wedge),
+              startCost,
+            );
+        }
+        return st;
+      };
+      let start = findStart();
+      if (!start && minRing > 0) {
+        minRing = 0;
+        start = findStart();
       }
       if (!start) continue;
 
@@ -302,12 +312,18 @@ export function layoutFrontier(map: ProjectMap): FrontierLayout {
           (a, b) =>
             growCost(a) - growCost(b) || hexKey(a).localeCompare(hexKey(b)),
         )[0];
-        if (!next) break;
+        if (!next) {
+          if (minRing === 0) break;
+          minRing = 0;
+          continue;
+        }
         cells.push(next);
         occupied.add(hexKey(next));
       }
       for (const h of cells) owner.set(hexKey(h), r.id);
       wedgeTaken.push(...cells);
+      if (!isFound)
+        for (const h of cells) plannedFar = Math.max(plannedFar, ringOf(h));
       groupCells.set(group, [...mine, ...cells]);
       leaves.push({ region: r, territory: top.id, group, depth, cells });
     }
