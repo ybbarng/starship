@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { parseDesk } from "@/protocol/desk";
 import { Snapshot } from "@/protocol/v1";
+import { buildDemoDesks } from "./desk";
 import { buildSnapshot, createDemoState, INCOMING_EVERY } from "./scenario";
 
 describe("데모 시나리오", () => {
@@ -31,12 +33,60 @@ describe("데모 시나리오", () => {
     expect(after).toBe(before + 1);
   });
 
-  it("세션 할 일을 치우면 그 승무원은 다시 일하러 간다", () => {
+  it("세션 할 일과 책상 기다림을 모두 치우면 그 승무원은 다시 일하러 간다", () => {
     const state = createDemoState(t0);
     state.dismissed.add("t-orbit-q");
+    const half = buildSnapshot(state, "default", t0);
+    expect(half.crew.find((c) => c.id === "orbit-notes")?.status).toBe(
+      "needs-you",
+    );
+    state.dismissed.add("desk:orbit-notes:format-v2");
     const snap = buildSnapshot(state, "default", t0);
     expect(snap.crew.find((c) => c.id === "orbit-notes")?.status).toBe(
       "working",
     );
+  });
+});
+
+describe("데모 책상", () => {
+  const t0 = 1_800_000_000_000;
+
+  it("기다림마다 Task가 desk:<crewId>:<waitId>로 나가고, 승무원에 요약이 붙는다", () => {
+    const snap = buildSnapshot(createDemoState(t0), "default", t0);
+    const deskTasks = snap.tasks.filter((t) =>
+      t.id.startsWith("desk:web-shop:"),
+    );
+    expect(deskTasks.map((t) => t.id).sort()).toEqual([
+      "desk:web-shop:checkout-motion",
+      "desk:web-shop:coupon-entry",
+      "desk:web-shop:free-ship",
+      "desk:web-shop:prod-push",
+    ]);
+    const approve = deskTasks.find((t) => t.id.endsWith(":prod-push"));
+    expect(approve?.choices).toEqual(["승인", "보류"]);
+    expect(snap.crew.find((c) => c.id === "web-shop")?.desk).toEqual({
+      waiting: 4,
+      doing: 2,
+    });
+  });
+
+  it("답한 기다림은 Task에서도 책상 요약에서도 빠진다", () => {
+    const state = createDemoState(t0);
+    state.dismissed.add("desk:web-shop:prod-push");
+    const snap = buildSnapshot(state, "default", t0);
+    expect(snap.tasks.some((t) => t.id === "desk:web-shop:prod-push")).toBe(
+      false,
+    );
+    expect(snap.crew.find((c) => c.id === "web-shop")?.desk?.waiting).toBe(3);
+  });
+
+  it("데모 책상은 모두 형식 검사를 통과한다", () => {
+    for (const desk of Object.values(buildDemoDesks(t0)))
+      expect(parseDesk(desk).problems).toEqual([]);
+  });
+
+  it("빈 시나리오에는 책상이 없다", () => {
+    const snap = buildSnapshot(createDemoState(t0), "empty", t0);
+    expect(snap.crew.every((c) => c.desk === undefined)).toBe(true);
   });
 });

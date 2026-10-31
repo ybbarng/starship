@@ -1,8 +1,9 @@
 // Starship 프로토콜 v1. 화면(이 앱)과 데이터를 주는 서버 사이의 약속이다.
 // 서버는 GET {base}/v1/snapshot 으로 Snapshot을, POST {base}/v1/actions 로 ActionRequest를 받는다.
-// 승무원 지도는 GET {base}/v1/crew/{id}/map 으로 준다.
+// 승무원 지도는 GET {base}/v1/crew/{id}/map, 책상은 GET {base}/v1/crew/{id}/desk 로 준다.
 // 자세한 설명은 docs/protocol.md.
 import { z } from "zod";
+import { Desk } from "./desk";
 import { ProjectMap } from "./map";
 
 export const PROTOCOL = "starship/1" as const;
@@ -176,6 +177,15 @@ export const Crew = z.object({
       stale: z.boolean(),
     })
     .optional(),
+  /** 책상(starship-desk/1) 요약. 책상이 없으면 생략. 갑판에서 기다림 수가 보인다. */
+  desk: z
+    .object({
+      /** 나를 기다리는 것 수 */
+      waiting: z.number().int().nonnegative(),
+      /** 지금 하는 일 수 */
+      doing: z.number().int().nonnegative(),
+    })
+    .optional(),
 });
 export type Crew = z.infer<typeof Crew>;
 
@@ -192,6 +202,19 @@ export const CrewMapResponse = z.object({
   mapAt: Millis.optional(),
 });
 export type CrewMapResponse = z.infer<typeof CrewMapResponse>;
+
+/**
+ * GET {base}/v1/crew/{id}/desk 응답. 책상 형식은 ./desk.ts(starship-desk/1).
+ * 모양은 지도 응답과 같다: desk가 null이면 책상이 아직 없고, problems는 형식 검사에 걸린 것이다.
+ * 기다림 하나하나는 Task로도 나온다(id는 desk:<crewId>:<waitId>). 답은 그 Task의 answer 동작으로 보낸다.
+ */
+export const CrewDeskResponse = z.object({
+  desk: Desk.nullable(),
+  problems: z.array(z.string()).optional(),
+  /** 책상 파일을 마지막으로 고친 때. */
+  deskAt: Millis.optional(),
+});
+export type CrewDeskResponse = z.infer<typeof CrewDeskResponse>;
 
 export const GaugeStatus = z.enum(["ok", "warn", "error", "off"]);
 export type GaugeStatus = z.infer<typeof GaugeStatus>;

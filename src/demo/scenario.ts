@@ -1,5 +1,6 @@
 // 데모 모드의 지어낸 데이터. 실제 사람·회사·서비스 내용은 없다.
 // 시나리오: default(보통), empty(할 일 0개), busy(승무원 30명·할 일 많음).
+import { type Desk, summarizeDesk } from "@/protocol/desk";
 import { summarizeMap } from "@/protocol/map";
 import {
   type Crew,
@@ -11,6 +12,7 @@ import {
   type TaskAction,
   type TaskKind,
 } from "@/protocol/v1";
+import { buildDemoDesks, deskTasks, visibleDesk } from "./desk";
 import { buildDemoLink, type LinkMode } from "./link";
 import {
   buildBigDemoMap,
@@ -114,6 +116,25 @@ const BRIEFS: Record<string, NonNullable<Crew["brief"]>> = {
     at: 0,
   },
 };
+
+/** 이 자리에서 보이는 데모 책상들. 답하거나 치우거나 미룬 기다림은 빠진다. */
+export function demoDesks(
+  state: DemoState,
+  now = Date.now(),
+): Record<string, Desk> {
+  const hidden = (id: string) =>
+    state.dismissed.has(id) || (state.snoozed.get(id) ?? 0) > now;
+  return Object.fromEntries(
+    Object.entries(buildDemoDesks(now)).map(([id, desk]) => [
+      id,
+      visibleDesk(id, desk, hidden),
+    ]),
+  );
+}
+
+function crewContext(id: string): Crew["context"] {
+  return CREW.find((c) => c.id === id)?.context ?? "personal";
+}
 
 function crewName(id: string) {
   return id;
@@ -322,22 +343,30 @@ export function buildSnapshot(
   const visible = seeds.filter(
     (s) => !state.dismissed.has(s.id) && (state.snoozed.get(s.id) ?? 0) <= now,
   );
+  const desks = scenario === "empty" ? {} : demoDesks(state, now);
 
   const tasks: Task[] = visible
-    .map((s) => ({
-      id: s.id,
-      kind: s.kind,
-      source: s.source,
-      context: s.context,
-      title: s.title,
-      detail: s.detail,
-      from: s.from,
-      crewId: s.crewId,
-      since: now - s.ago,
-      actions: actionsFor(s),
-      choices: s.choices,
-      url: s.url,
-    }))
+    .map(
+      (s): Task => ({
+        id: s.id,
+        kind: s.kind,
+        source: s.source,
+        context: s.context,
+        title: s.title,
+        detail: s.detail,
+        from: s.from,
+        crewId: s.crewId,
+        since: now - s.ago,
+        actions: actionsFor(s),
+        choices: s.choices,
+        url: s.url,
+      }),
+    )
+    .concat(
+      Object.entries(desks).flatMap(([id, desk]) =>
+        deskTasks(id, desk, crewContext(id), now),
+      ),
+    )
     .sort((a, b) => RANK[a.kind] - RANK[b.kind] || a.since - b.since);
 
   const hails: Hail[] = tasks
@@ -384,6 +413,7 @@ export function buildSnapshot(
     const status =
       c.status === "needs-you" && !waiting.has(c.id) ? "working" : c.status;
     const brief = BRIEFS[c.id];
+    const desk = desks[c.id] as Desk | undefined;
     return {
       id: c.id,
       name: crewName(c.id),
@@ -401,6 +431,7 @@ export function buildSnapshot(
           : c.id === DEMO_BIG_MAP_CREW
             ? bigMapSummary
             : undefined,
+      desk: desk ? summarizeDesk(desk) : undefined,
     };
   });
 

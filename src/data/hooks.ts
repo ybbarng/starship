@@ -6,6 +6,8 @@ import {
   type ActionRequest,
   ActionResult,
   type Crew,
+  type CrewDeskResponse,
+  CrewDeskResponse as CrewDeskResponseSchema,
   type CrewMapResponse,
   CrewMapResponse as CrewMapResponseSchema,
   type Snapshot,
@@ -78,6 +80,24 @@ export function useCrewMap(crewId: string) {
   });
 }
 
+async function fetchCrewDesk(crewId: string): Promise<CrewDeskResponse> {
+  const res = await fetch(
+    `/api/v1/crew/${encodeURIComponent(crewId)}/desk${scenarioParam()}`,
+    { cache: "no-store" },
+  );
+  if (!res.ok) throw new Error(`desk ${res.status}`);
+  return CrewDeskResponseSchema.parse(await res.json());
+}
+
+/** 승무원 하나의 책상. 세션이 자주 고치니 스냅샷처럼 5초마다 다시 읽는다. */
+export function useCrewDesk(crewId: string) {
+  return useQuery({
+    queryKey: ["crew-desk", crewId],
+    queryFn: () => fetchCrewDesk(crewId),
+    refetchInterval: 5_000,
+  });
+}
+
 /** 5초마다 새로 읽는 전체 상태. */
 export function useSnapshot() {
   return useQuery({
@@ -129,6 +149,7 @@ export function useAct() {
       if (result.openUrl) window.open(result.openUrl, "_blank", "noopener");
       if (result.note) toast(result.note, result.ok ? "ok" : "error");
       client.invalidateQueries({ queryKey: ["snapshot"] });
+      client.invalidateQueries({ queryKey: ["crew-desk"] });
     },
     onError: () => toast("요청을 보내지 못했어요", "error"),
   });

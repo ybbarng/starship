@@ -12,12 +12,15 @@ import {
   buildSnapshot,
   createDemoState,
   type DemoState,
+  demoDesks,
   type Scenario,
 } from "@/demo/scenario";
+import { parseDesk } from "@/protocol/desk";
 import { parseMap } from "@/protocol/map";
 import {
   type ActionRequest,
   ActionResult,
+  CrewDeskResponse,
   CrewMapResponse,
   Snapshot,
 } from "@/protocol/v1";
@@ -100,6 +103,41 @@ export async function getCrewMap(
 
 /** 지도 응답에서 map만 아직 검사하지 않은 껍데기. */
 const MapEnvelope = CrewMapResponse.extend({ map: z.unknown() });
+
+/**
+ * 승무원 하나의 책상. 서버 연결 모드는 {base}/v1/crew/{id}/desk 를 그대로 중계한다.
+ * 데모 모드는 자리(seat)의 상태를 써서, 답한 기다림이 책상에서도 빠진다.
+ */
+export async function getCrewDesk(
+  crewId: string,
+  seat = "default",
+  now = Date.now(),
+): Promise<CrewDeskResponse> {
+  const info = sourceInfo();
+  if (info.mode === "demo") {
+    const desk = demoDesks(demoState(seat), now)[crewId];
+    return desk ? { desk, deskAt: Date.parse(desk.updatedAt) } : { desk: null };
+  }
+  const res = await fetch(
+    `${info.base}/v1/crew/${encodeURIComponent(crewId)}/desk`,
+    { cache: "no-store" },
+  );
+  if (res.status === 404) return { desk: null };
+  if (!res.ok) throw new Error(`desk ${res.status}`);
+  const body = DeskEnvelope.parse(await res.json());
+  if (body.desk === null) return { ...body, desk: null };
+  const parsed = parseDesk(body.desk);
+  return parsed.ok
+    ? { ...body, desk: parsed.desk }
+    : {
+        ...body,
+        desk: null,
+        problems: [...(body.problems ?? []), ...parsed.problems],
+      };
+}
+
+/** 책상 응답에서 desk만 아직 검사하지 않은 껍데기. */
+const DeskEnvelope = CrewDeskResponse.extend({ desk: z.unknown() });
 
 export async function runAction(
   req: ActionRequest,
