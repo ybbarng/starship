@@ -6,7 +6,8 @@
 // 처음 treemap(MapView)은 /proto/cabin/treemap에 비교용으로 남아 있다.
 import Link from "next/link";
 import { type ComponentType, useEffect, useMemo, useState } from "react";
-import { useBridge, useCrewMap } from "@/data/hooks";
+import { useBridge, useCrewDesk, useCrewMap } from "@/data/hooks";
+import type { Desk } from "@/protocol/desk";
 import {
   droppedIds,
   isForkForMe,
@@ -15,8 +16,9 @@ import {
   type Sign,
   summarizeMap,
 } from "@/protocol/map";
-import type { Crew } from "@/protocol/v1";
+import type { Crew, Task } from "@/protocol/v1";
 import { CrewHeader } from "@/protos/classic/CrewDetail";
+import { DeskPanel } from "@/ui/desk/DeskPanel";
 import { Toasts } from "@/ui/kit";
 import { FrontierView } from "./frontier/FrontierView";
 import { agoLabel, SIGN_ICON } from "./labels";
@@ -42,6 +44,10 @@ export function Cabin({
   const now = useMinuteClock();
   const data = query.data;
   const map = data?.map ?? null;
+  const deskQuery = useCrewDesk(crewId);
+  const desk = deskQuery.data?.desk ?? null;
+  const deskProblems = deskQuery.data?.problems ?? [];
+  const tasks = bridge.tasksByCrew.get(crewId) ?? [];
 
   return (
     <main className="flex h-dvh min-h-[560px] flex-col bg-hull-950 text-white">
@@ -86,24 +92,52 @@ export function Cabin({
         </div>
       )}
 
+      {deskProblems.length > 0 && (
+        <div
+          data-desk-problems
+          className="border-b border-[#ff6b6b]/30 bg-[#ff6b6b]/10 px-4 py-1.5 text-[12px] text-[#ffd0d0]"
+          title={deskProblems.join("\n")}
+        >
+          책상 파일이 틀렸어요 ({deskProblems.length}){" "}
+          {desk ? "· 마지막으로 맞았던 책상을 보여요" : ""} ·{" "}
+          <span className="text-white/60">{deskProblems[0]}</span>
+        </div>
+      )}
+
       {query.isLoading ? (
         <Center>지도를 펼치는 중…</Center>
-      ) : query.error && !data ? (
-        <Center>
-          지도를 받아 오지 못했어요 · {String(query.error.message)}
-        </Center>
       ) : map ? (
-        <MapRoom key={crewId} map={map} crew={crew} now={now} View={View} />
+        <MapRoom
+          key={crewId}
+          map={map}
+          crew={crew}
+          crewId={crewId}
+          desk={desk}
+          tasks={tasks}
+          now={now}
+          View={View}
+        />
       ) : (
-        <Center>
-          <div className="text-center">
-            <div className="text-lg text-white/75">지도가 아직 없어요</div>
-            <p className="mt-2 text-[13px] text-white/45">
-              이 프로젝트 저장소에 <code>map.json</code>
-              (starship-map/1)을 두면 여기에 펼쳐져요.
-            </p>
-          </div>
-        </Center>
+        <div className="flex min-h-0 flex-1">
+          <Center>
+            {query.error && !data ? (
+              <>지도를 받아 오지 못했어요 · {String(query.error.message)}</>
+            ) : (
+              <div className="text-center">
+                <div className="text-lg text-white/75">지도가 아직 없어요</div>
+                <p className="mt-2 text-[13px] text-white/45">
+                  이 프로젝트 저장소에 <code>map.json</code>
+                  (starship-map/1)을 두면 여기에 펼쳐져요.
+                </p>
+              </div>
+            )}
+          </Center>
+          {desk && (
+            <aside className="w-[380px] shrink-0 overflow-y-auto border-l border-white/[0.07] px-4 py-4">
+              <DeskPanel crewId={crewId} desk={desk} tasks={tasks} now={now} />
+            </aside>
+          )}
+        </div>
       )}
       <Toasts />
     </main>
@@ -167,18 +201,35 @@ function TopLine({
   );
 }
 
+type SideTab = "desk" | "map";
+
 function MapRoom({
   map,
   crew,
+  crewId,
+  desk,
+  tasks,
   now,
   View,
 }: {
   map: ProjectMap;
   crew?: Crew;
+  crewId: string;
+  desk: Desk | null;
+  tasks: Task[];
   now: number;
   View: ComponentType<MapViewProps>;
 }) {
   const [selected, setSelected] = useState<string | null>(map.here ?? null);
+  // 고르기 전에는 기다리는 것이 있으면 책상, 없으면 지도. 책상이 늦게 와도 따라간다.
+  const [pickedTab, setTab] = useState<SideTab | null>(null);
+  const tab: SideTab = !desk
+    ? "map"
+    : (pickedTab ?? (desk.waiting.length > 0 ? "desk" : "map"));
+  const select = (id: string) => {
+    setTab("map");
+    setSelected(id);
+  };
   const [showDropped, setShowDropped] = useState(false);
   const dropped = useMemo(() => droppedIds(map), [map]);
   const region = map.regions.find((r) => r.id === selected);
@@ -202,7 +253,10 @@ function MapRoom({
             map={map}
             crew={crew}
             selected={visibleSelected?.id ?? null}
-            onSelect={(id) => setSelected((cur) => (cur === id ? null : id))}
+            onSelect={(id) => {
+              setTab("map");
+              setSelected((cur) => (cur === id ? null : id));
+            }}
             showDropped={showDropped}
             now={now}
           />
@@ -233,8 +287,44 @@ function MapRoom({
           )}
         </footer>
       </div>
-      <aside className="w-[340px] shrink-0 overflow-y-auto border-l border-white/[0.07] px-4 py-4">
-        {visibleSelected ? (
+      <aside className="w-[380px] shrink-0 overflow-y-auto border-l border-white/[0.07] px-4 py-4">
+        {desk && (
+          <div
+            data-side-tabs
+            className="mb-4 flex gap-1 rounded-md bg-white/[0.04] p-0.5 text-[12.5px]"
+          >
+            {(["desk", "map"] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                data-side-tab={t}
+                aria-pressed={tab === t}
+                onClick={() => setTab(t)}
+                className={`flex-1 rounded px-2 py-1 ${
+                  tab === t
+                    ? "bg-white/[0.1] font-semibold text-white"
+                    : "text-white/50 hover:text-white/80"
+                }`}
+              >
+                {t === "desk" ? (
+                  <>
+                    책상
+                    {desk.waiting.length > 0 && (
+                      <b className="ml-1.5 rounded-full bg-[#ffd84a] px-1.5 text-[11px] text-hull-950">
+                        {desk.waiting.length}
+                      </b>
+                    )}
+                  </>
+                ) : (
+                  "지도"
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+        {tab === "desk" && desk ? (
+          <DeskPanel crewId={crewId} desk={desk} tasks={tasks} now={now} />
+        ) : visibleSelected ? (
           <RegionPanel
             map={map}
             region={visibleSelected}
@@ -242,12 +332,7 @@ function MapRoom({
             now={now}
           />
         ) : (
-          <Overview
-            map={map}
-            forks={forks}
-            talks={talks}
-            onSelect={setSelected}
-          />
+          <Overview map={map} forks={forks} talks={talks} onSelect={select} />
         )}
       </aside>
     </div>

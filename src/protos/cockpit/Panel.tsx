@@ -185,15 +185,31 @@ export function MapBadge({
   compact?: boolean;
 }) {
   const m = crew.map;
-  if (!m) return null;
-  const pct = Math.round(m.progress * 100);
+  const waiting = crew.desk?.waiting ?? 0;
+  if (!m && waiting === 0) return null;
+  const pct = m ? Math.round(m.progress * 100) : 0;
+  const title = [
+    waiting > 0 && `책상에서 기다리는 것 ${waiting}`,
+    m &&
+      `지도 진행 ${pct}% · 내가 정할 갈림길 ${m.forksForMe}${m.stale ? " · 지도가 오래됨" : ""}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
   return (
     <span
       data-map-badge
       className="ml-auto flex shrink-0 items-center gap-1 text-[10px] tabular-nums"
-      title={`지도 진행 ${pct}% · 내가 정할 갈림길 ${m.forksForMe}${m.stale ? " · 지도가 오래됨" : ""}`}
+      title={title}
     >
-      {compact ? (
+      {waiting > 0 && (
+        <span
+          data-desk-badge
+          className="rounded-full bg-[#ffd84a] px-1 leading-[14px] font-bold text-hull-950"
+        >
+          {waiting}
+        </span>
+      )}
+      {!m ? null : compact ? (
         <span className="pointer-events-none absolute inset-x-1.5 bottom-0 h-[2px] overflow-hidden rounded-full bg-white/10">
           <span
             className={`absolute inset-y-0 left-0 ${m.stale ? "bg-[#ffd84a]/60" : "bg-[#5ee08a]/80"}`}
@@ -205,7 +221,7 @@ export function MapBadge({
           {pct}%
         </span>
       )}
-      {m.forksForMe > 0 && (
+      {m && m.forksForMe > 0 && (
         <span className="font-semibold text-[#ffd84a]">⑂{m.forksForMe}</span>
       )}
     </span>
