@@ -67,6 +67,23 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
 - `problems`가 있으면 서버는 마지막으로 맞았던 지도를 `map`에 그대로 준다(없으면 `null`). 화면은 지도를 그리고 문제를 따로 알린다.
 - Starship은 받은 `map`을 다시 검사한다(id 중복, 없는 parent, 고리, 3단 넘김). 걸리면 `map: null`로 바꾸고 그 문제를 `problems`에 더한다.
 
+### `GET {base}/v1/crew/{id}/desk` → `CrewDeskResponse`
+
+승무원 하나의 책상: 그 세션이 나를 기다리는 것과 지금 하는 일. 선실이 지도 옆에 보인다. 형식 `starship-desk/1`의 원본은 [`src/protocol/desk.ts`](../src/protocol/desk.ts)이고, 뜻은 [`desk.md`](desk.md)에 있다. 모양은 지도 응답과 같다.
+
+```jsonc
+{
+  "desk": { "desk": "starship-desk/1", "updatedAt": "2026-10-31T10:12:00+09:00", "waiting": [/* ... */], "doing": [/* ... */] },
+  "problems": ["waiting.0.options: ..."], // 선택. 형식 검사에 걸린 것
+  "deskAt": 1792900000000                  // 선택. 책상 파일을 마지막으로 고친 때(Unix 밀리초)
+}
+```
+
+- `desk: null`은 책상이 아직 없다는 뜻이다. 404도 같게 본다.
+- `problems`가 있으면 서버는 마지막으로 맞았던 책상을 `desk`에 그대로 준다(없으면 `null`).
+- Starship은 받은 `desk`를 다시 검사한다(waiting id 중복, decide 선택지 2개 미만, check 항목 0개, http(s)가 아닌 주소). 걸리면 `desk: null`로 바꾸고 그 문제를 `problems`에 더한다.
+- **답은 Task로 보낸다.** 서버는 기다림 하나하나를 스냅샷의 Task로도 내보내고, 그 id를 `desk:<crewId>:<waitId>`로 둔다. 선실 카드는 그 Task에 `answer`를 보낸다. 고를 것(`choices`)은 decide가 선택지 `label`들, approve가 `["승인","보류"]`, check가 `["확인함","고칠 것 있음"]`이고, answer는 글로만 답한다. 고른 것에 글을 덧붙이면 `"고칠 것 있음 — 버튼 색이 흐려요"`처럼 ` — `로 잇는다(규칙은 `desk.md` "답하기"). 답을 받은 서버는 그 기다림을 책상과 할 일에서 뺀다.
+
 ## 개념
 
 ### Task — 할 일
@@ -105,6 +122,7 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
 | `brief` | 요약·오늘·다음·위험 |
 | `actions` | `focus` 그 창으로 가기 · `brief` 브리핑 다시 만들기 |
 | `map` | 선택. 지도 요약 `{ progress, regions, found, forksForMe, stale }`. 진행률(0..1), 버림을 뺀 구역 수, 그 가운데 발견 구역 수, 내가 정할 열린 갈림길 수, 지도가 오래됐나. 계산 규칙은 `src/protocol/map.ts`의 `summarizeMap` |
+| `desk` | 선택. 책상 요약 `{ waiting, doing }`. 나를 기다리는 것 수, 지금 하는 일 수. 조종석 승무원 옆에 기다림 수가 보인다 |
 
 ### Gauge — 계기판 등
 

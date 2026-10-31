@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   type Desk,
+  deskAnswer,
   deskChoices,
   deskTaskId,
   parseDesk,
@@ -165,5 +166,18 @@ describe("할 일과 이어 주기", () => {
 
   it("요약은 기다림 수와 하는 일 수", () => {
     expect(summarizeDesk(parsed.desk)).toEqual({ waiting: 1, doing: 0 });
+  });
+});
+
+describe("deskAnswer", () => {
+  it("고른 것과 글을 한 줄로 잇는다", () => {
+    expect(deskAnswer("고칠 것 있음", "버튼 색이\n흐려요 ")).toBe(
+      "고칠 것 있음 — 버튼 색이 흐려요",
+    );
+  });
+  it("하나만 있으면 그것만", () => {
+    expect(deskAnswer("승인")).toBe("승인");
+    expect(deskAnswer(undefined, "3만 원")).toBe("3만 원");
+    expect(deskAnswer(undefined, "  \n ")).toBeUndefined();
   });
 });

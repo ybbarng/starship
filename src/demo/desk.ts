@@ -144,7 +144,7 @@ export function deskTasks(
     from: crewId,
     crewId,
     since: w.since ? Date.parse(w.since) : now,
-    actions: ["focus", "answer", "snooze", "dismiss"],
+    actions: ["focus", "answer", "snooze"],
     choices: deskChoices(w),
   }));
 }

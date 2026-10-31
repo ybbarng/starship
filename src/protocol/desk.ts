@@ -158,3 +158,13 @@ export type DeskSummary = { waiting: number; doing: number };
 export function summarizeDesk(desk: Desk): DeskSummary {
   return { waiting: desk.waiting.length, doing: desk.doing.length };
 }
+
+/**
+ * 카드에서 보낼 answer 글. 고른 것에 글을 덧붙이면 "고른 것 — 글"로 한 줄에 잇는다.
+ * 세션 창에서는 줄바꿈이 곧 보내기라 줄바꿈은 공백으로 바꾼다. 둘 다 비면 undefined.
+ */
+export function deskAnswer(choice?: string, text?: string): string | undefined {
+  const note = (text ?? "").replace(/\s*[\r\n]+\s*/g, " ").trim();
+  if (choice && note) return `${choice} — ${note}`;
+  return choice || note || undefined;
+}
