@@ -9,6 +9,7 @@ import {
   type ChainNode,
   chainNodes,
   dropLine,
+  HOP_MEANING,
   placeLabel,
   VERDICT_LABEL,
   VPN_LABEL,
@@ -211,7 +212,7 @@ function Node({ node }: { node: ChainNode }) {
       data-hop={node.id}
       data-hop-status={node.status}
       className={`flex max-w-[84px] min-w-[52px] shrink-0 flex-col items-center text-center ${node.cut ? "opacity-40" : ""}`}
-      title={`${node.label}${node.value ? ` · ${node.value}` : ""}`}
+      title={`${node.label}${HOP_MEANING[node.id] ? ` = ${HOP_MEANING[node.id]}` : ""}${node.value ? ` · ${node.value}` : ""}`}
     >
       <span
         className={`inline-block h-[10px] w-[10px] rounded-full ${DOT[node.status]}`}

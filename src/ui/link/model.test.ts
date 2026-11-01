@@ -6,6 +6,7 @@ import {
   clockKst,
   dropLine,
   formatSecs,
+  HOP_MEANING,
   vpnDetail,
   vpnOnlyProblem,
 } from "./model";
@@ -142,5 +143,12 @@ describe("회사 VPN", () => {
     expect(vpnOnlyProblem(buildDemoLink("ok", now))).toBe(false);
     // 인터넷이 끊겼으면 VPN 문제는 그 결과라 따로 가르지 않는다.
     expect(vpnOnlyProblem(buildDemoLink("down", now))).toBe(false);
+  });
+});
+
+describe("칸의 실제 뜻", () => {
+  it("사슬의 칸마다 마우스를 올리면 볼 뜻이 있다", () => {
+    for (const n of chainNodes(buildDemoLink("ok", now)))
+      expect(HOP_MEANING[n.id], n.id).toBeTruthy();
   });
 });

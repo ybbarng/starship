@@ -9,6 +9,15 @@ export const HOP_LABEL: Record<string, string> = {
   dns: "항법 신호",
 };
 
+/** 칸마다 실제 뜻. 화면에서 칸에 마우스를 올리면 보인다. */
+export const HOP_MEANING: Record<string, string> = {
+  ship: "이 맥북 (측정이 돌고 있는지)",
+  wifi: "Wi-Fi 연결 (값은 Wi-Fi 이름)",
+  gateway: "집·사무실 공유기 (핑 손실)",
+  internet: "인터넷 (바깥까지 핑 손실)",
+  dns: "DNS (이름 조회)",
+};
+
 export const VERDICT_LABEL: Record<Link["verdict"], string> = {
   ok: "회선 정상",
   warn: "회선 불안",
