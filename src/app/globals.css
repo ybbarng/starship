@@ -62,3 +62,24 @@ body {
     animation: none;
   }
 }
+
+/* 연료실 계통도: 배관의 연료 점이 엔진 쪽으로 흐르고, 배기 불꽃이 떨린다 */
+@keyframes fuel-dash {
+  to {
+    stroke-dashoffset: -20;
+  }
+}
+.fuel-dash {
+  animation: fuel-dash linear infinite;
+}
+.fuel-plume {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: fuel-flame 0.16s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fuel-dash,
+  .fuel-plume {
+    animation: none;
+  }
+}

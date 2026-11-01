@@ -18,7 +18,7 @@ import { VERDICT_LABEL, verdictDetail } from "@/ui/link/model";
 //   왼쪽 = 승무원 상태판(업무/개인 두 줄, 프로젝트마다 작은 등)
 //   가운데 = 주 표시창(지금 할 일 하나)
 //   오른쪽 = 교신 수신등·칩, 항법 소형 표시(행성 단추·더 먼 곳·이동 중 속도)
-import { FuelChip } from "@/ui/usage/FuelChip";
+import { FuelGauge } from "@/ui/usage/FuelGauge";
 import styles from "./cockpit.module.css";
 import { MainDisplay } from "./MainDisplay";
 import { type Lamp, PILE_WARN, selecting, type useWarnings } from "./util";
@@ -349,7 +349,7 @@ export function CrewBoard({
       aria-label="승무원 상태판"
       className={`${styles.bay} flex h-full min-h-0 flex-col gap-2 overflow-hidden rounded-lg px-2.5 pt-2 pb-2`}
     >
-      <Heading title="승무원" right={<FuelChip />} />
+      <Heading title="승무원" />
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
         <CrewRow
           context="work"
@@ -697,7 +697,8 @@ export function Dashboard({
             now={now}
             onOpen={(id) => onHail(id)}
           />
-          <div className="mt-auto">
+          <div className="mt-auto flex flex-col gap-2">
+            <FuelGauge />
             <NavMini onPicker={onPicker} />
           </div>
         </div>

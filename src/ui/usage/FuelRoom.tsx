@@ -1,10 +1,14 @@
 "use client";
 
-// 연료실: 오늘 쓴 연료(출력 토큰)를 탱크·배관·추진체로 그린다. 설계: docs/usage.md "연료실".
-// 왼쪽 탱크 셋(업무·개인·기타)은 오늘 연소 몫만큼 차고, 배관의 점은 최근 15분 연소가 셀수록 빨리 흐르고,
-// 오른쪽 추진체 불꽃은 그 영역의 지금 속도(분당 출력)만큼 길다. 위 속도계는 전체 속도, 아래는 시간별 속도 기록.
-// 구석의 연료 기록 노트를 누르면 자세한 도표(/usage)로 간다. 이름마다 마우스를 올리면 실제 뜻이 보인다.
+// 연료실: 오늘 쓴 연료(출력 토큰)를 기관 계통도로 그린다. 설계: docs/usage.md "연료실".
+// 위: 청사진 유리 위 계통도. 금속 원통 탱크 셋(업무·개인·기타, 들여다보는 창에 오늘 연소 몫만큼 연료),
+//     밸브·플랜지가 달린 배관(최근 15분 연소가 셀수록 연료 점이 빨리 흐른다), 연소실과 종 모양 노즐의 엔진 셋
+//     (그 영역의 지금 속도만큼 배기 불꽃이 길다).
+// 아래: 계기판. 아날로그 속도계 넷(전체·업무·개인·기타, 로그 눈금), 호박색 숫자판(오늘 연소·연료비),
+//       판에 끼워 둔 연료 기록 노트(누르면 자세한 도표 /usage). 맨 아래는 시간별 속도 기록지.
+// 이름·부품마다 마우스를 올리면 실제 뜻이 보인다(조종석과 같은 빠른 말풍선).
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import { useUsage } from "@/data/hooks";
 import cockpit from "@/protos/cockpit/cockpit.module.css";
 import { Tip } from "@/ui/kit/Tip";
@@ -16,18 +20,33 @@ const AREAS: Area[] = ["work", "personal", "other"];
 const COLOR: Record<Area, string> = {
   work: "#6aa8ff",
   personal: "#ffb45c",
-  other: "#8792a8",
+  other: "#9aa6bd",
 };
 
-/** 바늘 끝: 분당 2만 토큰. 세션 하나는 수백, 여럿이 바쁘면 수천이라 로그 눈금으로 그린다(2026-11-01 실측 7,927/분) */
-const SPEED_FULL = 20_000;
+/** 계통도 이름판에 적는 탱크 번호 */
+const TAG: Record<Area, string> = {
+  work: "T-1",
+  personal: "T-2",
+  other: "T-3",
+};
+
+/**
+ * 바늘 끝: 분당 2만 토큰. 세션 하나는 수백, 여럿이 바쁘면 수천이라 로그 눈금으로 그린다
+ * (2026-11-01 실측 7,927/분).
+ */
+export const SPEED_FULL = 20_000;
+
+/** 분당 토큰 → 0..1(로그) */
+export function speedRatio(v: number): number {
+  return Math.min(1, Math.log10(1 + v) / Math.log10(1 + SPEED_FULL));
+}
 
 export function FuelRoom() {
   const query = useUsage("today");
   const data = query.data;
   return (
     <main className={`min-h-dvh text-white ${cockpit.panel}`}>
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-black/50 px-4 py-2.5">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-black/50 px-4 py-2.5 shadow-[0_1px_0_rgba(255,255,255,0.04)]">
         <Link
           href="/"
           className="rounded px-2 py-1 text-[12px] text-white/55 hover:bg-white/[0.06] hover:text-white"
@@ -36,21 +55,25 @@ export function FuelRoom() {
         </Link>
         <h1 className="flex items-baseline gap-2">
           <span className="text-[10px] font-semibold tracking-[0.3em] text-[#ffb45c]/80">
-            FUEL ROOM
+            ENGINE ROOM · FUEL
           </span>
           <span className="text-[15px] font-semibold">연료실</span>
           <span className="text-[12px] text-white/45">
             · 오늘의 연료와 추력
           </span>
         </h1>
-        {data?.meta.source === "demo" && (
-          <span className="ml-auto rounded bg-[#ffd84a]/15 px-1.5 py-0.5 text-[11.5px] font-semibold text-[#ffd84a]">
-            데모 · 지어낸 숫자예요
+        {data && (
+          <span className="ml-auto font-mono text-[11px] text-white/35">
+            {data.meta.source === "demo"
+              ? "데모 · 지어낸 숫자"
+              : `계측 ${new Date(data.meta.scannedAt).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" })} · 최근 ${data.burn.windowMin}분 평균`}
           </span>
         )}
       </header>
       {query.isLoading || !data ? (
-        <p className="p-8 text-white/55">연료실 계기를 켜는 중…</p>
+        <p className="p-8 font-mono text-[12px] text-white/50">
+          계기를 켜는 중…
+        </p>
       ) : (
         <Room data={data} />
       )}
@@ -59,283 +82,119 @@ export function FuelRoom() {
 }
 
 function Room({ data }: { data: UsageResponse }) {
-  const total = data.total.output || 1;
-  const maxBurn = Math.max(1, ...AREAS.map((a) => data.burn.perMin[a]));
   return (
-    <div className="mx-auto flex max-w-[1180px] flex-col gap-5 px-4 py-5">
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_300px]">
-        {/* 연료 흐름도 */}
-        <section
-          data-fuel-flow
-          className={`relative rounded-xl px-4 py-4 ${cockpit.bay}`}
-        >
-          <h2 className="mb-3 text-[10.5px] font-semibold tracking-[0.18em] text-white/40">
-            연료 흐름도
-          </h2>
-          <div className="flex flex-col gap-4">
-            {AREAS.map((a) => (
-              <Line
-                key={a}
-                area={a}
-                share={data.areas[a].output / total}
-                today={data.areas[a].output}
-                cost={data.areas[a].cost}
-                perMin={data.burn.perMin[a]}
-                flame={data.burn.perMin[a] / maxBurn}
-                windowMin={data.burn.windowMin}
-              />
-            ))}
-          </div>
-        </section>
-
-        {/* 속도계와 노트 */}
-        <div className="flex flex-col gap-4">
-          <Speedometer data={data} />
-          <Tip
-            align="end"
-            text={
-              "연료 기록 노트 = 자세한 도표.\n오늘·7일·30일, 업무·개인 합계, 승무원(프로젝트)·세션 순위, 날마다 연소, 엔진(모델)별"
-            }
-          >
-            <Link
-              href="/usage"
-              data-fuel-notebook
-              className="group flex w-full items-center gap-3 rounded-lg border border-[#ffb45c]/30 bg-[#2a1f12]/60 px-3 py-3 hover:border-[#ffb45c]/60"
-            >
-              <Notebook />
-              <span className="flex flex-col">
-                <span className="text-[13px] font-semibold text-[#ffd9a8]">
-                  연료 기록 노트
-                </span>
-                <span className="text-[11.5px] text-white/50">
-                  펼치면 자세한 도표 ▸
-                </span>
-              </span>
-            </Link>
-          </Tip>
-        </div>
+    <div className="mx-auto flex max-w-[1220px] flex-col gap-4 px-4 py-4">
+      <Schematic data={data} />
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_230px]">
+        <Instruments data={data} />
+        <LogBook />
       </div>
-
       <HourLog data={data} />
     </div>
   );
 }
 
-/** 탱크 → 배관 → 추진체 한 줄 */
-function Line({
-  area,
-  share,
-  today,
-  cost,
-  perMin,
-  flame,
-  windowMin,
-}: {
-  area: Area;
-  share: number;
-  today: number;
-  cost: number;
-  perMin: number;
-  flame: number;
-  windowMin: number;
-}) {
-  const c = COLOR[area];
-  const label = AREA_LABEL[area];
-  // 흐름 점이 한 바퀴 도는 시간: 셀수록 짧게(0.6초~), 안 쓰면 멈춤
-  const flowSecs = perMin > 0 ? Math.max(0.6, 4 - 3.4 * flame) : 0;
-  return (
-    <div data-fuel-line={area} className="flex items-center gap-3">
-      <Tip
-        align="start"
-        text={`${label} 탱크 = ${label} 프로젝트 세션이 오늘 쓴 연료(출력 토큰).\n오늘 ${tokens(today)} · 오늘 연소의 ${Math.round(share * 100)}% · 연료비 추정 ${usd(cost)}`}
-      >
-        <button
-          type="button"
-          className="flex w-[130px] shrink-0 cursor-default items-center gap-2 outline-none"
-        >
-          <span className="relative h-[54px] w-[22px] overflow-hidden rounded-[6px] border border-white/20 bg-black/40">
-            <span
-              className="absolute inset-x-0 bottom-0 transition-[height] duration-700"
-              style={{
-                height: `${Math.max(3, share * 100)}%`,
-                background: `linear-gradient(180deg, ${c}, ${c}88)`,
-                boxShadow: `0 0 10px ${c}66`,
-              }}
-            />
-          </span>
-          <span className="flex flex-col text-left">
-            <span className="text-[12px] font-semibold" style={{ color: c }}>
-              {label} 탱크
-            </span>
-            <span className="font-mono text-[12px] text-white/80">
-              {tokens(today)}
-            </span>
-          </span>
-        </button>
-      </Tip>
+/* ───────────── 계통도 ───────────── */
 
-      {/* 배관: 점이 흐른다 */}
-      <Tip
-        text={`${label} 배관 = 탱크에서 추진체로 가는 연료. 점이 빨리 흐를수록 최근 ${windowMin}분에 많이 썼어요.`}
-        className="min-w-0 flex-1"
-      >
-        <button
-          type="button"
-          className="relative h-[10px] w-full cursor-default overflow-hidden rounded-full border border-white/10 bg-black/40 outline-none"
-        >
-          {flowSecs > 0 && (
-            <span
-              className="fuel-flow absolute inset-0"
-              style={
-                {
-                  backgroundImage: `radial-gradient(circle, ${c} 0 2px, transparent 2.5px)`,
-                  backgroundSize: "18px 10px",
-                  animationDuration: `${flowSecs}s`,
-                } as React.CSSProperties
-              }
-            />
-          )}
-        </button>
-      </Tip>
+const VB_W = 1100;
+const VB_H = 400;
 
-      {/* 추진체 */}
-      <Tip
-        align="end"
-        text={`${label} 추진체 = 지금 ${label} 쪽 속도.\n최근 ${windowMin}분 동안 분당 ${tokens(Math.round(perMin))} 토큰을 태웠어요.`}
-      >
-        <button
-          type="button"
-          className="flex w-[170px] shrink-0 cursor-default items-center gap-2 outline-none"
-        >
-          <span className="relative flex h-[30px] w-[26px] items-center justify-center rounded-l-md border border-white/20 bg-[#1b212c]">
-            <span className="h-[14px] w-[6px] rounded-sm bg-white/20" />
-          </span>
-          <span
-            className="fuel-flame h-[14px] rounded-r-full"
-            style={{
-              width: `${perMin > 0 ? 12 + flame * 70 : 0}px`,
-              background: `linear-gradient(90deg, #fff6e0, ${c}, transparent)`,
-              boxShadow: perMin > 0 ? `0 0 12px ${c}` : undefined,
-            }}
-          />
-          <span className="ml-auto font-mono text-[11px] text-white/60">
-            {tokens(Math.round(perMin))}/분
-          </span>
-        </button>
-      </Tip>
-    </div>
-  );
+/** 탱크 i(왼쪽부터 업무·개인·기타)의 자리 */
+const TANK = (i: number) => ({ x: 70 + i * 150, y: 52, w: 96, h: 248 });
+/** 엔진 줄의 높이(위에서부터). 탱크 i는 엔진 ENGINE_OF[i]로 간다(배관이 서로 엇갈리지 않게) */
+const ENGINE_Y = [110, 210, 310];
+const ENGINE_OF = [2, 1, 0];
+/** 탱크 i의 배관: 아래로 내려가 가로 길(LANE)을 달리고, 세로 길(RISER)로 엔진 높이까지 오른다 */
+const LANE = [380, 358, 336];
+const RISER = [700, 670, 640];
+const ENGINE_X = 760;
+
+function pipePath(i: number): string {
+  const t = TANK(i);
+  const cx = t.x + t.w / 2;
+  const y = ENGINE_Y[ENGINE_OF[i] ?? 0] ?? 110;
+  const lane = LANE[i] ?? 360;
+  const riser = RISER[i] ?? 680;
+  return `M ${cx} ${t.y + t.h} V ${lane} H ${riser} V ${y} H ${ENGINE_X}`;
 }
 
-/** 반원 속도계: 바늘이 전체 분당 출력을 가리킨다 */
-function Speedometer({ data }: { data: UsageResponse }) {
-  const v = data.burn.total;
-  const r = Math.min(1, Math.log10(1 + v) / Math.log10(1 + SPEED_FULL));
-  const angle = -90 + r * 180;
+function Schematic({ data }: { data: UsageResponse }) {
+  const total = data.total.output || 1;
+  const maxBurn = Math.max(1, ...AREAS.map((a) => data.burn.perMin[a]));
   return (
-    <Tip
-      align="end"
-      text={`속도 = 최근 ${data.burn.windowMin}분 동안 분당 태운 연료(출력 토큰), 모든 탱크 합.\n눈금은 로그(1·10·100·1천·1만), 바늘 끝은 분당 ${tokens(SPEED_FULL)}. 기록은 최대 5분 늦어요.`}
+    <section
+      data-fuel-flow
+      className={`relative overflow-hidden rounded-xl border border-white/10 ${cockpit.screen}`}
     >
-      <button
-        type="button"
-        data-fuel-speed
-        className={`flex w-full cursor-default flex-col items-center rounded-xl px-4 pt-3 pb-3 outline-none ${cockpit.screen}`}
-      >
-        <svg viewBox="-60 -60 120 70" className="w-[220px]" aria-hidden>
-          <path
-            d="M -50 0 A 50 50 0 0 1 50 0"
-            fill="none"
-            stroke="rgba(255,255,255,0.12)"
-            strokeWidth="7"
-          />
-          <path
-            d="M -50 0 A 50 50 0 0 1 50 0"
-            fill="none"
-            stroke="#ffb45c"
-            strokeWidth="7"
-            strokeDasharray={`${r * 157} 157`}
-          />
-          <line
-            x1="0"
-            y1="0"
-            x2="0"
-            y2="-42"
-            stroke="#fff"
-            strokeWidth="2"
-            transform={`rotate(${angle})`}
-          />
-          <circle r="4" fill="#fff" />
-        </svg>
-        <span className="font-mono text-[26px] leading-none font-semibold">
-          {tokens(Math.round(v))}
-        </span>
-        <span className="mt-1 text-[11.5px] text-white/50">
-          분당 토큰 · 지금 속도
-        </span>
-        <span className="mt-2 text-[11.5px] text-white/60">
-          오늘 연소 {tokens(data.total.output)} · 연료비 추정{" "}
-          {usd(data.total.cost)}
-        </span>
-      </button>
-    </Tip>
-  );
-}
-
-/** 시간별 속도 기록: 오늘 시간마다 분당 출력(시간 합 ÷ 60), 영역별로 쌓는다 */
-function HourLog({ data }: { data: UsageResponse }) {
-  const perMin = data.hours.map((h) => ({
-    at: h.at,
-    work: h.work / 60,
-    personal: h.personal / 60,
-    other: h.other / 60,
-  }));
-  const max = Math.max(1, ...perMin.map((h) => h.work + h.personal + h.other));
-  return (
-    <section data-fuel-hours>
-      <Tip
-        align="start"
-        text="시간별 속도 = 그 시간 동안 평균 분당 출력 토큰. 언제 일을 많이 시켰는지(시간당 업무량) 보여요."
-      >
-        <button
-          type="button"
-          className="mb-2 cursor-default text-[10.5px] font-semibold tracking-[0.18em] text-white/40 outline-none"
+      <div className="pointer-events-none absolute top-2.5 left-4 z-10 font-mono text-[10px] tracking-[0.25em] text-[#7ce0ff]/55">
+        FUEL SYSTEM · 연료 계통도
+      </div>
+      <div className="relative">
+        <svg
+          viewBox={`0 0 ${VB_W} ${VB_H}`}
+          className="block w-full"
+          role="img"
+          aria-label="연료 계통도: 탱크 셋에서 배관을 지나 엔진 셋으로"
         >
-          속도 기록 · 오늘 시간별
-        </button>
-      </Tip>
-      <div
-        className={`flex h-[130px] items-end gap-[3px] rounded-lg border border-white/10 px-3 pt-3 pb-1 ${cockpit.screen}`}
-      >
-        {perMin.map((h) => {
-          const sum = h.work + h.personal + h.other;
-          const hour = new Date(h.at).getHours();
+          <SchematicDefs />
+          <Blueprint />
+          {AREAS.map((a, i) => (
+            <PipeRun
+              key={a}
+              i={i}
+              area={a}
+              perMin={data.burn.perMin[a]}
+              flow={data.burn.perMin[a] / maxBurn}
+            />
+          ))}
+          {AREAS.map((a, i) => (
+            <Tank
+              key={a}
+              i={i}
+              area={a}
+              share={data.areas[a].output / total}
+              today={data.areas[a].output}
+            />
+          ))}
+          {AREAS.map((a, i) => (
+            <Engine
+              key={a}
+              y={ENGINE_Y[ENGINE_OF[i] ?? 0] ?? 110}
+              area={a}
+              perMin={data.burn.perMin[a]}
+              thrust={data.burn.perMin[a] / maxBurn}
+            />
+          ))}
+        </svg>
+        {/* 말풍선 자리(SVG 위에 겹친 투명 단추) */}
+        {AREAS.map((a, i) => {
+          const t = TANK(i);
+          const y = ENGINE_Y[ENGINE_OF[i] ?? 0] ?? 110;
           return (
-            <div
-              key={h.at}
-              className="flex min-w-0 flex-1 flex-col items-stretch"
-              title={`${hour}시 · 분당 ${tokens(Math.round(sum))} (업무 ${tokens(Math.round(h.work))} · 개인 ${tokens(Math.round(h.personal))})`}
-            >
-              <div
-                className="flex flex-col-reverse"
-                style={{ height: `${(sum / max) * 96}px` }}
-              >
-                {AREAS.map((a) =>
-                  h[a] > 0 ? (
-                    <div
-                      key={a}
-                      style={{
-                        height: `${(h[a] / sum) * 100}%`,
-                        background: COLOR[a],
-                      }}
-                      className="opacity-80"
-                    />
-                  ) : null,
-                )}
-              </div>
-              <div className="mt-1 text-center text-[9.5px] text-white/35">
-                {hour}
-              </div>
+            <div key={a}>
+              <Zone
+                x={t.x - 8}
+                y={t.y - 10}
+                w={t.w + 16}
+                h={t.h + 46}
+                align={i === 0 ? "start" : "center"}
+                text={`${AREA_LABEL[a]} 탱크(${TAG[a]}) = ${AREA_LABEL[a]} 프로젝트 세션이 오늘 쓴 연료(출력 토큰).\n오늘 ${tokens(data.areas[a].output)} · 오늘 연소의 ${Math.round((data.areas[a].output / total) * 100)}% · 연료비 추정 ${usd(data.areas[a].cost)}`}
+              />
+              <Zone
+                x={RISER[i] ?? 680}
+                y={y - 14}
+                w={ENGINE_X - (RISER[i] ?? 680)}
+                h={28}
+                text={`${AREA_LABEL[a]} 연료관 = 탱크에서 엔진으로 가는 연료. 점이 빨리 흐를수록 최근 ${data.burn.windowMin}분에 많이 썼어요.`}
+              />
+              <Zone
+                x={ENGINE_X}
+                y={y - 46}
+                w={300}
+                h={92}
+                align="end"
+                text={`${AREA_LABEL[a]} 엔진 = 지금 ${AREA_LABEL[a]} 쪽 속도.\n최근 ${data.burn.windowMin}분 동안 분당 ${tokens(Math.round(data.burn.perMin[a]))} 토큰을 태웠어요. 배기 불꽃이 길수록 빨라요.`}
+              />
             </div>
           );
         })}
@@ -344,23 +203,835 @@ function HourLog({ data }: { data: UsageResponse }) {
   );
 }
 
-function Notebook() {
+/** SVG 좌표를 %로 바꿔 겹치는 말풍선 자리 */
+function Zone({
+  x,
+  y,
+  w,
+  h,
+  text,
+  align = "center",
+}: {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  text: string;
+  align?: "start" | "center" | "end";
+}) {
   return (
-    <svg viewBox="0 0 40 46" className="h-[46px] w-[40px] shrink-0" aria-hidden>
-      <rect x="4" y="2" width="32" height="42" rx="3" fill="#8a5a2b" />
-      <rect x="8" y="2" width="28" height="42" rx="2" fill="#c98b4a" />
-      <rect x="12" y="10" width="20" height="2" fill="#5a3a1a" opacity="0.6" />
-      <rect x="12" y="16" width="16" height="2" fill="#5a3a1a" opacity="0.5" />
-      <rect x="12" y="22" width="18" height="2" fill="#5a3a1a" opacity="0.5" />
-      <path
-        d="M 8 30 L 14 26 L 20 29 L 26 22 L 32 25"
-        stroke="#2a1a0a"
-        strokeWidth="1.5"
-        fill="none"
-      />
-      {[8, 16, 24, 32, 40].map((y) => (
-        <circle key={y} cx="6" cy={y} r="1.6" fill="#2a1f12" />
+    <div
+      className="absolute"
+      style={{
+        left: `${(x / VB_W) * 100}%`,
+        top: `${(y / VB_H) * 100}%`,
+        width: `${(w / VB_W) * 100}%`,
+        height: `${(h / VB_H) * 100}%`,
+      }}
+    >
+      <Tip text={text} align={align} className="h-full w-full">
+        <button
+          type="button"
+          aria-label={text.split("\n")[0]}
+          className="h-full w-full cursor-default rounded-md outline-none focus-visible:ring-1 focus-visible:ring-[#7ce0ff]/50 hover:bg-[#7ce0ff]/[0.04]"
+        />
+      </Tip>
+    </div>
+  );
+}
+
+function SchematicDefs() {
+  return (
+    <defs>
+      {/* 금속 원통: 가운데가 밝고 양끝이 어두운 가로 그라디언트 */}
+      <linearGradient id="fr-metal" x1="0" x2="1" y1="0" y2="0">
+        <stop offset="0" stopColor="#1c2330" />
+        <stop offset="0.18" stopColor="#3a4558" />
+        <stop offset="0.42" stopColor="#5a687f" />
+        <stop offset="0.6" stopColor="#3a4558" />
+        <stop offset="1" stopColor="#161c27" />
+      </linearGradient>
+      <linearGradient id="fr-cap" x1="0" x2="0" y1="0" y2="1">
+        <stop offset="0" stopColor="#6b7a92" />
+        <stop offset="1" stopColor="#2a3342" />
+      </linearGradient>
+      <linearGradient id="fr-pipe" x1="0" x2="0" y1="0" y2="1">
+        <stop offset="0" stopColor="#4c586c" />
+        <stop offset="0.5" stopColor="#2a3240" />
+        <stop offset="1" stopColor="#141922" />
+      </linearGradient>
+      <linearGradient id="fr-bell" x1="0" x2="0" y1="0" y2="1">
+        <stop offset="0" stopColor="#2a3240" />
+        <stop offset="0.45" stopColor="#7d6a55" />
+        <stop offset="0.55" stopColor="#9a7f62" />
+        <stop offset="1" stopColor="#241d17" />
+      </linearGradient>
+      <linearGradient id="fr-glass" x1="0" x2="1" y1="0" y2="0">
+        <stop offset="0" stopColor="#05080d" />
+        <stop offset="0.5" stopColor="#0d1420" />
+        <stop offset="1" stopColor="#05080d" />
+      </linearGradient>
+      {AREAS.map((a) => (
+        <linearGradient key={a} id={`fr-plume-${a}`} x1="0" x2="1">
+          <stop offset="0" stopColor="#fffaf0" stopOpacity="0.95" />
+          <stop offset="0.18" stopColor={COLOR[a]} stopOpacity="0.85" />
+          <stop offset="1" stopColor={COLOR[a]} stopOpacity="0" />
+        </linearGradient>
       ))}
-    </svg>
+      <pattern
+        id="fr-grid"
+        width="20"
+        height="20"
+        patternUnits="userSpaceOnUse"
+      >
+        <path
+          d="M 20 0 L 0 0 0 20"
+          fill="none"
+          stroke="#7ce0ff"
+          strokeOpacity="0.05"
+          strokeWidth="1"
+        />
+      </pattern>
+    </defs>
+  );
+}
+
+/** 청사진 바탕: 모눈과 선체 윤곽 */
+function Blueprint() {
+  return (
+    <g aria-hidden>
+      <rect width={VB_W} height={VB_H} fill="url(#fr-grid)" />
+      <rect
+        x="24"
+        y="30"
+        width="1052"
+        height="356"
+        rx="34"
+        fill="none"
+        stroke="#7ce0ff"
+        strokeOpacity="0.12"
+        strokeDasharray="2 6"
+      />
+      {[250, 520, 760].map((x) => (
+        <line
+          key={x}
+          x1={x}
+          y1="34"
+          x2={x}
+          y2="382"
+          stroke="#7ce0ff"
+          strokeOpacity="0.05"
+        />
+      ))}
+      <text
+        x="1060"
+        y="378"
+        textAnchor="end"
+        fontFamily="ui-monospace, monospace"
+        fontSize="9"
+        fill="#7ce0ff"
+        fillOpacity="0.35"
+      >
+        DECK 4 · AFT
+      </text>
+    </g>
+  );
+}
+
+function Tank({
+  i,
+  area,
+  share,
+  today,
+}: {
+  i: number;
+  area: Area;
+  share: number;
+  today: number;
+}) {
+  const t = TANK(i);
+  const c = COLOR[area];
+  // 들여다보는 창(사이트 글라스): 탱크 가운데 세로 홈
+  const gx = t.x + t.w / 2 - 9;
+  const gy = t.y + 28;
+  const gh = t.h - 56;
+  const level = Math.max(0.02, Math.min(1, share));
+  const ly = gy + gh * (1 - level);
+  return (
+    <g data-tank={area}>
+      {/* 받침 */}
+      <rect
+        x={t.x + 10}
+        y={t.y + t.h - 2}
+        width={t.w - 20}
+        height="10"
+        rx="2"
+        fill="#11161f"
+        stroke="#ffffff"
+        strokeOpacity="0.08"
+      />
+      {/* 몸통 */}
+      <rect
+        x={t.x}
+        y={t.y + 10}
+        width={t.w}
+        height={t.h - 20}
+        fill="url(#fr-metal)"
+      />
+      {/* 위·아래 뚜껑 */}
+      <ellipse
+        cx={t.x + t.w / 2}
+        cy={t.y + 10}
+        rx={t.w / 2}
+        ry="11"
+        fill="url(#fr-cap)"
+      />
+      <ellipse
+        cx={t.x + t.w / 2}
+        cy={t.y + t.h - 10}
+        rx={t.w / 2}
+        ry="11"
+        fill="#1a212c"
+      />
+      {/* 이음 띠와 리벳 */}
+      {[0.3, 0.7].map((f) => (
+        <g key={f}>
+          <rect
+            x={t.x}
+            y={t.y + t.h * f - 3}
+            width={t.w}
+            height="6"
+            fill="#000"
+            fillOpacity="0.28"
+          />
+          {[0.12, 0.88].map((r) => (
+            <circle
+              key={r}
+              cx={t.x + t.w * r}
+              cy={t.y + t.h * f}
+              r="1.8"
+              fill="#8a97ad"
+              fillOpacity="0.7"
+            />
+          ))}
+        </g>
+      ))}
+      {/* 사이트 글라스 */}
+      <rect
+        x={gx - 3}
+        y={gy - 3}
+        width="24"
+        height={gh + 6}
+        rx="5"
+        fill="#0b0f16"
+        stroke="#8a97ad"
+        strokeOpacity="0.45"
+      />
+      <rect x={gx} y={gy} width="18" height={gh} rx="3" fill="url(#fr-glass)" />
+      <rect
+        x={gx}
+        y={ly}
+        width="18"
+        height={gy + gh - ly}
+        rx="3"
+        fill={c}
+        fillOpacity="0.85"
+        style={{ filter: `drop-shadow(0 0 6px ${c})` }}
+      />
+      <line
+        x1={gx}
+        x2={gx + 18}
+        y1={ly}
+        y2={ly}
+        stroke="#fff"
+        strokeOpacity="0.8"
+        strokeWidth="1"
+      />
+      {/* 눈금 */}
+      {[0.25, 0.5, 0.75].map((f) => (
+        <line
+          key={f}
+          x1={gx + 20}
+          x2={gx + 27}
+          y1={gy + gh * (1 - f)}
+          y2={gy + gh * (1 - f)}
+          stroke="#cfd8e8"
+          strokeOpacity="0.45"
+        />
+      ))}
+      {/* 이름판 */}
+      <rect
+        x={t.x + 6}
+        y={t.y + t.h + 12}
+        width={t.w - 12}
+        height="30"
+        rx="2"
+        fill="#0d1118"
+        stroke="#ffffff"
+        strokeOpacity="0.1"
+      />
+      <text
+        x={t.x + t.w / 2}
+        y={t.y + t.h + 24}
+        textAnchor="middle"
+        fontSize="10"
+        fontWeight="600"
+        fill={c}
+      >
+        {TAG[area]} · {AREA_LABEL[area]}
+      </text>
+      <text
+        x={t.x + t.w / 2}
+        y={t.y + t.h + 37}
+        textAnchor="middle"
+        fontFamily="ui-monospace, monospace"
+        fontSize="10"
+        fill="#e8edf7"
+        fillOpacity="0.85"
+      >
+        {tokens(today)} · {Math.round(share * 100)}%
+      </text>
+    </g>
+  );
+}
+
+function PipeRun({
+  i,
+  area,
+  perMin,
+  flow,
+}: {
+  i: number;
+  area: Area;
+  perMin: number;
+  flow: number;
+}) {
+  const d = pipePath(i);
+  const c = COLOR[area];
+  // 연료 점이 한 칸(20) 가는 데 걸리는 시간: 셀수록 짧게, 안 쓰면 멈춤
+  const secs = perMin > 0 ? Math.max(0.35, 2.4 - 2 * flow) : 0;
+  const t = TANK(i);
+  const lane = LANE[i] ?? 360;
+  const riser = RISER[i] ?? 680;
+  return (
+    <g data-pipe={area}>
+      <path
+        d={d}
+        fill="none"
+        stroke="#0a0d13"
+        strokeWidth="13"
+        strokeLinejoin="round"
+      />
+      <path
+        d={d}
+        fill="none"
+        stroke="#3d4758"
+        strokeWidth="9"
+        strokeLinejoin="round"
+      />
+      <path
+        d={d}
+        fill="none"
+        stroke="#0f141c"
+        strokeWidth="5"
+        strokeLinejoin="round"
+      />
+      {secs > 0 && (
+        <path
+          d={d}
+          fill="none"
+          stroke={c}
+          strokeWidth="3"
+          strokeLinecap="round"
+          strokeDasharray="4 16"
+          className="fuel-dash"
+          style={
+            {
+              animationDuration: `${secs}s`,
+              filter: `drop-shadow(0 0 3px ${c})`,
+            } as CSSProperties
+          }
+        />
+      )}
+      {/* 밸브(나비 모양): 탱크 아래 이름판에 가리지 않게 가로 배관 위, 탱크 바로 오른쪽 */}
+      <g transform={`translate(${t.x + t.w / 2 + 34} ${lane})`}>
+        <path
+          d="M -8 -6 L 8 6 L 8 -6 L -8 6 Z"
+          fill="#2a3240"
+          stroke="#9aa6bd"
+          strokeOpacity="0.7"
+        />
+        <rect
+          x="-2"
+          y="-12"
+          width="4"
+          height="6"
+          fill="#9aa6bd"
+          fillOpacity="0.6"
+        />
+      </g>
+      {[riser - 20, (riser + ENGINE_X) / 2].map((fx) => (
+        <rect
+          key={fx}
+          x={fx - 2}
+          y={(ENGINE_Y[ENGINE_OF[i] ?? 0] ?? 110) - 8}
+          width="4"
+          height="16"
+          fill="#6b7a92"
+          fillOpacity="0.8"
+        />
+      ))}
+      <rect
+        x={(t.x + t.w / 2 + riser) / 2 - 2}
+        y={lane - 8}
+        width="4"
+        height="16"
+        fill="#6b7a92"
+        fillOpacity="0.8"
+      />
+    </g>
+  );
+}
+
+function Engine({
+  y,
+  area,
+  perMin,
+  thrust,
+}: {
+  y: number;
+  area: Area;
+  perMin: number;
+  thrust: number;
+}) {
+  const x = ENGINE_X;
+  const c = COLOR[area];
+  const plume = perMin > 0 ? 40 + thrust * 150 : 0;
+  return (
+    <g data-engine={area}>
+      {/* 연소실 */}
+      <rect
+        x={x}
+        y={y - 20}
+        width="74"
+        height="40"
+        rx="5"
+        fill="url(#fr-metal)"
+        stroke="#000"
+        strokeOpacity="0.5"
+      />
+      {[x + 14, x + 34, x + 54].map((rx) => (
+        <rect
+          key={rx}
+          x={rx}
+          y={y - 20}
+          width="3"
+          height="40"
+          fill="#000"
+          fillOpacity="0.25"
+        />
+      ))}
+      {/* 목(스로트)과 종 모양 노즐 */}
+      <path
+        d={`M ${x + 74} ${y - 12} L ${x + 86} ${y - 8} L ${x + 86} ${y + 8} L ${x + 74} ${y + 12} Z`}
+        fill="#2a3240"
+      />
+      <path
+        d={`M ${x + 86} ${y - 8} C ${x + 110} ${y - 12}, ${x + 128} ${y - 30}, ${x + 142} ${y - 38} L ${x + 142} ${y + 38} C ${x + 128} ${y + 30}, ${x + 110} ${y + 12}, ${x + 86} ${y + 8} Z`}
+        fill="url(#fr-bell)"
+        stroke="#000"
+        strokeOpacity="0.5"
+      />
+      {/* 배기 불꽃 */}
+      {plume > 0 && (
+        <g className="fuel-plume">
+          <ellipse
+            cx={x + 142 + plume / 2}
+            cy={y}
+            rx={plume / 2}
+            ry={30}
+            fill={`url(#fr-plume-${area})`}
+            style={{ filter: `blur(2px) drop-shadow(0 0 10px ${c})` }}
+          />
+          <ellipse
+            cx={x + 142 + plume / 4}
+            cy={y}
+            rx={plume / 4}
+            ry={12}
+            fill="#fffaf0"
+            fillOpacity="0.75"
+          />
+        </g>
+      )}
+      {/* 이름판 */}
+      <text
+        x={x + 37}
+        y={y + 4}
+        textAnchor="middle"
+        fontSize="10"
+        fontWeight="600"
+        fill={c}
+      >
+        {AREA_LABEL[area]}
+      </text>
+      <text
+        x={x + 37}
+        y={y + 34}
+        textAnchor="middle"
+        fontFamily="ui-monospace, monospace"
+        fontSize="10"
+        fill="#e8edf7"
+        fillOpacity="0.8"
+      >
+        {tokens(Math.round(perMin))}/분
+      </text>
+    </g>
+  );
+}
+
+/* ───────────── 계기판 ───────────── */
+
+function Instruments({ data }: { data: UsageResponse }) {
+  return (
+    <section
+      className={`flex flex-wrap items-stretch gap-3 rounded-xl px-4 py-3 ${cockpit.bay}`}
+    >
+      <Dial
+        value={data.burn.total}
+        label="전체 속도"
+        color="#ffd9a8"
+        big
+        tip={`전체 속도 = 최근 ${data.burn.windowMin}분 동안 분당 태운 연료(출력 토큰), 엔진 셋 합.\n눈금은 로그(1·10·100·1천·1만), 끝은 분당 ${tokens(SPEED_FULL)}. 계측은 최대 5분 늦어요.`}
+      />
+      {AREAS.map((a) => (
+        <Dial
+          key={a}
+          value={data.burn.perMin[a]}
+          label={`${AREA_LABEL[a]} 엔진`}
+          color={COLOR[a]}
+          tip={`${AREA_LABEL[a]} 엔진 속도 = 최근 ${data.burn.windowMin}분 동안 ${AREA_LABEL[a]} 세션이 분당 태운 연료(출력 토큰).`}
+        />
+      ))}
+      <div className="ml-auto flex min-w-[200px] flex-col justify-center gap-2">
+        <Readout
+          label="오늘 연소"
+          value={tokens(data.total.output)}
+          unit="토큰"
+          tip={`오늘 연소 = 오늘 자정부터 쓴 출력 토큰 합(엔진 셋). 점화(요청) ${data.total.requests.toLocaleString("ko-KR")}번.`}
+        />
+        <Readout
+          label="연료비"
+          value={usd(data.total.cost)}
+          unit="추정"
+          tip="연료비 = 오늘 쓴 토큰을 API 가격으로 셈한 추정. 구독 사용 한도(%)와는 맞지 않아요."
+        />
+        <Readout
+          label="재순환"
+          value={tokens(data.total.cacheRead)}
+          unit="캐시 읽기"
+          tip="재순환 연료 = 캐시에서 다시 읽은 입력. 값이 싸서 토큰 수는 출력의 수백 배로 커요."
+        />
+      </div>
+    </section>
+  );
+}
+
+/** 아날로그 속도계: 240도 눈금, 로그 눈금(1·10·100·1천·1만) */
+function Dial({
+  value,
+  label,
+  color,
+  tip,
+  big,
+}: {
+  value: number;
+  label: string;
+  color: string;
+  tip: string;
+  big?: boolean;
+}) {
+  const r = speedRatio(value);
+  const start = -120;
+  const sweep = 240;
+  const angle = start + r * sweep;
+  const ticks = [0, 1, 2, 3, 4].map((p) => ({
+    p,
+    f: Math.log10(1 + 10 ** p) / Math.log10(1 + SPEED_FULL),
+  }));
+  const size = big ? 150 : 120;
+  return (
+    <Tip text={tip} align="start">
+      <button
+        type="button"
+        data-fuel-speed={big ? "total" : label}
+        className="flex cursor-default flex-col items-center outline-none"
+      >
+        <svg viewBox="-60 -60 120 120" width={size} aria-hidden>
+          <circle r="56" fill="#0a0e15" stroke="#3a4558" strokeWidth="3" />
+          <circle r="50" fill="none" stroke="#ffffff" strokeOpacity="0.06" />
+          {/* 바탕 호와 값 호 */}
+          <path
+            d={arc(44, start, start + sweep)}
+            fill="none"
+            stroke="#ffffff"
+            strokeOpacity="0.1"
+            strokeWidth="4"
+          />
+          <path
+            d={arc(44, start, angle)}
+            fill="none"
+            stroke={color}
+            strokeWidth="4"
+            style={{ filter: `drop-shadow(0 0 4px ${color})` }}
+          />
+          {ticks.map(({ p, f }) => {
+            const a = ((start + f * sweep - 90) * Math.PI) / 180;
+            return (
+              <g key={p}>
+                <line
+                  x1={Math.cos(a) * 36}
+                  y1={Math.sin(a) * 36}
+                  x2={Math.cos(a) * 42}
+                  y2={Math.sin(a) * 42}
+                  stroke="#cfd8e8"
+                  strokeOpacity="0.6"
+                />
+                <text
+                  x={Math.cos(a) * 28}
+                  y={Math.sin(a) * 28 + 3}
+                  textAnchor="middle"
+                  fontSize="7"
+                  fontFamily="ui-monospace, monospace"
+                  fill="#cfd8e8"
+                  fillOpacity="0.5"
+                >
+                  {["1", "10", "100", "1천", "1만"][p]}
+                </text>
+              </g>
+            );
+          })}
+          <line
+            x1="0"
+            y1="6"
+            x2="0"
+            y2="-40"
+            stroke="#f4f6fa"
+            strokeWidth="2"
+            strokeLinecap="round"
+            transform={`rotate(${angle})`}
+          />
+          <circle r="5" fill="#2a3240" stroke="#cfd8e8" strokeOpacity="0.6" />
+          <text
+            y="30"
+            textAnchor="middle"
+            fontSize={big ? 13 : 11}
+            fontWeight="700"
+            fontFamily="ui-monospace, monospace"
+            fill="#f4f6fa"
+          >
+            {tokens(Math.round(value))}
+          </text>
+          <text
+            y="40"
+            textAnchor="middle"
+            fontSize="6.5"
+            fill="#cfd8e8"
+            fillOpacity="0.5"
+          >
+            분당 토큰
+          </text>
+        </svg>
+        <span
+          className="mt-0.5 text-[11px] font-semibold tracking-wide"
+          style={{ color }}
+        >
+          {label}
+        </span>
+      </button>
+    </Tip>
+  );
+}
+
+/** 반지름 r, 각도 a0→a1(위가 0도, 시계 방향)인 호 */
+function arc(r: number, a0: number, a1: number): string {
+  const p = (a: number) => {
+    const t = ((a - 90) * Math.PI) / 180;
+    return `${(Math.cos(t) * r).toFixed(2)} ${(Math.sin(t) * r).toFixed(2)}`;
+  };
+  const large = a1 - a0 > 180 ? 1 : 0;
+  return `M ${p(a0)} A ${r} ${r} 0 ${large} 1 ${p(a1)}`;
+}
+
+/** 호박색 숫자판 */
+function Readout({
+  label,
+  value,
+  unit,
+  tip,
+}: {
+  label: string;
+  value: string;
+  unit: string;
+  tip: string;
+}) {
+  return (
+    <Tip text={tip} align="end">
+      <button
+        type="button"
+        className="flex w-full cursor-default items-center gap-2 rounded-md border border-black/60 bg-[#07090d] px-2.5 py-1.5 text-left shadow-[inset_0_1px_6px_rgba(0,0,0,0.8)] outline-none"
+      >
+        <span className="w-[52px] shrink-0 text-[10.5px] text-white/45">
+          {label}
+        </span>
+        <span className="flex-1 text-right font-mono text-[16px] font-semibold tabular-nums text-[#ffc46b] [text-shadow:0_0_8px_rgba(255,180,92,0.55)]">
+          {value}
+        </span>
+        <span className="w-[44px] shrink-0 text-[10px] text-white/35">
+          {unit}
+        </span>
+      </button>
+    </Tip>
+  );
+}
+
+/** 판에 끼워 둔 연료 기록 노트 */
+function LogBook() {
+  return (
+    <Tip
+      align="end"
+      text={
+        "연료 기록 노트 = 자세한 도표.\n오늘·7일·30일, 업무·개인 합계, 승무원(프로젝트)·세션 순위, 날마다 연소, 엔진(모델)별"
+      }
+      className="h-full"
+    >
+      <Link
+        href="/usage"
+        data-fuel-notebook
+        className={`group relative flex h-full w-full flex-col justify-between overflow-hidden rounded-xl px-4 pt-6 pb-4 ${cockpit.bay}`}
+      >
+        {/* 집게 */}
+        <span className="absolute top-0 left-1/2 h-[14px] w-[64px] -translate-x-1/2 rounded-b-md bg-gradient-to-b from-[#8a97ad] to-[#3a4558] shadow-[0_2px_4px_rgba(0,0,0,0.6)]" />
+        <span className="flex flex-col gap-1.5">
+          <span className="font-mono text-[9.5px] tracking-[0.25em] text-white/35">
+            FUEL LOG BOOK
+          </span>
+          <span className="text-[15px] font-semibold text-[#ffd9a8]">
+            연료 기록 노트
+          </span>
+          {[0, 1, 2, 3].map((n) => (
+            <span
+              key={n}
+              className="h-px bg-white/10"
+              style={{ width: `${88 - n * 14}%` }}
+            />
+          ))}
+        </span>
+        <span className="mt-3 text-[12px] text-white/55 group-hover:text-white/85">
+          펼쳐서 자세한 도표 보기 ▸
+        </span>
+      </Link>
+    </Tip>
+  );
+}
+
+/* ───────────── 속도 기록지 ───────────── */
+
+/** 시간별 속도 기록: 그 시간 평균 분당 출력(시간 합 ÷ 60), 영역별로 쌓는다 */
+function HourLog({ data }: { data: UsageResponse }) {
+  const rows = data.hours.map((h) => ({
+    at: h.at,
+    work: h.work / 60,
+    personal: h.personal / 60,
+    other: h.other / 60,
+  }));
+  const max = Math.max(1, ...rows.map((h) => h.work + h.personal + h.other));
+  const grid = [0.25, 0.5, 0.75, 1];
+  return (
+    <section
+      data-fuel-hours
+      className={`rounded-xl border border-white/10 px-4 pt-3 pb-2 ${cockpit.screen}`}
+    >
+      <div className="mb-2 flex items-center gap-3">
+        <Tip
+          align="start"
+          text="속도 기록지 = 오늘 시간마다 평균 분당 출력 토큰. 언제 일을 많이 시켰는지(시간당 업무량)가 보여요."
+        >
+          <button
+            type="button"
+            className="cursor-default font-mono text-[10px] tracking-[0.25em] text-[#7ce0ff]/55 outline-none"
+          >
+            SPEED LOG · 오늘 시간별 속도
+          </button>
+        </Tip>
+        <span className="ml-auto flex gap-3 text-[10.5px] text-white/45">
+          {AREAS.map((a) => (
+            <span key={a} className="flex items-center gap-1">
+              <span
+                className="inline-block h-2 w-2 rounded-sm"
+                style={{ background: COLOR[a] }}
+              />
+              {AREA_LABEL[a]}
+            </span>
+          ))}
+        </span>
+      </div>
+      <div className="relative h-[140px] pl-12">
+        {grid.map((g) => (
+          <div
+            key={g}
+            className="absolute right-0 left-12 border-t border-dashed border-[#7ce0ff]/10"
+            style={{ bottom: `${g * 100}%` }}
+          >
+            <span className="absolute -top-2 -left-12 w-10 text-right font-mono text-[9px] text-white/30">
+              {tokens(Math.round(max * g))}
+            </span>
+          </div>
+        ))}
+        <div className="absolute inset-0 left-12 flex items-end gap-[3px]">
+          {rows.map((h) => {
+            const sum = h.work + h.personal + h.other;
+            const hour = new Date(h.at).getHours();
+            return (
+              <div
+                key={h.at}
+                className="flex h-full min-w-0 flex-1 flex-col justify-end"
+                title={`${hour}시 · 분당 ${tokens(Math.round(sum))}`}
+              >
+                <div
+                  className="flex flex-col-reverse overflow-hidden rounded-t-[2px]"
+                  style={{ height: `${(sum / max) * 100}%` }}
+                >
+                  {AREAS.map((a) =>
+                    h[a] > 0 ? (
+                      <div
+                        key={a}
+                        style={{
+                          height: `${(h[a] / sum) * 100}%`,
+                          background: COLOR[a],
+                        }}
+                        className="opacity-85"
+                      />
+                    ) : null,
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="flex gap-[3px] pt-1 pl-12">
+        {rows.map((h) => {
+          const hour = new Date(h.at).getHours();
+          return (
+            <div
+              key={h.at}
+              className="min-w-0 flex-1 text-center font-mono text-[9px] text-white/30"
+            >
+              {hour % 3 === 0 ? hour : ""}
+            </div>
+          );
+        })}
+      </div>
+    </section>
   );
 }
