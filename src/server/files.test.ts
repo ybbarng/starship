@@ -11,11 +11,13 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  boundToLoopback,
   checkInput,
   checkResolved,
   fileRoots,
   hasHiddenPart,
   isInside,
+  isLoopbackHost,
   isTrustedFetch,
   parseRange,
   parseRoots,
@@ -212,15 +214,67 @@ describe("parseRange", () => {
 });
 
 describe("isTrustedFetch", () => {
-  const req = (site?: string) =>
-    new Request("http://localhost/api/files", {
-      headers: site ? { "sec-fetch-site": site } : {},
-    });
-  it("같은 출처와 주소창(none)만 받는다", () => {
+  const req = (site?: string, host = "127.0.0.1:7790") => {
+    // Request는 host 머리글을 직접 못 넣으니 headers만 꾸민다.
+    const headers = new Headers(site ? { "sec-fetch-site": site } : {});
+    headers.set("host", host);
+    return { headers } as unknown as Request;
+  };
+  it("같은 출처이고 Host가 이 컴퓨터 자신일 때만 받는다", () => {
     expect(isTrustedFetch(req("same-origin"))).toBe(true);
-    expect(isTrustedFetch(req("none"))).toBe(true);
+    expect(isTrustedFetch(req("same-origin", "localhost:7790"))).toBe(true);
+    expect(isTrustedFetch(req("same-origin", "[::1]:7790"))).toBe(true);
+  });
+  it("주소창(none)은 아무 클라이언트나 꾸밀 수 있어 받지 않는다", () => {
+    expect(isTrustedFetch(req("none"))).toBe(false);
+  });
+  it("다른 사이트·머리글 없음은 거절", () => {
     expect(isTrustedFetch(req("cross-site"))).toBe(false);
     expect(isTrustedFetch(req("same-site"))).toBe(false);
     expect(isTrustedFetch(req())).toBe(false);
+  });
+  it("Host가 LAN 주소·남의 도메인이면 거절(DNS 재바인딩 포함)", () => {
+    for (const host of [
+      "192.168.0.10:7790",
+      "100.64.1.2:7790",
+      "evil.example:7790",
+      "127.0.0.1.evil.example",
+    ])
+      expect(isTrustedFetch(req("same-origin", host)), host).toBe(false);
+  });
+});
+
+describe("isLoopbackHost", () => {
+  it("이 컴퓨터 자신만", () => {
+    expect(isLoopbackHost("127.0.0.1")).toBe(true);
+    expect(isLoopbackHost("LOCALHOST:7795")).toBe(true);
+    expect(isLoopbackHost("[::1]")).toBe(true);
+    expect(isLoopbackHost("0.0.0.0:7790")).toBe(false);
+    expect(isLoopbackHost(null)).toBe(false);
+  });
+});
+
+describe("boundToLoopback", () => {
+  it("띄울 때 -H·--hostname이 이 컴퓨터 자신이면 true", () => {
+    expect(
+      boundToLoopback(["node", "next", "start", "-H", "127.0.0.1"], {}),
+    ).toBe(true);
+    expect(boundToLoopback(["node", "next", "--hostname=localhost"], {})).toBe(
+      true,
+    );
+  });
+  it("인자가 없으면 HOSTNAME 환경 변수를 본다", () => {
+    expect(
+      boundToLoopback(["node", "next", "start"], { HOSTNAME: "127.0.0.1" }),
+    ).toBe(true);
+  });
+  it("모든 주소(0.0.0.0)나 아무 표시가 없으면 false", () => {
+    expect(
+      boundToLoopback(["node", "next", "start", "-H", "0.0.0.0"], {}),
+    ).toBe(false);
+    expect(boundToLoopback(["node", "next", "start"], {})).toBe(false);
+    expect(
+      boundToLoopback(["node", "next", "start"], { HOSTNAME: "my-mac" }),
+    ).toBe(false);
   });
 });

@@ -4,6 +4,7 @@ import { createReadStream } from "node:fs";
 import path from "node:path";
 import { Readable } from "node:stream";
 import {
+  boundToLoopback,
   fileRoots,
   isTrustedFetch,
   parseRange,
@@ -31,10 +32,16 @@ export async function GET(request: Request) {
   // 다른 사이트가 <img>·fetch로 내 파일을 끌어가지 못하게 막는다.
   if (!isTrustedFetch(request)) return fail(403, "다른 출처의 요청");
   const input = new URL(request.url).searchParams.get("path");
-  const { roots } = fileRoots(
+  const { roots, demo } = fileRoots(
     process.env.STARSHIP_FILE_ROOTS,
     sourceInfo().mode,
   );
+  // 모든 주소로 뜬 서버는 다른 기기가 Host를 꾸며 들어올 수 있다. 데모 예시 파일만 예외.
+  if (!demo && !boundToLoopback())
+    return fail(
+      403,
+      "서버가 이 컴퓨터 밖에도 열려 있어 파일을 내주지 않아요(-H 127.0.0.1로 띄우세요)",
+    );
   const file = await resolveFile(input, roots, "view");
   if (!file.ok) return fail(file.status, file.reason);
 

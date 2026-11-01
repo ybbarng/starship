@@ -222,7 +222,44 @@ export function parseRange(
 }
 
 /** 다른 사이트가 &lt;img&gt;·fetch로 이 끝점을 부르지 못하게. 같은 출처거나 주소창에서 직접 연 것만. */
+const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
+
+/** "127.0.0.1:7790" · "localhost" · "[::1]:7790" 처럼 이 컴퓨터 자신을 가리키는 Host인가. */
+export function isLoopbackHost(host: string | null | undefined): boolean {
+  if (!host) return false;
+  const name = host.startsWith("[")
+    ? host.slice(0, host.indexOf("]") + 1)
+    : (host.split(":")[0] ?? "");
+  return LOOPBACK.has(name.toLowerCase());
+}
+
+/**
+ * 서버를 이 컴퓨터 자신(-H 127.0.0.1 등)에만 열고 띄웠나. 띄울 때 인자(-H·--hostname)를 보고,
+ * 없으면 HOSTNAME 환경 변수를 본다. 둘 다 없으면 모든 주소로 뜬 것으로 보고 false.
+ * 모든 주소로 뜨면 같은 Wi-Fi·VPN의 다른 기기가 Host를 꾸며 들어올 수 있어 파일을 내주지 않는다(2026-11-01 비서 지적).
+ */
+export function boundToLoopback(
+  argv: readonly string[] = process.argv,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+  let host: string | undefined;
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i] ?? "";
+    if (a === "-H" || a === "--hostname") host = argv[i + 1];
+    else if (a.startsWith("--hostname=")) host = a.slice("--hostname=".length);
+  }
+  host ??= env.HOSTNAME;
+  return host !== undefined && LOOPBACK.has(host.toLowerCase());
+}
+
+/**
+ * 보기 요청을 믿어도 되나: 같은 출처에서 연 것(Sec-Fetch-Site same-origin)이고 Host가 이 컴퓨터 자신일 때만.
+ * "none"(주소창에 직접 친 것)은 브라우저가 아닌 클라이언트가 마음대로 넣을 수 있어 받지 않는다.
+ * Host를 보면 DNS 재바인딩(남의 도메인이 127.0.0.1을 가리키게 하는 것)도 막힌다.
+ */
 export function isTrustedFetch(request: Request): boolean {
-  const site = request.headers.get("sec-fetch-site");
-  return site === "same-origin" || site === "none";
+  return (
+    request.headers.get("sec-fetch-site") === "same-origin" &&
+    isLoopbackHost(request.headers.get("host"))
+  );
 }

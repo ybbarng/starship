@@ -34,7 +34,8 @@
 | 보기는 정한 종류만 | `VIEW_TYPES`: png jpg jpeg gif webp pdf mp4 mov webm txt md log json csv. svg·html은 스크립트를 담을 수 있어 받지 않는다. md·log·json·csv는 `text/plain`으로 준다 |
 | 보기 응답이 이 앱 출처로 스크립트를 돌리지 못한다 | `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox`, `Content-Disposition: inline` |
 | 보기는 200MB까지 | `MAX_VIEW_BYTES`. 넘으면 413, 열기로 본다 |
-| 다른 사이트가 내 파일을 끌어가지 못한다 | 보기는 `Sec-Fetch-Site`가 `same-origin`(카드 링크) 또는 `none`(주소창)일 때만. 머리글이 없으면 거절 |
+| 다른 사이트가 내 파일을 끌어가지 못한다 | 보기는 `Sec-Fetch-Site`가 `same-origin`(카드 링크)이고 `Host`가 이 컴퓨터 자신(127.0.0.1·localhost·[::1])일 때만. `none`(주소창)은 브라우저가 아닌 클라이언트가 마음대로 넣을 수 있어 받지 않는다(2026-11-01 비서 지적). `Host`를 보면 DNS 재바인딩도 막힌다 |
+| 같은 Wi-Fi·VPN의 다른 기기가 못 본다 | 서버를 `next start -H 127.0.0.1`로 띄운다(비서 install-starship.sh). 코드도 띄울 때 인자(`-H`·`--hostname`, 없으면 `HOSTNAME`)가 이 컴퓨터 자신이 아니면 모든 주소로 뜬 것으로 보고 보기·열기를 거절한다(`boundToLoopback`). 다른 기기는 `Host`·`Origin`을 꾸밀 수 있어서다. 데모 예시 파일만 예외 |
 | 다른 사이트가 내 맥에서 파일을 열지 못한다 | 열기는 `isSameOrigin`(Origin = Host)일 때만 |
 | 실행 파일은 열지 않는다 | 열기는 `OPEN_EXTS`(문서·이미지·영상·소리) 확장자만. 보통 파일만(`.app`·폴더 거절), 실행 권한 비트가 붙은 파일도 거절 |
 | 셸을 거치지 않는다 | `execFile("/usr/bin/open", ["--", 경로])` |
@@ -47,7 +48,7 @@
 
 - **세션(AI)**: 결과물을 허용 폴더(예: `~/Desktop`) 아래에 저장하고, 책상 기다림의 `options[].path`나 `items[].path`에 절대 경로를 적는다. `~`는 쓰지 않는다(형식 검사에서 걸린다).
 - **사람**: 선실 책상 카드에서 파일 이름 옆 "보기"(새 탭) 또는 "열기"(맥 프로그램)를 누른다. 거절되면 까닭이 알림으로 뜬다("허용 폴더 밖이에요", "숨김 파일·폴더예요" 등).
-- **직접 확인**: 주소창에 `http://localhost:7790/api/files?path=/Users/…/a.png`를 넣어도 된다(주소창은 `Sec-Fetch-Site: none`).
+- **직접 확인**: 선실 책상 카드의 "보기"로 연다. 주소창에 직접 넣으면(`Sec-Fetch-Site: none`) 거절된다.
 - **PWA**: Chrome 주소창 오른쪽의 설치 아이콘 또는 메뉴 → "앱으로 설치". 따로 된 창에서 "보기"는 기본 브라우저 탭으로 열린다.
 
 ## 4. 요구사항이 바뀌면
