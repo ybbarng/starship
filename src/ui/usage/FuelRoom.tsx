@@ -162,7 +162,8 @@ function Schematic({ data }: { data: UsageResponse }) {
               y={ENGINE_Y[ENGINE_OF[i] ?? 0] ?? 110}
               area={a}
               perMin={data.burn.perMin[a]}
-              thrust={data.burn.perMin[a] / maxBurn}
+              // 불꽃 세기는 계기판 바늘과 같은 절대 눈금(가장 센 엔진 대비가 아니다)
+              thrust={speedRatio(data.burn.perMin[a])}
             />
           ))}
         </svg>
@@ -662,39 +663,46 @@ const PLUME_INSET = 8;
 function Plume({
   x,
   y,
-  len,
+  power,
   area,
 }: {
   x: number;
   y: number;
-  len: number;
+  /** 세기 0..1(계기판 바늘과 같은 로그 눈금, speedRatio) */
+  power: number;
   area: Area;
 }) {
+  // 세기가 크면 길고 굵고 밝다. 약하면 짧고 가늘고 흐리며 충격파 무늬가 줄어든다.
+  const len = 30 + 160 * power;
+  const w = 0.55 + 0.45 * power;
   // x는 노즐 출구. 불꽃은 출구 안쪽(PLUME_INSET)에서 노즐 입구(반높이 38)보다 좁게 시작한다.
   const sx = x - PLUME_INSET;
-  const diamonds = [0.16, 0.3, 0.43].filter((t) => t * len > 14);
+  const diamonds = [0.16, 0.3, 0.43].slice(
+    0,
+    power > 0.75 ? 3 : power > 0.5 ? 2 : power > 0.3 ? 1 : 0,
+  );
   return (
-    <g style={{ mixBlendMode: "screen" }}>
+    <g style={{ mixBlendMode: "screen", opacity: 0.65 + 0.35 * power }}>
       {/* 번진 빛은 출구 밖에서만(노즐 몸통 뒤로 번지면 얼룩처럼 보였다) */}
       <path
-        d={flameShape(x + 6, y, len, 22, 34)}
+        d={flameShape(x + 6, y, len, 22 * w, 34 * w)}
         fill={COLOR[area]}
-        fillOpacity="0.3"
+        fillOpacity={0.1 + 0.25 * power}
         filter="url(#fr-glow)"
       />
       <g className="fuel-plume">
         <g filter="url(#fr-fire)">
           <path
-            d={flameShape(sx, y, len + PLUME_INSET, 27, 33)}
+            d={flameShape(sx, y, len + PLUME_INSET, 27 * w, 33 * w)}
             fill={`url(#fr-plume-${area})`}
           />
           <path
-            d={flameShape(sx, y, len * 0.72, 18, 21)}
+            d={flameShape(sx, y, len * 0.72, 18 * w, 21 * w)}
             fill="url(#fr-plume-mid)"
           />
         </g>
         <path
-          d={flameShape(sx, y, len * 0.48, 9, 10)}
+          d={flameShape(sx, y, len * 0.48, 9 * w, 10 * w)}
           fill="url(#fr-plume-core)"
         />
         {diamonds.map((t, i) => (
@@ -726,11 +734,10 @@ function Engine({
 }) {
   const x = ENGINE_X;
   const c = COLOR[area];
-  const plume = perMin > 0 ? 40 + thrust * 150 : 0;
   return (
     <g data-engine={area}>
       {/* 배기 불꽃: 노즐 안쪽에서 시작해 노즐 뒤에 그린다(일렁이는 왼쪽 끝을 노즐이 가린다) */}
-      {plume > 0 && <Plume x={x + 142} y={y} len={plume} area={area} />}
+      {perMin > 0 && <Plume x={x + 142} y={y} power={thrust} area={area} />}
       {/* 연소실 */}
       <rect
         x={x}
