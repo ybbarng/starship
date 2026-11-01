@@ -1,0 +1,9 @@
+# 느린 폰에서 잰 결제 화면 연출 기록 (데모, 지어낸 값)
+10:02:11.120 cart-fly     start
+10:02:11.718 cart-fly     end    frames=36 dropped=0
+10:02:14.003 coupon-roll  start
+10:02:14.810 coupon-roll  end    frames=48 dropped=0
+10:02:20.441 confetti     start
+10:02:22.252 confetti     end    frames=107 dropped=2
+10:02:25.900 soldout-wig  start
+10:02:26.302 soldout-wig  end    frames=24 dropped=0
