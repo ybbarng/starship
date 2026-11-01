@@ -144,8 +144,8 @@ export function Annunciators({
           <Tile
             id="vpn"
             lamp={link.vpn.status === "error" ? "alert" : "warn"}
-            label={`회사 VPN ${link.vpn.status === "error" ? "끊김" : "주의"}`}
-            hint={`${link.vpn.cause ?? ""} 유리창 왼쪽 위 관제 링크에 자세히 보여요`}
+            label={`함대 통신망 ${link.vpn.status === "error" ? "끊김" : "주의"}`}
+            hint={`회사 VPN(Tailscale). ${link.vpn.cause ?? ""} 유리창 왼쪽 위 관제 링크에 자세히 보여요`}
           />
         )}
     </div>

@@ -105,7 +105,7 @@ export const VPN_LABEL: Record<GaugeStatus, string> = {
   off: "꺼짐",
 };
 
-/** 회사 VPN 줄의 작은 글: "키 7일 · 라우터 3/3". 키가 3일 안이면 "키 2일 남음". */
+/** 함대 통신망(회사 VPN) 줄의 작은 글: "키 7일 · 라우터 3/3". 키가 3일 안이면 "키 2일 남음". */
 export function vpnDetail(vpn: NonNullable<Link["vpn"]>): string {
   const parts: string[] = [];
   if (vpn.keyDays !== undefined)

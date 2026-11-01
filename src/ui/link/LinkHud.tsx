@@ -115,7 +115,7 @@ const VPN_COLOR: Record<GaugeStatus, string> = {
 };
 
 /**
- * 회사 VPN: 사슬 아래 따로 한 줄. 본부(회사 망)로 가는 비밀 통로다.
+ * 함대 통신망(회사 VPN, Tailscale): 사슬 아래 따로 한 줄. 회사를 이 배가 속한 함대로 본다.
  * 문제가 있으면 이 줄만 호박색·붉은색이 되고 원인을 보인다. 인터넷이 멀쩡하면 "인터넷은 정상"을 붙인다.
  */
 function VpnRow({ link, vpn }: { link: Link; vpn: NonNullable<Link["vpn"]> }) {
@@ -125,13 +125,13 @@ function VpnRow({ link, vpn }: { link: Link; vpn: NonNullable<Link["vpn"]> }) {
       data-link-vpn
       data-vpn-status={vpn.status}
       className={`mt-1.5 rounded-md border px-2 py-1 text-[10.5px] ${VPN_FRAME[vpn.status]}`}
-      title="본부(회사 망)로 가는 비밀 통로"
+      title="함대 통신망 = 회사 VPN(Tailscale)"
     >
       <div className="flex items-center gap-1.5">
         <span
           className={`inline-block h-[7px] w-[7px] rounded-full ${DOT[vpn.status]}`}
         />
-        <span className="text-white/70">회사 VPN</span>
+        <span className="text-white/70">함대 통신망</span>
         <span className={`font-semibold ${VPN_COLOR[vpn.status]}`}>
           {VPN_LABEL[vpn.status]}
         </span>
