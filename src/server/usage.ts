@@ -26,6 +26,7 @@ import {
   applyRecord,
   bucketsFrom,
   buildReport,
+  burnRate,
   dayKey,
   HEAD_BYTES,
   keyOf,
@@ -53,7 +54,7 @@ const CHUNK = 1024 * 1024;
 const RECENT_IDS = 5_000;
 /** 한 번에 이만큼 넘게 붙잡으면 그만큼 쉰다(코어 하나를 절반쯤만 쓴다). */
 const BUSY_MS = 25;
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 4;
 
 const USAGE_MARK = Buffer.from(USAGE_KEY);
 const ASSISTANT_MARK = Buffer.from('"type":"assistant"');
@@ -123,10 +124,16 @@ export async function getUsage(
   const now = opts.now ?? Date.now();
   const dir = usageDir();
   if (!dir) {
-    const buckets = bucketsFrom(buildDemoUsage(now));
+    const records = buildDemoUsage(now);
+    const buckets = bucketsFrom(records);
     return {
       ...buildReport(buckets.values(), {
         range,
+        now,
+        rules: DEMO_USAGE_RULES,
+        paths: DEMO_USAGE_PATHS,
+      }),
+      burn: burnRate(records, {
         now,
         rules: DEMO_USAGE_RULES,
         paths: DEMO_USAGE_PATHS,
@@ -152,13 +159,11 @@ export async function getUsage(
     await s.running;
   }
   const rules = parseAreaRules(process.env.STARSHIP_USAGE_AREAS, homedir());
+  const paths = projectPaths(s);
   return {
-    ...buildReport(s.buckets.values(), {
-      range,
-      now,
-      rules,
-      paths: projectPaths(s),
-    }),
+    ...buildReport(s.buckets.values(), { range, now, rules, paths }),
+    // 지금 속도는 최근 요청(recent, 마지막 5천 개)으로 셈한다. 최대 5분 늦을 수 있다(읽기 간격).
+    burn: burnRate(s.recent.values(), { now, rules, paths }),
     meta: {
       source: "local",
       scannedAt: s.scannedAt,

@@ -4,6 +4,7 @@ import {
   areaOf,
   bucketsFrom,
   buildReport,
+  burnRate,
   costOf,
   parseAreaRules,
   rangeStart,
@@ -417,5 +418,64 @@ describe("미리 합치기", () => {
     applyRecord(buckets, { ...a, output: 5 }, -1);
     applyRecord(buckets, b, -1);
     expect(buckets.size).toBe(0);
+  });
+});
+
+describe("시간별과 지금 속도", () => {
+  const now = new Date(2026, 9, 31, 15, 30).getTime();
+  const at = (h: number, m = 0) => new Date(2026, 9, 31, h, m).getTime();
+  const rules = parseAreaRules("work:~/company;personal:~/personal", HOME);
+  const paths = {
+    "-co-app": `${HOME}/company/app`,
+    "-pe-starship": `${HOME}/personal/projects/starship`,
+  };
+
+  it("같은 날이라도 시간이 다르면 다른 칸에 모인다", () => {
+    const buckets = bucketsFrom([
+      rec({ id: "h1", t: at(9, 10), output: 1 }),
+      rec({ id: "h2", t: at(9, 50), output: 2 }),
+      rec({ id: "h3", t: at(14, 5), output: 4 }),
+    ]);
+    expect([...buckets.values()].map((b) => [b.hour, b.output])).toEqual([
+      [9, 3],
+      [14, 4],
+    ]);
+  });
+
+  it("오늘은 자정부터 지금까지 시간 칸이 있고 영역별로 모인다", () => {
+    const r = buildReport(
+      bucketsFrom([
+        rec({ id: "a", t: at(9, 10), project: "-co-app", output: 5 }),
+        rec({ id: "b", t: at(14, 5), project: "-pe-starship", output: 7 }),
+      ]).values(),
+      { range: "today", now, rules, paths },
+    );
+    expect(r.hours).toHaveLength(16);
+    expect(r.hours[9]).toMatchObject({ work: 5, personal: 0 });
+    expect(r.hours[14]).toMatchObject({ work: 0, personal: 7 });
+  });
+
+  it("지금 속도는 최근 15분 출력을 분으로 나눈 값", () => {
+    const burn = burnRate(
+      [
+        rec({ id: "x", t: now - 5 * 60_000, project: "-co-app", output: 300 }),
+        rec({
+          id: "y",
+          t: now - 10 * 60_000,
+          project: "-pe-starship",
+          output: 150,
+        }),
+        rec({
+          id: "z",
+          t: now - 40 * 60_000,
+          project: "-pe-starship",
+          output: 999,
+        }),
+      ],
+      { now, rules, paths },
+    );
+    expect(burn.perMin.work).toBe(20);
+    expect(burn.perMin.personal).toBe(10);
+    expect(burn.total).toBe(30);
   });
 });

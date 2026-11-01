@@ -171,6 +171,8 @@ function add(t: Totals, b: UsageBucket) {
 export type UsageBucket = Tokens & {
   /** 이 컴퓨터 시간대의 날짜("2026-11-01") */
   day: string;
+  /** 그날의 몇 시(0~23). 시간별 속도 그래프가 쓴다 */
+  hour: number;
   project: string;
   session: string;
   requests: number;
@@ -184,15 +186,18 @@ export function dayKey(t: number): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
-/** 합계 칸의 열쇠: 날·프로젝트·세션·모델·fast */
+/** 합계 칸의 열쇠: 날·시·프로젝트·세션·모델·fast */
 export function keyOf(
-  b: Pick<UsageBucket, "day" | "project" | "session" | "model" | "fast">,
+  b: Pick<
+    UsageBucket,
+    "day" | "hour" | "project" | "session" | "model" | "fast"
+  >,
 ): string {
-  return `${b.day}\t${b.project}\t${b.session}\t${b.model}\t${b.fast ? "fast" : ""}`;
+  return `${b.day}T${b.hour}\t${b.project}\t${b.session}\t${b.model}\t${b.fast ? "fast" : ""}`;
 }
 
 export function bucketKey(r: UsageRecord): string {
-  return keyOf({ ...r, day: dayKey(r.t) });
+  return keyOf({ ...r, day: dayKey(r.t), hour: new Date(r.t).getHours() });
 }
 
 /**
@@ -210,6 +215,7 @@ export function applyRecord(
     if (sign < 0) return;
     b = {
       day: dayKey(r.t),
+      hour: new Date(r.t).getHours(),
       project: r.project,
       session: r.session,
       model: r.model,
@@ -289,6 +295,40 @@ export type ProjectUsage = Totals & {
 
 export type DayUsage = { day: string } & Record<Area, number>;
 
+/** 한 시간 동안의 영역별 출력 토큰. at은 그 시간이 시작한 시각 */
+export type HourUsage = { at: number } & Record<Area, number>;
+
+/** 최근 몇 분 동안 분당 출력 토큰(= 우주선 속도). 연료실·조종석 계기가 쓴다 */
+export type Burn = {
+  windowMin: number;
+  perMin: Record<Area, number>;
+  total: number;
+};
+
+/** 최근 windowMin분 안의 요청으로 분당 출력 토큰을 셈한다. */
+export function burnRate(
+  records: Iterable<UsageRecord>,
+  opts: {
+    now: number;
+    rules: AreaRule[];
+    paths: ProjectPaths;
+    windowMin?: number;
+  },
+): Burn {
+  const windowMin = opts.windowMin ?? 15;
+  const from = opts.now - windowMin * 60_000;
+  const perMin: Record<Area, number> = { work: 0, personal: 0, other: 0 };
+  for (const r of records) {
+    if (r.t < from || r.t > opts.now) continue;
+    perMin[areaOf(opts.paths[r.project], opts.rules)] += r.output / windowMin;
+  }
+  return {
+    windowMin,
+    perMin,
+    total: perMin.work + perMin.personal + perMin.other,
+  };
+}
+
 export type UsageReport = {
   range: UsageRange;
   from: number;
@@ -298,6 +338,8 @@ export type UsageReport = {
   projects: ProjectUsage[];
   /** 날마다 영역별 출력 토큰 */
   days: DayUsage[];
+  /** 시간마다 영역별 출력 토큰(기간 전체, 오늘이면 24칸) */
+  hours: HourUsage[];
   models: { model: string; requests: number; output: number; cost?: number }[];
 };
 
@@ -331,6 +373,17 @@ export function buildReport(
   for (let d = from; d <= opts.now; d += 86_400_000) {
     const k = dayKey(d);
     days.set(k, { day: k, work: 0, personal: 0, other: 0 });
+  }
+  // 시간 칸: 기간 시작 자정부터 지금 시각까지. 열쇠는 "날짜T시"
+  const hours = new Map<string, HourUsage>();
+  for (let t = from; t <= opts.now; t += 3_600_000) {
+    const d = new Date(t);
+    hours.set(`${dayKey(t)}T${d.getHours()}`, {
+      at: t,
+      work: 0,
+      personal: 0,
+      other: 0,
+    });
   }
 
   const fromDay = dayKey(from);
@@ -371,6 +424,8 @@ export function buildReport(
 
     const day = days.get(r.day);
     if (day) day[area] += r.output;
+    const hour = hours.get(`${r.day}T${r.hour}`);
+    if (hour) hour[area] += r.output;
 
     const m = models.get(r.model) ?? { requests: 0, output: 0 };
     m.requests += r.requests;
@@ -396,6 +451,7 @@ export function buildReport(
     total,
     projects: list,
     days: [...days.values()],
+    hours: [...hours.values()],
     models: [...models.entries()]
       .map(([model, m]) => ({ model, ...m }))
       .sort((a, b) => b.output - a.output),
@@ -549,5 +605,5 @@ export type UsageMeta = {
   rules: boolean;
 };
 
-/** GET /api/usage?range= 응답 */
-export type UsageResponse = UsageReport & { meta: UsageMeta };
+/** GET /api/usage?range= 응답. burn은 최근 15분 분당 출력(= 지금 속도) */
+export type UsageResponse = UsageReport & { meta: UsageMeta; burn: Burn };
