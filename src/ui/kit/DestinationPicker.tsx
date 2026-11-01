@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef } from "react";
 import { AU_KM } from "@/sky/astro";
 import {
   DESTINATIONS,
@@ -28,10 +29,37 @@ export function DestinationPicker({
 }) {
   const current = useVoyage((s) => s.destinationId);
   const travelTo = useVoyage((s) => s.travelTo);
+  const sections = useRef(new Map<DestinationGroup, HTMLElement>());
   return (
-    <div className="space-y-4">
+    <div className="relative space-y-4">
+      {/* 목록이 길어 창 아래로 이어진다. 갈 수 있는 무리를 한눈에 보이고 누르면 그리로 옮긴다. */}
+      <nav
+        data-destination-groups
+        className="sticky -top-5 z-10 -mx-5 -mt-5 flex flex-wrap gap-1.5 border-b border-white/10 bg-hull-900/95 px-5 py-2.5 backdrop-blur"
+      >
+        {GROUPS.map((g) => (
+          <button
+            key={g}
+            type="button"
+            onClick={() =>
+              sections.current
+                .get(g)
+                ?.scrollIntoView({ behavior: "smooth", block: "start" })
+            }
+            className="rounded-full border border-white/15 px-2.5 py-0.5 text-xs text-white/70 hover:border-white/40 hover:text-white"
+          >
+            {g}
+          </button>
+        ))}
+      </nav>
       {GROUPS.map((g) => (
-        <section key={g}>
+        <section
+          key={g}
+          ref={(el) => {
+            if (el) sections.current.set(g, el);
+          }}
+          className="scroll-mt-14"
+        >
           <h3 className="mb-1.5 text-xs font-semibold tracking-widest text-white/50">
             {g}
           </h3>
@@ -67,6 +95,11 @@ export function DestinationPicker({
           </div>
         </section>
       ))}
+      {/* 아래로 더 있다는 표시: 창 아래 끝이 흐려진다. */}
+      <div
+        aria-hidden
+        className="pointer-events-none sticky -bottom-5 -mx-5 -mb-5 h-8 bg-gradient-to-t from-hull-900 to-transparent"
+      />
     </div>
   );
 }

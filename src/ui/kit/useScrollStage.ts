@@ -83,6 +83,9 @@ export function useScrollStage({
       touchY = e.touches[0]?.clientY ?? null;
     };
     const onTouchMove = (e: TouchEvent) => {
+      // 휠과 같이: 창(대화상자)이나 스스로 스크롤하는 목록 안에서 민 것은 넘기지 않는다.
+      const el = e.target as HTMLElement | null;
+      if (el?.closest("[data-scroll-inside],[role=dialog]")) return;
       const y = e.touches[0]?.clientY;
       if (touchY === null || y === undefined) return;
       feed((touchY - y) * 2);
