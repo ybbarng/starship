@@ -1345,7 +1345,12 @@ function starHomePosition(d: Destination): THREE.Vector3 {
  */
 const starPlacement = new Map<
   string,
-  { center: THREE.Vector3; back: THREE.Vector3 }
+  {
+    center: THREE.Vector3;
+    back: THREE.Vector3;
+    /** 출발할 때 관측자에서 그 별까지(광년). 날아가는 동안 하늘 관측자 자리를 셀 때 쓴다. */
+    startLy: number;
+  }
 >();
 
 /** 지금 프레임에 그린 별 구의 자리(이름표 가림 계산에 쓴다). StarTargets가 매 프레임 채운다. */
@@ -1354,11 +1359,44 @@ const starSceneNow = new Map<string, THREE.Vector3>();
 function placeStar(d: Destination, from: THREE.Vector3) {
   const [sx, sy, sz] = starLy(d);
   const [ox, oy, oz] = skyObserver.ly;
-  const dir = new THREE.Vector3(sx - ox, sy - oy, sz - oz).normalize();
+  const toStar = new THREE.Vector3(sx - ox, sy - oy, sz - oz);
+  const startLy = toStar.length();
+  const dir = toStar.normalize();
   starPlacement.set(d.id, {
     center: from.clone().add(dir.clone().multiplyScalar(starDistance())),
     back: dir.negate(),
+    startLy,
   });
+}
+
+/**
+ * 별로 가는 동안·도착한 뒤 하늘 관측자 자리(광년): 별의 실제 자리 + (카메라 − 별 구) × 배율.
+ * 배율이 얼마든 관측자에서 그 별을 보는 방향이 카메라에서 구를 보는 방향과 같아, 별자리 선과
+ * 이름표가 날아가는 내내 구에 붙어 있다(2026-11-01 사용자 지적: 도착하면 갑자기 붙었다).
+ * 배율은 출발 거리에서 실제 거리(startLy)와, 도착 거리(p.dist)에서 NEAR_STAR_OFFSET_LY와 맞도록
+ * 거리의 로그로 잇는다.
+ */
+function observerNearStar(
+  d: Destination,
+  cam: THREE.Vector3,
+  dist: number,
+): Vec3 | null {
+  const placed = starPlacement.get(d.id);
+  if (!placed) return null;
+  const [sx, sy, sz] = starLy(d);
+  const rel = cam.clone().sub(placed.center);
+  const r = Math.max(rel.length(), 1e-9);
+  const r0 = starDistance();
+  const s0 = placed.startLy / r0;
+  const s1 = NEAR_STAR_OFFSET_LY / dist;
+  let s: number;
+  if (r >= r0 || s0 <= s1) s = s0;
+  else if (r <= dist) s = s1;
+  else {
+    const t = Math.log(r / dist) / Math.log(r0 / dist);
+    s = Math.exp(Math.log(s1) + (Math.log(s0) - Math.log(s1)) * t);
+  }
+  return [sx + rel.x * s, sy + rel.y * s, sz + rel.z * s];
 }
 
 /** 별 목적지의 장면 자리: 출발 때 정한 자리, 없으면 기본 자리. */
@@ -1985,9 +2023,20 @@ function CameraRig({
     } else {
       off = offsetAt(camera.position);
     }
-    lastOffset.current = off;
     const [x, y, z] = auToSkyLy(telemetry.position);
-    skyObserver.ly = [x + off[0], y + off[1], z + off[2]];
+    // 별로 가는 중·별에 머무는 중에는 카메라 자리에서 바로 센다(선·이름표가 구에 붙어 있게).
+    const near = dest.star
+      ? observerNearStar(dest, camera.position, p.dist)
+      : null;
+    if (near) {
+      skyObserver.ly = near;
+      // 별을 떠날 때 이어서 출발하도록, 별의 실제 자리에서 비킨 몫으로 남긴다.
+      const [sx, sy, sz] = starLy(dest);
+      off = [near[0] - sx, near[1] - sy, near[2] - sz];
+    } else {
+      skyObserver.ly = [x + off[0], y + off[1], z + off[2]];
+    }
+    lastOffset.current = off;
     skyObserver.fromSun = Math.hypot(...skyObserver.ly);
   }
 

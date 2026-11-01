@@ -1,6 +1,6 @@
 // 설치된 Chrome으로 페이지를 열어 스크린숏을 찍고, 콘솔 오류를 보여 주고, 차례로 누른다.
 //   node scripts/shoot.mjs <url> <out.png> [--wait 4000] [--size 1372x872]
-//        [--click "<css 또는 text=글자>"]... [--click-wait ms] [--after out2.png] [--after-wait ms] [--scroll 900] [--hover "<css>"]
+//        [--click "<css 또는 text=글자>"]... [--click-wait ms 또는 ms,ms,…(클릭마다, 모자라면 마지막 값)] [--after out2.png] [--after-wait ms] [--scroll 900] [--hover "<css>"]
 // 클릭마다 0.8초 쉬고, 마지막에 --after 경로로 한 장 더 찍는다. 토스트 글은 출력한다.
 import { chromium } from "playwright-core";
 
@@ -41,7 +41,8 @@ if (scroll) {
   await page.waitForTimeout(1500);
 }
 await page.screenshot({ path: out });
-for (const sel of clicks) {
+const waits = opt("--click-wait", "800").split(",").map(Number);
+for (const [ci, sel] of clicks.entries()) {
   try {
     await page.locator(sel).first().click({ timeout: 3000 });
     // 클릭하려고 브라우저가 문서를 스크롤했으면 되돌린다(화면은 스크롤하지 않는 구조).
@@ -50,7 +51,7 @@ for (const sel of clicks) {
       for (const el of document.querySelectorAll("body *"))
         if (el.scrollTop && !el.closest("[role=dialog]")) el.scrollTop = 0;
     });
-    await page.waitForTimeout(Number(opt("--click-wait", "800")));
+    await page.waitForTimeout(waits[Math.min(ci, waits.length - 1)] ?? 800);
     const toast = await page
       .locator("[data-toast]")
       .allInnerTexts()
