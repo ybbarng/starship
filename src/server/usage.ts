@@ -65,7 +65,7 @@ export type UsageState = {
   buckets: Map<string, UsageBucket>;
   /** 최근 요청 id → 그 요청이 더한 값. 같은 요청의 다음 줄이 오면 이걸 빼고 새 값을 더한다 */
   recent: Map<string, UsageRecord>;
-  /** 32일 안에 센 요청 id → 날짜. 다른 파일에 복사된 같은 요청을 거른다 */
+  /** 32일 안에 센 요청 id → 날짜. 손으로 복사·이동한 기록 파일에 같은 요청이 또 있으면 거른다 */
   seen: Map<string, string>;
   /** 프로젝트(기록 폴더) → 작업 폴더별 줄 수. 가장 많은 것을 그 프로젝트의 경로로 본다 */
   cwds: Map<string, Map<string, number>>;
@@ -398,7 +398,7 @@ function take(
     applyRecord(s.buckets, prev, -1);
     s.recent.delete(r.id);
   } else if (s.seen.has(r.id)) {
-    // 세션을 다른 폴더에서 다시 열면 앞 대화가 새 파일로 복사된다(2026-11-01 실측: 한 파일 6천 개 중 5.6천 개).
+    // 기록 파일을 손으로 복사·이동하면 같은 요청이 두 파일에 있게 된다(2026-11-01 mighty→game 폴더 이사: 한 파일 6천 개 중 5.6천 개).
     // 이미 센 요청이니 건너뛴다.
     return;
   }

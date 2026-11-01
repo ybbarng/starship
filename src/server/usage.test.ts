@@ -109,11 +109,11 @@ describe("기록 훑기", () => {
     expect(sum(s)).toEqual({ requests: 3, output: 10 });
   });
 
-  it("다른 폴더에서 다시 연 세션이 앞 대화를 복사해도 두 번 세지 않는다", async () => {
+  it("기록 파일을 다른 폴더로 손으로 복사해도 두 번 세지 않는다", async () => {
     await writeFile(log, line("m1", 10) + line("m2", 20));
     const other = join(projects, "-home-me-renamed");
     await mkdir(other, { recursive: true });
-    // 다시 연 세션: 앞 대화(m1, m2)를 복사하고 새 요청(m3)을 잇는다. 사이에 요청이 많아 recent에서 빠졌어도 같다.
+    // 폴더 이사: 기록(m1, m2)을 새 폴더로 복사하고 거기서 이어 열어 새 요청(m3)을 잇는다. 사이에 요청이 많아 recent에서 빠졌어도 같다.
     await writeFile(
       join(other, "sess-2.jsonl"),
       line("m1", 10) + line("m2", 20) + line("m3", 30),
