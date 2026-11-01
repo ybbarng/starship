@@ -165,11 +165,17 @@
       "id": "window-3d-sky",
       "title": "3D 별하늘",
       "parent": "window",
-      "status": "fog",
+      "status": "done",
       "size": 3,
-      "summary": "별에 Hipparcos 거리를 붙이고 별자리 선을 3D로. 다른 별에 가면 별자리가 실제로 일그러진다",
-      "next": "데이터 출처 라이선스 확인",
+      "summary": "맨눈 별 5천 개에 Hipparcos(van Leeuwen 2007) 거리를 붙이고 별자리 선을 3D로. 다른 별에 가면 별자리가 실제로 일그러지고, 6~8등급 3만 6천 개와 이름 있는 별 목적지·검색을 더했다",
+      "since": "2026-11-01",
       "found": "2026-11-01",
+      "links": [
+        {
+          "label": "설계와 측정",
+          "path": "docs/sky-3d.md"
+        }
+      ],
       "signs": [
         {
           "id": "approve-3d",
@@ -178,7 +184,8 @@
           "owner": "me",
           "options": ["만들기", "도착한 별의 점만 숨기기", "그대로"],
           "recommend": "만들기",
-          "status": "open"
+          "status": "decided",
+          "decided": "만들기"
         }
       ]
     },
