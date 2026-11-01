@@ -1,0 +1,325 @@
+{
+  "map": "starship-map/1",
+  "title": "Starship",
+  "goal": "세션들을 우주선 승무원으로 보며, 나를 기다리는 것·하는 일·쓴 연료를 한 화면(조종석)에서 묻지 않고 보고 답한다",
+  "baselineAt": "2026-10-25",
+  "updatedAt": "2026-11-01T19:20:00+09:00",
+  "here": "cockpit-home",
+  "regions": [
+    {
+      "id": "protocol",
+      "title": "프로토콜",
+      "status": "done",
+      "size": 1,
+      "summary": "화면과 비서 서버 사이의 약속(starship/1). 필드를 더하기만 하고, 틀린 필드는 그 필드만 뺀다",
+      "links": [{ "label": "프로토콜 설명", "path": "docs/protocol.md" }]
+    },
+    {
+      "id": "protocol-snapshot",
+      "title": "스냅샷과 동작",
+      "parent": "protocol",
+      "status": "done",
+      "size": 2,
+      "summary": "할 일·교신·승무원·계기를 5초마다 받고, 답·미루기·치우기를 보낸다",
+      "since": "2026-10-26",
+      "links": [{ "label": "v1.ts", "path": "src/protocol/v1.ts" }]
+    },
+    {
+      "id": "protocol-map",
+      "title": "지도 형식",
+      "parent": "protocol",
+      "status": "done",
+      "size": 2,
+      "summary": "starship-map/1. 검사기와 진행률을 비서와 같이 쓴다",
+      "since": "2026-10-29",
+      "found": "2026-10-29",
+      "links": [{ "label": "지도 설계", "path": "docs/map.md" }]
+    },
+    {
+      "id": "protocol-desk",
+      "title": "책상 형식",
+      "parent": "protocol",
+      "status": "done",
+      "size": 2,
+      "summary": "starship-desk/1. 세션이 나를 기다리는 것(고르기·확인·승인·답하기)과 하는 일",
+      "since": "2026-10-31",
+      "found": "2026-10-31",
+      "links": [{ "label": "책상 설계", "path": "docs/desk.md" }]
+    },
+    {
+      "id": "cockpit",
+      "title": "조종석",
+      "status": "building",
+      "size": 1,
+      "summary": "주 화면. 유리창 너머 우주, 계기판 가운데 지금 할 일 하나, 경고등·승무원판·교신 수신등"
+    },
+    {
+      "id": "cockpit-protos",
+      "title": "시안 고르기",
+      "parent": "cockpit",
+      "status": "done",
+      "size": 3,
+      "summary": "아이디어 100개 → 1차 다섯 → 2차 트인 함교 → 3차 조종석과 감상창. 2026-11-01 조종석으로 확정",
+      "since": "2026-11-01",
+      "links": [{ "label": "시안 기록", "path": "docs/prototypes" }]
+    },
+    {
+      "id": "cockpit-home",
+      "title": "조종석을 홈으로",
+      "parent": "cockpit",
+      "status": "building",
+      "size": 1,
+      "summary": "주소 하나로 바로 조종석. 나머지 시안은 옛 시안 한 곳에 접어 둔다",
+      "next": "/ 를 조종석으로 바꾸고 시안 목록을 /proto 아래로",
+      "since": "2026-11-01",
+      "found": "2026-11-01"
+    },
+    {
+      "id": "cockpit-panel",
+      "title": "계기판(할 일·경고등·승무원판·교신)",
+      "parent": "cockpit",
+      "status": "done",
+      "size": 3,
+      "since": "2026-10-28",
+      "links": [
+        { "label": "Panel.tsx", "path": "src/protos/cockpit/Panel.tsx" }
+      ]
+    },
+    {
+      "id": "window",
+      "title": "창밖 우주",
+      "status": "building",
+      "size": 1,
+      "summary": "실제 날짜의 태양계와 맨눈 별 5,044개. 천체를 눌러 날아간다"
+    },
+    {
+      "id": "window-solar",
+      "title": "태양계와 축척",
+      "parent": "window",
+      "status": "done",
+      "size": 3,
+      "summary": "행성·위성·소천체·혜성·탐사선, 실제 축척과 보기 좋은 축척",
+      "since": "2026-10-26",
+      "signs": [
+        {
+          "id": "giant-scale",
+          "type": "risk",
+          "title": "거대한 천체가 작게 느껴진다(목성, 베텔게우스). 지금은 그대로 두기로 함"
+        }
+      ]
+    },
+    {
+      "id": "window-hdr",
+      "title": "HDR과 빛나는 항성",
+      "parent": "window",
+      "status": "done",
+      "size": 2,
+      "summary": "1.0을 넘는 빛만 번지고 표면 쌀알 무늬는 남긴다. ?hdr=0으로 끈다",
+      "since": "2026-11-01",
+      "found": "2026-11-01",
+      "links": [{ "label": "Hdr.tsx", "path": "src/sky/Hdr.tsx" }]
+    },
+    {
+      "id": "window-stars",
+      "title": "갈 수 있는 유명한 별 13",
+      "parent": "window",
+      "status": "done",
+      "size": 1,
+      "summary": "카노푸스 등 일곱을 더함. 방향·거리·반지름·색은 측정값",
+      "since": "2026-11-01",
+      "found": "2026-11-01"
+    },
+    {
+      "id": "window-3d-sky",
+      "title": "3D 별하늘",
+      "parent": "window",
+      "status": "fog",
+      "size": 3,
+      "summary": "별에 Hipparcos 거리를 붙이고 별자리 선을 3D로. 다른 별에 가면 별자리가 실제로 일그러진다",
+      "next": "데이터 출처 라이선스 확인",
+      "found": "2026-11-01",
+      "signs": [
+        {
+          "id": "approve-3d",
+          "type": "fork",
+          "title": "3D 별하늘 만들기",
+          "owner": "me",
+          "options": ["만들기", "도착한 별의 점만 숨기기", "그대로"],
+          "recommend": "만들기",
+          "status": "open"
+        }
+      ]
+    },
+    {
+      "id": "cabin",
+      "title": "선실",
+      "status": "building",
+      "size": 1,
+      "summary": "승무원(프로젝트) 하나의 방: 지도와 책상",
+      "links": [{ "label": "개척지 설계", "path": "docs/frontier.md" }]
+    },
+    {
+      "id": "cabin-frontier",
+      "title": "개척지 지도",
+      "parent": "cabin",
+      "status": "done",
+      "size": 3,
+      "summary": "육각 행성 지도. 끌기·확대 카메라, 확대 단계별 이름표, 화면 밖 표",
+      "since": "2026-10-29"
+    },
+    {
+      "id": "cabin-desk",
+      "title": "책상",
+      "parent": "cabin",
+      "status": "done",
+      "size": 2,
+      "summary": "기다리는 것 카드와 하는 일. 답은 Task로 보낸다",
+      "since": "2026-10-31",
+      "found": "2026-10-31"
+    },
+    {
+      "id": "cabin-files",
+      "title": "파일 바로 보기·열기",
+      "parent": "cabin",
+      "status": "fog",
+      "size": 2,
+      "summary": "스크린샷·PDF를 경로 복사 없이 링크로 보거나 프로그램으로 연다. 허용 폴더·실행 파일 금지",
+      "found": "2026-11-01",
+      "signs": [
+        {
+          "id": "files-way",
+          "type": "fork",
+          "title": "파일 보기·열기 방식",
+          "owner": "me",
+          "options": ["starship 서버 + PWA", "맥 앱(Tauri)", "보기만"],
+          "recommend": "starship 서버 + PWA",
+          "status": "open"
+        }
+      ]
+    },
+    {
+      "id": "cabin-answer-forks",
+      "title": "선실에서 갈림길에 답하기",
+      "parent": "cabin",
+      "status": "fog",
+      "size": 1
+    },
+    {
+      "id": "link",
+      "title": "관제 링크",
+      "status": "done",
+      "size": 1,
+      "summary": "우주선 → 중계 위성(Wi-Fi) → 지상국(공유기) → 지구(인터넷) → 항법 신호(DNS)",
+      "links": [{ "label": "LinkHud.tsx", "path": "src/ui/link/LinkHud.tsx" }]
+    },
+    {
+      "id": "link-chain",
+      "title": "회선 사슬과 경고등",
+      "parent": "link",
+      "status": "done",
+      "size": 2,
+      "since": "2026-10-29",
+      "found": "2026-10-29"
+    },
+    {
+      "id": "link-fleet",
+      "title": "함대 통신망(회사 VPN)",
+      "parent": "link",
+      "status": "done",
+      "size": 1,
+      "summary": "인터넷은 되는데 VPN만 안 되는 경우를 한눈에. 키 남은 날·라우터 수",
+      "since": "2026-11-01",
+      "found": "2026-11-01"
+    },
+    {
+      "id": "fuel",
+      "title": "연료 기록",
+      "status": "building",
+      "size": 1,
+      "summary": "토큰 사용량을 업무·개인, 프로젝트·세션별로. 맥북을 붙잡지 않게 늘어난 기록만 읽는다",
+      "found": "2026-11-01",
+      "links": [{ "label": "연료 기록 설계", "path": "docs/usage.md" }]
+    },
+    {
+      "id": "fuel-read",
+      "title": "기록 읽기와 합계",
+      "parent": "fuel",
+      "status": "done",
+      "size": 3,
+      "summary": "파일별 읽은 위치, 날·프로젝트·세션·모델 합계, 줄마다 세 창만, 복사한 기록 거르기",
+      "since": "2026-11-01",
+      "found": "2026-11-01",
+      "signs": [
+        {
+          "id": "first-read-memory",
+          "type": "risk",
+          "title": "첫 전체 읽기 때만 메모리가 약 300MB까지 오른다(다시 띄우면 180MB)"
+        }
+      ]
+    },
+    {
+      "id": "fuel-theme",
+      "title": "연료 탱크·항해 일지",
+      "parent": "fuel",
+      "status": "done",
+      "size": 1,
+      "since": "2026-11-01",
+      "found": "2026-11-01"
+    },
+    {
+      "id": "fuel-thrusters",
+      "title": "추진체 셋·연료 흐름도·시간별 속도",
+      "parent": "fuel",
+      "status": "fog",
+      "size": 3,
+      "summary": "업무·개인·기타 추진체에 연료가 흐르는 그림, 단위 시간당 연소량으로 속도, 시간별 속도 그래프",
+      "next": "합계를 날 단위에서 시간 단위로 바꾸는 설계",
+      "found": "2026-11-01"
+    },
+    {
+      "id": "ops",
+      "title": "운영",
+      "status": "building",
+      "size": 1,
+      "summary": "공개 저장소, 금지어 검사, 늘 켜 둔 앱(7790, 비서가 띄움)"
+    },
+    {
+      "id": "ops-public",
+      "title": "공개 저장소와 금지어 검사",
+      "parent": "ops",
+      "status": "done",
+      "size": 1,
+      "since": "2026-10-29"
+    },
+    {
+      "id": "ops-build",
+      "title": "확인용 빌드 분리",
+      "parent": "ops",
+      "status": "done",
+      "size": 1,
+      "summary": "확인용은 .next-check. .next를 덮으면 7790 화면이 빈다",
+      "since": "2026-11-01",
+      "found": "2026-11-01"
+    },
+    {
+      "id": "ops-push",
+      "title": "push 흐름",
+      "parent": "ops",
+      "status": "blocked",
+      "size": 1,
+      "summary": "커밋이 쌓여 있다. 상시 push 허락을 이 세션에서 한 번 확인받아야 한다",
+      "since": "2026-11-01",
+      "found": "2026-11-01",
+      "signs": [
+        {
+          "id": "push-always",
+          "type": "fork",
+          "title": "시간 될 때마다 push해도 될지",
+          "owner": "me",
+          "options": ["허락", "매번 묻기"],
+          "status": "open"
+        }
+      ]
+    }
+  ]
+}
