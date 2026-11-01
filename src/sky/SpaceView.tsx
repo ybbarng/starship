@@ -38,6 +38,7 @@ import {
   sunlightFactor,
 } from "./bodies";
 import { loadCatalog, type SkyCatalog } from "./catalog";
+import { Hdr, useHdrEnabled } from "./Hdr";
 import { projector } from "./projector";
 import { ScaleNote } from "./ScaleNote";
 import { SunGlare } from "./SunGlare";
@@ -109,6 +110,7 @@ export function SpaceView({
   const warpRef = useRef<HTMLCanvasElement>(null);
   const warp = useRef(0);
   const mode = useScale((s) => s.mode);
+  const hdr = useHdrEnabled();
 
   useEffect(() => {
     let alive = true;
@@ -138,6 +140,7 @@ export function SpaceView({
         style={{ position: "absolute", inset: 0 }}
       >
         <color attach="background" args={["#02030a"]} />
+        {hdr && <Hdr />}
         {catalog && (
           <>
             <SkyDome
@@ -148,8 +151,8 @@ export function SpaceView({
             />
             {/* 축척이 바뀌면 크기·자리를 다시 계산하도록 통째로 다시 만든다. */}
             <group key={mode}>
-              <SolarSystem catalog={catalog} onPick={onPick} />
-              <StarTargets />
+              <SolarSystem catalog={catalog} onPick={onPick} hdr={hdr} />
+              <StarTargets hdr={hdr} />
               <CameraRig lookAround={lookAround} drift={drift} warp={warp} />
               {labels !== "none" && (
                 <LabelLayer
@@ -506,13 +509,15 @@ function loadTexture(file: string, onLoad: (tex: THREE.Texture) => void) {
 function SolarSystem({
   catalog,
   onPick,
+  hdr,
 }: {
   catalog: SkyCatalog;
   onPick?: (id: string) => void;
+  hdr: boolean;
 }) {
   return (
     <group>
-      <Sun />
+      <Sun hdr={hdr} />
       {BODIES.filter((b) => b.id !== "sun").map((b) => (
         <Planet key={b.id} body={b} catalog={catalog} onPick={onPick} />
       ))}
@@ -699,7 +704,7 @@ function ProbeModel({
   );
 }
 
-function Sun() {
+function Sun({ hdr }: { hdr: boolean }) {
   const mat = useMemo(
     () =>
       new THREE.ShaderMaterial({
@@ -711,10 +716,14 @@ function Sun() {
           uIsStar: { value: 0 },
           uMap: { value: null },
           uHasMap: { value: 0 },
+          uHdr: { value: 0 },
         },
       }),
     [],
   );
+  useEffect(() => {
+    if (mat.uniforms.uHdr) mat.uniforms.uHdr.value = hdr ? 1 : 0;
+  }, [mat, hdr]);
   useEffect(() => {
     loadTexture("sun.jpg", (tex) => {
       if (mat.uniforms.uMap && mat.uniforms.uHasMap) {
@@ -1191,11 +1200,12 @@ function starSurface(color: string) {
       uTime: { value: 0 },
       uTint: { value: new THREE.Color(color) },
       uIsStar: { value: 1 },
+      uHdr: { value: 0 },
     },
   });
 }
 
-function StarTargets() {
+function StarTargets({ hdr }: { hdr: boolean }) {
   const { camera } = useThree();
   const refs = useRef<(THREE.Mesh | null)[]>([]);
   const stars = useMemo(() => DESTINATIONS.filter((d) => d.star), []);
@@ -1204,6 +1214,11 @@ function StarTargets() {
       new Map(stars.map((d) => [d.id, starSurface(d.star?.color ?? "#fff")])),
     [stars],
   );
+  // 태양처럼 항성도 HDR이면 가운데가 1.0을 넘게 밝아져 번진다.
+  useEffect(() => {
+    for (const m of surfaces.values())
+      if (m.uniforms.uHdr) m.uniforms.uHdr.value = hdr ? 1 : 0;
+  }, [surfaces, hdr]);
   useFrame(() => {
     for (const m of refs.current) m?.quaternion.copy(camera.quaternion);
   });

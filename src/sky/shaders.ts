@@ -205,6 +205,7 @@ uniform vec3 uTint;
 uniform float uIsStar;
 uniform sampler2D uMap;
 uniform float uHasMap;
+uniform float uHdr;
 varying vec3 vNormalW;
 varying vec3 vPosW;
 varying vec3 vLocal;
@@ -221,6 +222,11 @@ void main() {
   if (uHasMap > 0.5 && uIsStar < 0.5) {
     c = texture2D(uMap, vUv).rgb * (0.6 + 0.3 * g) * (0.6 + 0.5 * pow(mu, 0.5)) * 1.2;
   }
+  // HDR일 때 가운데로 갈수록 1.0을 넘게 밝힌다(가장자리는 무늬 색 그대로, 가운데는 하얗게 타며 번진다).
+  // 태양만: 가운데로 갈수록 노란 흰빛으로 바랜다(가장자리 어두워짐을 따라 매끄럽게, 무늬 밝기는 남긴다).
+  float m0 = max(max(c.r, c.g), c.b);
+  c = mix(c, vec3(1.0, 0.96, 0.86) * m0, 0.6 * pow(mu, 2.0) * uHdr * (1.0 - uIsStar));
+  c *= mix(1.0, mix(1.0, 3.2, pow(mu, 1.4)), uHdr);
   gl_FragColor = vec4(c * 1.15, 1.0);
 }
 `;
