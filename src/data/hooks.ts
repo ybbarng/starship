@@ -14,6 +14,7 @@ import {
   Snapshot as SnapshotSchema,
   type Task,
 } from "@/protocol/v1";
+import type { UsageRange, UsageResponse } from "@/usage/model";
 import { useToast } from "./toast";
 
 /** 데모 시나리오(?demo=, ?link=)와 자리(페이지 경로)를 서버에 넘긴다. */
@@ -95,6 +96,22 @@ export function useCrewDesk(crewId: string) {
     queryKey: ["crew-desk", crewId],
     queryFn: () => fetchCrewDesk(crewId),
     refetchInterval: 5_000,
+  });
+}
+
+/** 토큰 사용량. 서버가 늘어난 기록만 30초 간격으로 읽으니 1분마다 다시 묻는다. */
+export function useUsage(range: UsageRange) {
+  return useQuery({
+    queryKey: ["usage", range],
+    queryFn: async (): Promise<UsageResponse> => {
+      const res = await fetch(`/api/usage?range=${range}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(`usage ${res.status}`);
+      return (await res.json()) as UsageResponse;
+    },
+    refetchInterval: 60_000,
+    placeholderData: (prev) => prev,
   });
 }
 
