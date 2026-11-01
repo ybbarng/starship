@@ -72,6 +72,12 @@ export default function Home() {
         선실 · 승무원을 누르면 그 프로젝트의 지도로 들어가요
       </h2>
       <CrewCabins />
+      <h2 className="mt-12 text-sm font-semibold text-white/50">
+        <Link className="text-white/70 hover:text-white" href="/usage">
+          연료 기록
+        </Link>{" "}
+        · 업무·개인, 프로젝트·세션별 토큰 사용량
+      </h2>
       <h2 className="mt-12 text-sm font-semibold text-white/50">확인판</h2>
       <ul className="mt-2 flex gap-4 text-sm">
         {LABS.map((l) => (

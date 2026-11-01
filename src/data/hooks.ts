@@ -99,7 +99,7 @@ export function useCrewDesk(crewId: string) {
   });
 }
 
-/** 토큰 사용량. 서버가 늘어난 기록만 30초 간격으로 읽으니 1분마다 다시 묻는다. */
+/** 토큰 사용량. 서버가 5분보다 자주 기록을 다시 읽지 않으니 5분마다 묻는다. */
 export function useUsage(range: UsageRange) {
   return useQuery({
     queryKey: ["usage", range],
@@ -110,7 +110,7 @@ export function useUsage(range: UsageRange) {
       if (!res.ok) throw new Error(`usage ${res.status}`);
       return (await res.json()) as UsageResponse;
     },
-    refetchInterval: 60_000,
+    refetchInterval: 5 * 60_000,
     placeholderData: (prev) => prev,
   });
 }
