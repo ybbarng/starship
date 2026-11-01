@@ -105,10 +105,22 @@ export function isInside(child: string, root: string): boolean {
 
 /** root 아래 상대 경로에 "."으로 시작하는 조각(.ssh, .env, .git…)이 있나. */
 export function hasHiddenPart(child: string, root: string): boolean {
-  return path
-    .relative(root, child)
-    .split(path.sep)
-    .some((part) => part.startsWith("."));
+  const parts = path.relative(root, child).split(path.sep);
+  for (let i = 0; i < parts.length; i++) {
+    // 세션 작업 사본(<저장소>/.claude/worktrees/<이름>/…)은 숨김 예외. 사본 안의 파일만 받고
+    // (뒤에 조각이 더 있어야 한다), 그 아래의 .git·.env 같은 숨김 조각은 계속 막는다(2026-11-01 비서 요청).
+    if (
+      parts[i] === ".claude" &&
+      parts[i + 1] === "worktrees" &&
+      !(parts[i + 2] ?? ".").startsWith(".") &&
+      i + 3 < parts.length
+    ) {
+      i += 2;
+      continue;
+    }
+    if (parts[i]?.startsWith(".")) return true;
+  }
+  return false;
 }
 
 /** 받은 경로 글 자체를 본다: 절대 경로인가, ".." 조각이나 NUL이 없나. */

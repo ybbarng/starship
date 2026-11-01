@@ -30,7 +30,7 @@
 |---|---|
 | 허용 폴더 안의 파일만 | 경로와 허용 폴더를 모두 `realpath`로 푼 뒤 `isInside`로 본다. `../`는 글 단계(`checkInput`)에서도 거절한다. 이름만 비슷한 옆 폴더(`root-sibling`)는 `path.relative`로 걸러진다 |
 | 심볼릭 링크로 밖에 나가지 못한다 | 판단은 풀린 실제 경로로 한다. 확장자도 실제 파일 이름으로 본다(`a.pdf` → `run.sh` 링크는 sh로 판단) |
-| 숨김 파일·폴더(`.ssh`, `.env`, `.git` …)는 거절 | 허용 폴더 아래 상대 경로에 `.`으로 시작하는 조각이 있으면 거절(`hasHiddenPart`). 허용 폴더 자체가 숨김 폴더 아래 있는 것은 괜찮다 |
+| 숨김 파일·폴더(`.ssh`, `.env`, `.git` …)는 거절 | 허용 폴더 아래 상대 경로에 `.`으로 시작하는 조각이 있으면 거절(`hasHiddenPart`). 허용 폴더 자체가 숨김 폴더 아래 있는 것은 괜찮다. 예외: 세션 작업 사본 `.claude/worktrees/<이름>/` 안의 파일(사본 안의 `.git`·`.env` 같은 숨김 조각은 계속 거절, 2026-11-01) |
 | 보기는 정한 종류만 | `VIEW_TYPES`: png jpg jpeg gif webp pdf mp4 mov webm txt md log json csv. svg·html은 스크립트를 담을 수 있어 받지 않는다. md·log·json·csv는 `text/plain`으로 준다 |
 | 보기 응답이 이 앱 출처로 스크립트를 돌리지 못한다 | `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox`, `Content-Disposition: inline` |
 | 보기는 200MB까지 | `MAX_VIEW_BYTES`. 넘으면 413, 열기로 본다 |

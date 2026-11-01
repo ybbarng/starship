@@ -111,6 +111,21 @@ describe("순수 판단", () => {
     expect(hasHiddenPart("/r/.ssh/id.txt", "/r")).toBe(true);
     expect(hasHiddenPart("/r/a/.env", "/r")).toBe(true);
   });
+  it("세션 작업 사본(.claude/worktrees/<이름>/) 안의 파일만 숨김 예외", () => {
+    const wt = "/r/game/.claude/worktrees/agent-a1b2";
+    expect(hasHiddenPart(`${wt}/README.md`, "/r")).toBe(false);
+    expect(hasHiddenPart(`${wt}/docs/shot.png`, "/r")).toBe(false);
+    // 사본 안의 숨김 조각은 계속 막는다
+    expect(hasHiddenPart(`${wt}/.env`, "/r")).toBe(true);
+    expect(hasHiddenPart(`${wt}/.git/config`, "/r")).toBe(true);
+    expect(hasHiddenPart(`${wt}/a/.ssh/id.txt`, "/r")).toBe(true);
+    // .claude의 다른 곳, worktrees 바로 아래 파일, 숨김 이름의 사본은 막는다
+    expect(hasHiddenPart("/r/game/.claude/settings.json", "/r")).toBe(true);
+    expect(hasHiddenPart("/r/game/.claude/worktrees/x.md", "/r")).toBe(true);
+    expect(hasHiddenPart("/r/game/.claude/worktrees/.hidden/a.md", "/r")).toBe(
+      true,
+    );
+  });
   it("checkInput은 상대 경로·..·NUL을 거절한다", () => {
     expect(checkInput("/a/b.png")).toBeNull();
     expect(checkInput("a/b.png")).not.toBeNull();
@@ -179,6 +194,18 @@ describe("resolveFile (임시 폴더)", () => {
     expect((await view(at(".env"))).ok).toBe(false);
     expect((await view(at(".git", "config.txt"))).ok).toBe(false);
     expect((await view(at("hidden-link.txt"))).ok).toBe(false);
+  });
+
+  it("세션 작업 사본 안의 파일은 받고, 같은 사본의 .env는 거절한다", async () => {
+    const wt = path.join(root, "repo", ".claude", "worktrees", "agent-x");
+    mkdirSync(wt, { recursive: true });
+    writeFileSync(path.join(wt, "README.md"), "# 사본");
+    writeFileSync(path.join(wt, ".env"), "KEY=1");
+    expect(await view(path.join(wt, "README.md"))).toMatchObject({ ok: true });
+    expect(await view(path.join(wt, ".env"))).toMatchObject({
+      ok: false,
+      status: 403,
+    });
   });
 
   it("보기는 html을, 열기는 sh·폴더(.app)·실행 권한 파일을 거절한다", async () => {
