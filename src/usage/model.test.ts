@@ -358,6 +358,28 @@ describe("묶기", () => {
     ).toEqual([["starship", 12, 2]]);
   });
 
+  it("작업 폴더 이름만 같은 두 프로젝트는 부모 폴더를 붙여 나눈다", () => {
+    const r = buildReport(
+      bucketsFrom([
+        rec({ id: "y1", t: day(31), project: "-a", session: "a", output: 5 }),
+        rec({ id: "y2", t: day(31), project: "-b", session: "b", output: 7 }),
+      ]).values(),
+      {
+        range: "7d",
+        now,
+        rules,
+        paths: {
+          "-a": `${HOME}/personal/projects/game`,
+          "-b": `${HOME}/personal/projects/game/game`,
+        },
+      },
+    );
+    expect(r.projects.map((p) => p.name)).toEqual([
+      "game/game",
+      "projects/game",
+    ]);
+  });
+
   it("오늘만 고르면 어제 것은 빠진다", () => {
     const r = buildReport(bucketsFrom(records).values(), {
       range: "today",
