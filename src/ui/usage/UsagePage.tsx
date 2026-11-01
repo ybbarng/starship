@@ -67,7 +67,7 @@ export function UsagePage() {
     <main className={`min-h-dvh text-white ${cockpit.panel}`}>
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-black/50 px-4 py-2.5 shadow-[0_1px_0_rgba(255,255,255,0.04)]">
         <Link
-          href="/proto/cockpit"
+          href="/"
           className="rounded px-2 py-1 text-[12px] text-white/55 hover:bg-white/[0.06] hover:text-white"
         >
           ← 갑판으로

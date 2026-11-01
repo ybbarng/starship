@@ -4,7 +4,7 @@ import { CrewCabins } from "@/ui/map/CrewCabins";
 const PROTOS = [
   {
     href: "/proto/cockpit",
-    name: "★ 3차 · 조종석과 감상창",
+    name: "★ 3차 · 조종석과 감상창(확정, 홈과 같음)",
     line: '평소엔 일하는 조종석: 넓게 트인 유리창 너머 우주, 계기판 한가운데 지금 할 일 하나, 경고등·승무원판·교신 수신등. 유리의 "우주 감상하기"(G)로 2차의 트인 함교에 들어갔다 Esc로 나온다. 내리면 네 갑판 단면.',
   },
   {
@@ -46,14 +46,18 @@ const LABS = [
   { href: "/lab/events", name: "이벤트 확인판" },
 ];
 
-export default function Home() {
+export default function ProtoList() {
   return (
     <main className="mx-auto max-w-3xl px-6 py-16">
-      <h1 className="text-2xl font-semibold">Starship 시안</h1>
+      <Link href="/" className="text-sm text-white/55 hover:text-white">
+        ← 조종석으로
+      </Link>
+      <h1 className="mt-4 text-2xl font-semibold">옛 시안과 확인판</h1>
       <p className="mt-2 text-sm text-white/60">
-        모든 시안은 같은 데이터(기본은 데모)와 같은 창밖 우주를 쓴다. 주소 뒤에{" "}
-        <code>?demo=empty</code>, <code>?demo=busy</code>, <code>?reset=1</code>
-        을 붙여 볼 수 있다.
+        2026-11-01 3차 조종석으로 확정해 홈(/)으로 올렸다. 아래는 비교용으로
+        남긴 옛 시안이다. 모든 시안은 같은 데이터(기본은 데모)와 같은 창밖
+        우주를 쓴다. 주소 뒤에 <code>?demo=empty</code>, <code>?demo=busy</code>
+        , <code>?reset=1</code>을 붙여 볼 수 있다.
       </p>
       <ul className="mt-8 space-y-5">
         {PROTOS.map((p) => (

@@ -3,8 +3,8 @@
   "title": "Starship",
   "goal": "세션들을 우주선 승무원으로 보며, 나를 기다리는 것·하는 일·쓴 연료를 한 화면(조종석)에서 묻지 않고 보고 답한다",
   "baselineAt": "2026-10-25",
-  "updatedAt": "2026-11-01T19:20:00+09:00",
-  "here": "cockpit-home",
+  "updatedAt": "2026-11-01T19:30:00+09:00",
+  "here": "fuel-thrusters",
   "regions": [
     {
       "id": "protocol",
@@ -12,7 +12,12 @@
       "status": "done",
       "size": 1,
       "summary": "화면과 비서 서버 사이의 약속(starship/1). 필드를 더하기만 하고, 틀린 필드는 그 필드만 뺀다",
-      "links": [{ "label": "프로토콜 설명", "path": "docs/protocol.md" }]
+      "links": [
+        {
+          "label": "프로토콜 설명",
+          "path": "docs/protocol.md"
+        }
+      ]
     },
     {
       "id": "protocol-snapshot",
@@ -22,7 +27,12 @@
       "size": 2,
       "summary": "할 일·교신·승무원·계기를 5초마다 받고, 답·미루기·치우기를 보낸다",
       "since": "2026-10-26",
-      "links": [{ "label": "v1.ts", "path": "src/protocol/v1.ts" }]
+      "links": [
+        {
+          "label": "v1.ts",
+          "path": "src/protocol/v1.ts"
+        }
+      ]
     },
     {
       "id": "protocol-map",
@@ -33,7 +43,12 @@
       "summary": "starship-map/1. 검사기와 진행률을 비서와 같이 쓴다",
       "since": "2026-10-29",
       "found": "2026-10-29",
-      "links": [{ "label": "지도 설계", "path": "docs/map.md" }]
+      "links": [
+        {
+          "label": "지도 설계",
+          "path": "docs/map.md"
+        }
+      ]
     },
     {
       "id": "protocol-desk",
@@ -44,12 +59,17 @@
       "summary": "starship-desk/1. 세션이 나를 기다리는 것(고르기·확인·승인·답하기)과 하는 일",
       "since": "2026-10-31",
       "found": "2026-10-31",
-      "links": [{ "label": "책상 설계", "path": "docs/desk.md" }]
+      "links": [
+        {
+          "label": "책상 설계",
+          "path": "docs/desk.md"
+        }
+      ]
     },
     {
       "id": "cockpit",
       "title": "조종석",
-      "status": "building",
+      "status": "done",
       "size": 1,
       "summary": "주 화면. 유리창 너머 우주, 계기판 가운데 지금 할 일 하나, 경고등·승무원판·교신 수신등"
     },
@@ -61,16 +81,20 @@
       "size": 3,
       "summary": "아이디어 100개 → 1차 다섯 → 2차 트인 함교 → 3차 조종석과 감상창. 2026-11-01 조종석으로 확정",
       "since": "2026-11-01",
-      "links": [{ "label": "시안 기록", "path": "docs/prototypes" }]
+      "links": [
+        {
+          "label": "시안 기록",
+          "path": "docs/prototypes"
+        }
+      ]
     },
     {
       "id": "cockpit-home",
       "title": "조종석을 홈으로",
       "parent": "cockpit",
-      "status": "building",
+      "status": "done",
       "size": 1,
       "summary": "주소 하나로 바로 조종석. 나머지 시안은 옛 시안 한 곳에 접어 둔다",
-      "next": "/ 를 조종석으로 바꾸고 시안 목록을 /proto 아래로",
       "since": "2026-11-01",
       "found": "2026-11-01"
     },
@@ -82,7 +106,10 @@
       "size": 3,
       "since": "2026-10-28",
       "links": [
-        { "label": "Panel.tsx", "path": "src/protos/cockpit/Panel.tsx" }
+        {
+          "label": "Panel.tsx",
+          "path": "src/protos/cockpit/Panel.tsx"
+        }
       ]
     },
     {
@@ -117,7 +144,12 @@
       "summary": "1.0을 넘는 빛만 번지고 표면 쌀알 무늬는 남긴다. ?hdr=0으로 끈다",
       "since": "2026-11-01",
       "found": "2026-11-01",
-      "links": [{ "label": "Hdr.tsx", "path": "src/sky/Hdr.tsx" }]
+      "links": [
+        {
+          "label": "Hdr.tsx",
+          "path": "src/sky/Hdr.tsx"
+        }
+      ]
     },
     {
       "id": "window-stars",
@@ -156,7 +188,12 @@
       "status": "building",
       "size": 1,
       "summary": "승무원(프로젝트) 하나의 방: 지도와 책상",
-      "links": [{ "label": "개척지 설계", "path": "docs/frontier.md" }]
+      "links": [
+        {
+          "label": "개척지 설계",
+          "path": "docs/frontier.md"
+        }
+      ]
     },
     {
       "id": "cabin-frontier",
@@ -210,7 +247,12 @@
       "status": "done",
       "size": 1,
       "summary": "우주선 → 중계 위성(Wi-Fi) → 지상국(공유기) → 지구(인터넷) → 항법 신호(DNS)",
-      "links": [{ "label": "LinkHud.tsx", "path": "src/ui/link/LinkHud.tsx" }]
+      "links": [
+        {
+          "label": "LinkHud.tsx",
+          "path": "src/ui/link/LinkHud.tsx"
+        }
+      ]
     },
     {
       "id": "link-chain",
@@ -238,7 +280,12 @@
       "size": 1,
       "summary": "토큰 사용량을 업무·개인, 프로젝트·세션별로. 맥북을 붙잡지 않게 늘어난 기록만 읽는다",
       "found": "2026-11-01",
-      "links": [{ "label": "연료 기록 설계", "path": "docs/usage.md" }]
+      "links": [
+        {
+          "label": "연료 기록 설계",
+          "path": "docs/usage.md"
+        }
+      ]
     },
     {
       "id": "fuel-read",

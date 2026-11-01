@@ -29,7 +29,7 @@ export function Cabin({
   crewId,
   View = FrontierView,
   label,
-  backHref = "/proto/cockpit",
+  backHref = "/",
 }: {
   crewId: string;
   /** 가운데 지도 그림. 시안마다 바꿔 끼운다. */
@@ -56,7 +56,7 @@ export function Cabin({
           href={backHref}
           className="shrink-0 rounded px-2 py-1 text-[12px] text-white/55 hover:bg-white/[0.06] hover:text-white"
         >
-          {backHref === "/proto/cockpit" ? "← 갑판으로" : "← 시안 목록"}
+          {backHref === "/" ? "← 갑판으로" : "← 시안 목록"}
         </Link>
         {label && (
           <span className="shrink-0 rounded bg-white/[0.06] px-2 py-0.5 text-[11px] text-white/55">

@@ -414,7 +414,7 @@ export function CockpitGaze() {
       <Toasts
         className={stage === 1 ? "" : gaze ? "bottom-24" : "top-14 bottom-auto"}
       />
-      <ProtoBadge name="조종석과 감상창 (3차)" />
+      <ProtoBadge home />
 
       {/* 모달 */}
       <Modal open={!!moreTask} onClose={close} title="지금 할 일" width={620}>
