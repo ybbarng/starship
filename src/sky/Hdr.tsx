@@ -69,6 +69,23 @@ export function Hdr() {
       BLOOM_RADIUS,
       BLOOM_THRESHOLD,
     );
+    // 번질 빛을 밝기(휘도) 대신 가장 센 채널로 고른다. 휘도는 빨강을 작게 쳐서
+    // 붉은 거성(안타레스)이 넘쳐도 번지지 않았다(2026-11-01 피드백).
+    b.materialHighPassFilter.fragmentShader = /* glsl */ `
+      uniform sampler2D tDiffuse;
+      uniform vec3 defaultColor;
+      uniform float defaultOpacity;
+      uniform float luminosityThreshold;
+      uniform float smoothWidth;
+      varying vec2 vUv;
+      void main() {
+        vec4 texel = texture2D(tDiffuse, vUv);
+        float v = max(max(texel.r, texel.g), texel.b);
+        float alpha = smoothstep(luminosityThreshold, luminosityThreshold + smoothWidth, v);
+        gl_FragColor = mix(vec4(defaultColor, defaultOpacity), texel, alpha);
+      }
+    `;
+    b.materialHighPassFilter.needsUpdate = true;
     c.addPass(b);
     c.addPass(new ShaderPass(KneeShader));
     return { composer: c, bloom: b };
