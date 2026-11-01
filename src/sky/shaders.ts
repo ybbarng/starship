@@ -47,6 +47,82 @@ void main() {
 }
 `;
 
+/**
+ * 3D 별하늘: 별의 태양 중심 위치(광년)와 관측자 자리로 방향과 등급을 다시 셈해 하늘 구(uRadius)에 찍는다.
+ * 크기·밝기는 예전 starVertex와 같은 식(등급 → 크기)이라 태양계 안에서는 화면이 같다. 식은 stars3d.ts.
+ */
+export const sky3dVertex = /* glsl */ `
+attribute float aMag;
+attribute vec3 aColor;
+attribute float aSeed;
+attribute float aFar;
+attribute float aIndex;
+uniform vec3 uObserver;
+uniform float uRadius;
+uniform float uNearHide;
+/** 숨길 별의 aIndex(장면의 구가 대신 그린다), 없으면 -1 */
+uniform float uHide;
+uniform float uFarFade;
+uniform float uPixelRatio;
+uniform float uTime;
+uniform float uScale;
+varying vec3 vColor;
+varying float vAlpha;
+void main() {
+  // position: 태양 중심 위치(광년). 거리를 모르면 방향 × 1e9
+  vec3 rel = position - uObserver;
+  float d = length(rel);
+  float d0 = length(position);
+  // 거리를 모르는 별은 방향·등급이 그대로다.
+  vec3 dir = aFar > 0.5 ? position / d0 : rel / d;
+  float mag = aFar > 0.5 ? aMag : aMag + 5.0 * log(d / d0) / log(10.0);
+  vec4 mv = modelViewMatrix * vec4(dir * uRadius, 1.0);
+  gl_Position = projectionMatrix * mv;
+  float size = clamp(6.2 - mag * 0.85, 1.2, 9.0);
+  float tw = 0.85 + 0.15 * sin(uTime * (1.3 + aSeed * 2.1) + aSeed * 40.0);
+  gl_PointSize = size * uPixelRatio * uScale * mix(1.0, tw, step(1.5, size));
+  vColor = aColor;
+  // 6등급보다 흐리면 크기 대신 빛을 줄인다. 거리를 모르는 별은 멀리 갈수록 흐리게.
+  float faint = pow(10.0, -0.3 * max(0.0, mag - 6.0));
+  vAlpha = clamp(size / 2.2, 0.25, 1.0) * faint * (aFar > 0.5 ? uFarFade : 1.0);
+  // 아주 가까운 별은 장면의 별이 그린다. 너무 흐린 별도 그리지 않는다.
+  if ((aFar < 0.5 && d < uNearHide) || abs(aIndex - uHide) < 0.5 || vAlpha < 0.01) {
+    gl_PointSize = 0.0;
+    gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+  }
+}
+`;
+
+/**
+ * 별자리 선: 두 끝 별(광년)을 관측자 자리에서 본 방향으로 바꿔 그 사이를 대원호로 잇는다.
+ * 3D 직선을 한 점에서 보면 하늘에서는 대원호가 되므로, 별 가까이에서는 선이 그 별에서 뻗어 나간다.
+ */
+export const constellation3dVertex = /* glsl */ `
+attribute vec3 aB;
+attribute float aT;
+uniform vec3 uObserver;
+uniform float uRadius;
+void main() {
+  // position: 선의 앞 끝 별(광년), aB: 뒤 끝 별, aT: 0..1 사이 자리
+  vec3 da = normalize(position - uObserver);
+  vec3 db = normalize(aB - uObserver);
+  float c = clamp(dot(da, db), -0.9999, 1.0);
+  float th = acos(c);
+  vec3 dir = th < 1e-5
+    ? da
+    : (sin((1.0 - aT) * th) * da + sin(aT * th) * db) / sin(th);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(normalize(dir) * uRadius, 1.0);
+}
+`;
+
+export const lineFragment = /* glsl */ `
+uniform vec3 uColor;
+uniform float uOpacity;
+void main() {
+  gl_FragColor = vec4(uColor, uOpacity);
+}
+`;
+
 export const starFragment = /* glsl */ `
 varying vec3 vColor;
 varying float vAlpha;

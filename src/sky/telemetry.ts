@@ -72,7 +72,7 @@ export function realPositionAU(
     return halleyAt(HALLEY.perihelion + 10 * 86_400_000);
   if (dest.probe) return probePositionAU(dest.probe, ms);
   if (dest.star) {
-    const ly = STAR_LY[dest.id] ?? 10;
+    const ly = dest.star.ly ?? STAR_LY[dest.id] ?? 10;
     const ra = (dest.star.ra * Math.PI) / 180;
     const dec = (dest.star.dec * Math.PI) / 180;
     // 적도 → 황도

@@ -68,19 +68,17 @@ const brightPts = bright.map(point);
 const faintPts = all.filter((f) => !brightIds.has(f.id)).map(point);
 const rawLines = read("constellations.lines.json").features;
 let unmatched = 0;
-const lineHips = new Map(
-  rawLines.map((f) => [
-    f.id,
-    f.geometry.coordinates.map((line) =>
-      line.map(([x, y]) => {
-        const hip = matchVertex(ra(x), y, [brightPts, faintPts], MATCH_DEG);
-        if (!hip) unmatched++;
-        return hip;
-      }),
-    ),
-  ]),
+// 원자료 순서대로(뱀자리처럼 같은 id가 두 번 나오는 별자리가 있어 id로 묶지 않는다).
+const lineHips = rawLines.map((f) =>
+  f.geometry.coordinates.map((line) =>
+    line.map(([x, y]) => {
+      const hip = matchVertex(ra(x), y, [brightPts, faintPts], MATCH_DEG);
+      if (!hip) unmatched++;
+      return hip;
+    }),
+  ),
 );
-const vertexHips = new Set([...lineHips.values()].flat(2).filter(Boolean));
+const vertexHips = new Set(lineHips.flat(2).filter(Boolean));
 
 // 거리를 붙여 3D로 두는 별: 맨눈 별 전부와 별자리 꼭짓점인 흐린 별.
 // [적경, 적위, 등급, B-V, HIP, 시차(mas), 시차 오차(mas)]. 시차가 없으면 0, 0.
@@ -135,7 +133,7 @@ const KO_FIX = { Crv: "까마귀자리" };
 const conInfo = new Map(
   read("constellations.json").features.map((f) => [f.id, f]),
 );
-const constellations = rawLines.map((f) => {
+const constellations = rawLines.map((f, fi) => {
   const info = conInfo.get(f.id);
   const [lon, lat] = info?.geometry.coordinates ?? [0, 0];
   return {
@@ -148,7 +146,7 @@ const constellations = rawLines.map((f) => {
       line.map(([x, y]) => [r3(ra(x)), r3(y)]),
     ),
     // lines와 같은 모양. 꼭짓점마다 맞춘 별의 HIP, 못 맞추면 0.
-    hips: lineHips.get(f.id),
+    hips: lineHips[fi],
   };
 });
 
