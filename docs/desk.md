@@ -29,10 +29,11 @@
       "blocks": true,                         // 선택. 세션이 이것 때문에 멈췄나
       "options": [                            // decide는 2개 이상 필수
         { "id": "inline", "label": "결제 칸 안에 바로 입력", "url": "https://...", "note": "한 화면에서 끝나요", "recommended": true },
-        { "id": "sheet", "label": "쿠폰함을 아래에서 열기", "url": "https://..." }
+        { "id": "sheet", "label": "쿠폰함을 아래에서 열기", "url": "https://...", "path": "/Users/me/Desktop/sheet.png" }
       ],
       "items": [                              // check는 1개 이상 필수
-        { "label": "결제 완료 색종이", "url": "https://...", "look": "2초 안에 끝나나" }
+        { "label": "결제 완료 색종이", "url": "https://...", "look": "2초 안에 끝나나" },
+        { "label": "결제 완료 화면 녹화", "path": "/Users/me/Desktop/confetti.mov", "look": "2초 안에 끝나나" }
       ],
       "after": "고른 방식만 남기고 시험을 다시 돌려요" // 선택. 답하거나 승인하면 세션이 할 일
     }
@@ -45,10 +46,12 @@
 
 | 종류 | 뜻 | 꼭 있어야 하는 것 | 카드에 보이는 것 |
 |---|---|---|---|
-| `decide` | 고르기 | `options` 2개 이상 | 선택지마다 이름·설명·데모 주소·추천 표시, 고르기 버튼 |
-| `check` | 확인하기 | `items` 1개 이상 | 항목마다 주소와 보실 점, "확인함"·"고칠 것 있음" 버튼과 글 |
+| `decide` | 고르기 | `options` 2개 이상 | 선택지마다 이름·설명·데모 주소·파일 보기/열기·추천 표시, 고르기 버튼 |
+| `check` | 확인하기 | `items` 1개 이상 | 항목마다 주소·파일 보기/열기와 보실 점, "확인함"·"고칠 것 있음" 버튼과 글 |
 | `approve` | 승인하기 | — | "승인"·"보류" 버튼 |
 | `answer` | 글로 답하기 | — | 글 칸 |
+
+`options[]`와 `items[]`의 `path`(선택)는 이 맥의 파일 절대 경로다(2026-11-01 더함, 형식 이름은 그대로). 스크린샷·PDF·녹화처럼 주소가 없는 결과물을 경로 복사 없이 본다. 카드는 `path`가 있으면 "보기"(새 탭에서 `/api/files?path=…`)와 "열기"(맥의 맞는 프로그램) 단추를 보인다. 허용 폴더 밖이거나 숨김·실행 파일이면 서버가 거절한다. 자세한 규칙은 [`files.md`](files.md).
 
 `after`는 처음에 `then`이었다. `then`이 있는 객체는 `await`나 동적 `import`에서 Promise로 오해받는다. biome도 `noThenProperty`로 막는다. 그래서 `after`로 바꿨다.
 
@@ -61,6 +64,7 @@
 | 한 기다림 안에서 `options[].id`가 겹치지 않는다 | `checkDesk` |
 | 날짜는 `Date.parse`로 읽힌다 | `When` 스키마 |
 | 주소는 http(s)만 | `WebUrl` 스키마. 카드가 주소를 그대로 링크로 여니까 `javascript:`·`file:` 같은 주소는 막는다 |
+| `path`는 `/`로 시작하는 절대 경로만 | `FilePath` 스키마. 허용 폴더·숨김·확장자는 Starship 서버가 보기·열기 때 다시 본다([`files.md`](files.md)) |
 | 모르는 필드는 버린다 | zod 기본 동작. 같은 버전 안에서 필드를 더할 수 있다 |
 
 비서와 Starship은 같은 `parseDesk`로 검사한다. 서버 모드에서는 Starship이 받은 책상을 다시 검사한다. 걸리면 `desk: null`로 바꾸고 문제를 화면 위쪽에 알린다.

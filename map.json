@@ -218,10 +218,15 @@
       "id": "cabin-files",
       "title": "파일 바로 보기·열기",
       "parent": "cabin",
-      "status": "fog",
+      "status": "done",
       "size": 2,
       "summary": "스크린샷·PDF를 경로 복사 없이 링크로 보거나 프로그램으로 연다. 허용 폴더·실행 파일 금지",
+      "since": "2026-11-01",
       "found": "2026-11-01",
+      "links": [
+        { "label": "files.md", "path": "docs/files.md" },
+        { "label": "files.ts", "path": "src/server/files.ts" }
+      ],
       "signs": [
         {
           "id": "files-way",
@@ -230,7 +235,8 @@
           "owner": "me",
           "options": ["starship 서버 + PWA", "맥 앱(Tauri)", "보기만"],
           "recommend": "starship 서버 + PWA",
-          "status": "open"
+          "status": "decided",
+          "decided": "starship 서버 + PWA"
         }
       ]
     },

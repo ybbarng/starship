@@ -16,6 +16,15 @@ const WebUrl = z
   .refine((s) => /^https?:\/\//i.test(s), "http(s) 주소만 쓸 수 있어요");
 
 /**
+ * 이 맥의 파일 절대 경로. 선실이 "보기"(/api/files)·"열기"(/api/files/open) 단추로 쓴다.
+ * 허용 폴더·숨김·확장자 검사는 Starship 서버가 따로 한다(docs/files.md). 여기서는 모양만 본다.
+ */
+const FilePath = z
+  .string()
+  .max(4096)
+  .refine((s) => s.startsWith("/"), "절대 경로(/로 시작)만 쓸 수 있어요");
+
+/**
  * 기다리는 것의 종류.
  * - decide: 둘 이상 중 하나를 골라 달라
  * - check: 만든 것을 봐 달라(항목마다 주소와 보실 점)
@@ -29,6 +38,8 @@ export const WaitOption = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
   url: WebUrl.optional(),
+  /** 선택지를 보여 줄 파일(스크린샷·PDF 등) */
+  path: FilePath.optional(),
   note: z.string().optional(),
   recommended: z.boolean().optional(),
 });
@@ -37,6 +48,8 @@ export type WaitOption = z.infer<typeof WaitOption>;
 export const CheckItem = z.object({
   label: z.string().min(1),
   url: WebUrl.optional(),
+  /** 볼 파일(스크린샷·PDF·동영상 등) */
+  path: FilePath.optional(),
   /** 보실 점 */
   look: z.string().optional(),
 });

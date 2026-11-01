@@ -11,6 +11,12 @@ import type { Task, TaskKind } from "@/protocol/v1";
 
 const MIN = 60_000;
 
+/**
+ * 데모 예시 파일(public/demo-files) 절대 경로. 데모 모드의 파일 끝점이 허용하는 폴더와 같다
+ * (src/server/files.ts의 demoFilesDir). 이 모듈은 서버에서만 불린다.
+ */
+const demoFile = (name: string) => `${process.cwd()}/public/demo-files/${name}`;
+
 const iso = (now: number, minsAgo: number) =>
   new Date(now - minsAgo * MIN).toISOString();
 
@@ -40,6 +46,7 @@ export function buildDemoDesks(now = Date.now()): Record<string, Desk> {
               id: "sheet",
               label: "쿠폰함을 아래에서 열기",
               url: "https://example.com/web-shop/demo/coupon-sheet",
+              path: demoFile("coupon-sheet.png"),
               note: "가진 쿠폰을 골라요. 누르는 횟수가 하나 늘어요",
             },
           ],
@@ -71,6 +78,16 @@ export function buildDemoDesks(now = Date.now()): Record<string, Desk> {
               label: "품절 상품 흔들기",
               url: "https://example.com/web-shop/demo/motion-4",
               look: "오류처럼 보이지 않나",
+            },
+            {
+              label: "연출 점검표",
+              path: demoFile("motion-checklist.pdf"),
+              look: "네 연출의 길이가 표와 맞나",
+            },
+            {
+              label: "느린 폰에서 잰 기록",
+              path: demoFile("slow-phone.log"),
+              look: "끊긴 프레임이 있나",
             },
           ],
           after: "고칠 것이 없으면 연출을 그대로 굳혀요",
