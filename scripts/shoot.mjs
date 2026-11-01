@@ -1,6 +1,6 @@
 // 설치된 Chrome으로 페이지를 열어 스크린숏을 찍고, 콘솔 오류를 보여 주고, 차례로 누른다.
 //   node scripts/shoot.mjs <url> <out.png> [--wait 4000] [--size 1372x872]
-//        [--click "<css 또는 text=글자>"]... [--after out2.png] [--after-wait ms] [--scroll 900]
+//        [--click "<css 또는 text=글자>"]... [--after out2.png] [--after-wait ms] [--scroll 900] [--hover "<css>"]
 // 클릭마다 0.8초 쉬고, 마지막에 --after 경로로 한 장 더 찍는다. 토스트 글은 출력한다.
 import { chromium } from "playwright-core";
 
@@ -64,6 +64,12 @@ for (const sel of clicks) {
 }
 const after = opt("--after");
 await page.waitForTimeout(Number(opt("--after-wait", "0")));
+// --hover "<css>": 마우스를 올리고 0.2초 뒤에 찍는다(빠른 말풍선이 그 안에 뜨는지 본다).
+const hover = opt("--hover");
+if (hover) {
+  await page.locator(hover).first().hover({ timeout: 3000 });
+  await page.waitForTimeout(200);
+}
 if (after) await page.screenshot({ path: after });
 for (const l of logs.slice(0, 20)) console.log(l);
 await browser.close();
