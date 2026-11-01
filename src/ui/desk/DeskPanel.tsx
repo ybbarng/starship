@@ -190,9 +190,13 @@ function WaitCard({
                     {o.note}
                   </div>
                 )}
+                {o.path && (
+                  <div className="mt-1.5">
+                    <FileButtons path={o.path} />
+                  </div>
+                )}
                 <div className="mt-1.5 flex items-center gap-2">
                   {o.url && <OpenLink href={o.url}>데모 열기</OpenLink>}
-                  {o.path && <FileButtons path={o.path} />}
                   <span className="ml-auto">
                     {choiceButton(o.label, o.recommended)}
                   </span>
@@ -339,9 +343,12 @@ function FileButtons({ path }: { path: string }) {
     }
   };
   return (
-    <span data-file={path} className="inline-flex items-center gap-1.5">
+    <span
+      data-file={path}
+      className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap"
+    >
       <span
-        className="max-w-[12rem] truncate text-[11px] text-white/45"
+        className="min-w-0 max-w-[14rem] truncate text-[11px] text-white/45"
         title={path}
       >
         {baseName(path)}
