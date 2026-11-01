@@ -5,6 +5,7 @@ import { constants } from "node:fs";
 import { realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
+import { isLoopbackHost, LOOPBACK } from "./host";
 
 /** 보기(브라우저 새 탭)에서 주는 확장자와 Content-Type. svg·html은 스크립트를 담을 수 있어 넣지 않는다. */
 export const VIEW_TYPES: Record<string, string> = {
@@ -233,17 +234,7 @@ export function parseRange(
   return { start, end };
 }
 
-/** 다른 사이트가 &lt;img&gt;·fetch로 이 끝점을 부르지 못하게. 같은 출처거나 주소창에서 직접 연 것만. */
-const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
-
-/** "127.0.0.1:7790" · "localhost" · "[::1]:7790" 처럼 이 컴퓨터 자신을 가리키는 Host인가. */
-export function isLoopbackHost(host: string | null | undefined): boolean {
-  if (!host) return false;
-  const name = host.startsWith("[")
-    ? host.slice(0, host.indexOf("]") + 1)
-    : (host.split(":")[0] ?? "");
-  return LOOPBACK.has(name.toLowerCase());
-}
+export { isLoopbackHost };
 
 /**
  * 서버를 이 컴퓨터 자신(-H 127.0.0.1 등)에만 열고 띄웠나. 띄울 때 인자(-H·--hostname)를 보고,
