@@ -7,6 +7,8 @@ import {
   dropLine,
   formatSecs,
   HOP_MEANING,
+  linkProblems,
+  verdictDetail,
   vpnDetail,
   vpnOnlyProblem,
 } from "./model";
@@ -150,5 +152,20 @@ describe("칸의 실제 뜻", () => {
   it("사슬의 칸마다 마우스를 올리면 볼 뜻이 있다", () => {
     for (const n of chainNodes(buildDemoLink("ok", now)))
       expect(HOP_MEANING[n.id], n.id).toBeTruthy();
+  });
+});
+
+describe("회선 불안 설명", () => {
+  it("주의·끊김인 칸마다 이유를 모으고 원인을 붙인다", () => {
+    const text = verdictDetail(buildDemoLink("down", now));
+    expect(text).toContain(
+      "지구(인터넷): 공유기 너머로 보낸 핑이 모두 돌아오지 않음",
+    );
+    expect(text).toContain(
+      "원인: 공유기까지는 닿는데 그 너머 인터넷이 끊겼어요",
+    );
+  });
+  it("정상이면 문제 줄 없이 뜻만", () => {
+    expect(linkProblems(buildDemoLink("ok", now))).toEqual([]);
   });
 });

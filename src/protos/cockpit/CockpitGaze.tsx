@@ -329,7 +329,12 @@ export function CockpitGaze() {
           crew={bridge.crew}
           crewById={bridge.crewById}
           warnings={warnings}
-          connected={!bridge.error}
+          // 본부(비서 서버)를 다시 띄우는 몇 초 동안 깜빡이지 않게, 15초 넘게 못 받았을 때만 끊김으로 본다.
+          connected={
+            !bridge.error ||
+            (bridge.updatedAt > 0 && now - bridge.updatedAt < 15_000)
+          }
+          lastAt={bridge.updatedAt}
           link={bridge.link}
           now={now}
           drawerOpen={drawer}

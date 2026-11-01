@@ -40,6 +40,8 @@ export type ChainNode = {
   label: string;
   status: GaugeStatus;
   value?: string;
+  /** 주의·끊김일 때 왜 그런지(서버가 준 한 줄) */
+  why?: string;
   /** 앞쪽 칸이 끊겨 신호가 닿지 않는 칸 */
   cut: boolean;
 };
@@ -60,6 +62,7 @@ export function chainNodes(link: Link): ChainNode[] {
       label: HOP_LABEL[h.id] ?? h.id,
       status: h.status,
       value: h.value,
+      why: h.why,
     })),
   ];
   const broken = nodes.findIndex((n) => n.status === "error");
@@ -132,4 +135,26 @@ export function vpnOnlyProblem(link: Link): boolean {
   if (!vpn || vpn.status === "ok") return false;
   const internet = link.hops.find((h) => h.id === "internet");
   return link.verdict !== "down" && internet?.status !== "error";
+}
+
+/** 주의·끊김인 칸마다 "지상국(공유기): 이유" 한 줄. why가 없으면 상태만 적는다. */
+export function linkProblems(link: Link): string[] {
+  return link.hops
+    .filter((h) => h.status === "warn" || h.status === "error")
+    .map((h) => {
+      const name = HOP_LABEL[h.id] ?? h.id;
+      const plain = HOP_MEANING[h.id]?.replace(/ \(.*\)$/, "");
+      const head = plain ? `${name}(${plain})` : name;
+      return `${head}: ${h.why ?? (h.status === "error" ? "끊김" : "불안")}`;
+    });
+}
+
+/** "회선 불안"·"끊김" 글에 마우스를 올리면 보일 글: 어느 칸이 왜 그런지 모음과 원인 한 줄. */
+export function verdictDetail(link: Link): string {
+  const lines = [
+    "관제 링크 = 이 맥북의 회선(Wi-Fi → 공유기 → 인터넷 → DNS)을 20초마다 잰 결과",
+    ...linkProblems(link).map((l) => `· ${l}`),
+  ];
+  if (link.cause) lines.push(`원인: ${link.cause}`);
+  return lines.join("\n");
 }

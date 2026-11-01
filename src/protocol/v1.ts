@@ -241,6 +241,8 @@ export const LinkHop = z.object({
   status: GaugeStatus,
   /** 칸 옆에 적을 값. wifi는 SSID, gateway·internet은 지연("2ms"). */
   value: z.string().optional(),
+  /** 주의·끊김일 때 왜 그런지 사람 말 한 줄(예: "공유기까지 보낸 핑의 33%가 돌아오지 않음") */
+  why: z.string().optional(),
 });
 export type LinkHop = z.infer<typeof LinkHop>;
 

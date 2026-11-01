@@ -17,8 +17,8 @@ import type {
 import { formatSpeed } from "@/sky/telemetry";
 import { useTelemetry } from "@/sky/useTelemetry";
 import { useDestination, useVoyage } from "@/sky/voyage";
-import { ago, CONTEXT_COLOR, CONTEXT_LABEL, sourceLabel } from "@/ui/kit";
-import { VERDICT_LABEL } from "@/ui/link/model";
+import { ago, CONTEXT_COLOR, CONTEXT_LABEL, sourceLabel, Tip } from "@/ui/kit";
+import { VERDICT_LABEL, verdictDetail } from "@/ui/link/model";
 import styles from "./cockpit.module.css";
 import { MainDisplay } from "./MainDisplay";
 import { type Lamp, PILE_WARN, selecting, type useWarnings } from "./util";
@@ -51,19 +51,27 @@ function Tile({
         ? styles.tileWarn
         : "text-white/35";
   return (
-    <button
-      type="button"
-      data-warn={id}
-      data-lamp-state={lamp}
-      title={hint}
-      onClick={onClick}
-      disabled={!onClick}
-      className={`${styles.tile} ${tone} flex h-[24px] min-w-0 items-center justify-center gap-1.5 rounded-[3px] px-2.5 text-[11px] font-semibold tracking-[0.04em] whitespace-nowrap enabled:hover:brightness-125 disabled:cursor-default`}
-    >
-      <span className="truncate">{label}</span>
-      {value && <span className="font-mono tabular-nums">{value}</span>}
-    </button>
+    // 경고등 줄 바로 아래에 다음 할 일 탭이 겹쳐서 말풍선은 위(유리창 쪽)로 띄운다.
+    <Tip text={hint} side="top" className="min-w-0">
+      <button
+        type="button"
+        data-warn={id}
+        data-lamp-state={lamp}
+        onClick={onClick}
+        disabled={!onClick}
+        className={`${styles.tile} ${tone} flex h-[24px] min-w-0 items-center justify-center gap-1.5 rounded-[3px] px-2.5 text-[11px] font-semibold tracking-[0.04em] whitespace-nowrap enabled:hover:brightness-125 disabled:cursor-default`}
+      >
+        <span className="truncate">{label}</span>
+        {value && <span className="font-mono tabular-nums">{value}</span>}
+      </button>
+    </Tip>
   );
+}
+
+/** 3초 전 · 2분 전 */
+function agoShort(at: number, now: number): string {
+  const s = Math.max(0, Math.round((now - at) / 1000));
+  return s < 60 ? `${s}초 전` : `${Math.round(s / 60)}분 전`;
 }
 
 export function Annunciators({
@@ -71,6 +79,8 @@ export function Annunciators({
   hails,
   warnings,
   connected,
+  lastAt,
+  now,
   link,
   onList,
   onHail,
@@ -79,6 +89,8 @@ export function Annunciators({
   hails: Hail[];
   warnings: Warnings;
   connected: boolean;
+  lastAt: number;
+  now: number;
   link?: Link;
   onList: (k: ListKind) => void;
   onHail: () => void;
@@ -99,7 +111,7 @@ export function Annunciators({
         lamp={w.pile}
         label={w.pile === "off" ? "내 차례" : "일이 쌓임 · 내 차례"}
         value={String(tasks.length)}
-        hint={`내 차례가 ${PILE_WARN}개 이상이면 켜져요. 누르면 전체 할 일`}
+        hint={`내 차례 = 나를 기다리는 할 일(세션 질문·리뷰·멘션 등)의 수.\n${PILE_WARN}개 이상이면 켜져요. 누르면 전체 할 일`}
         onClick={() => onList("all")}
       />
       <Tile
@@ -129,14 +141,24 @@ export function Annunciators({
         id="link"
         lamp={connected ? "off" : "alert"}
         label={connected ? "본부 연결 정상" : "본부 연결 끊김"}
-        hint="상태를 5초마다 받아 와요"
+        hint={[
+          "본부 = 비서 서버. 선원·할 일·교신·관제 링크 데이터를 받아 오는 곳(5초마다).",
+          lastAt > 0
+            ? `마지막으로 받은 때: ${agoShort(lastAt, now)}`
+            : "아직 한 번도 받지 못했어요",
+          connected
+            ? ""
+            : "15초 넘게 받지 못해 켜졌어요. 지금 화면은 마지막으로 받은 때의 데이터예요. 다시 받으면 저절로 꺼져요.",
+        ]
+          .filter(Boolean)
+          .join("\n")}
       />
       {link && link.verdict !== "ok" && (
         <Tile
           id="relay"
           lamp={link.verdict === "down" ? "alert" : "warn"}
           label={VERDICT_LABEL[link.verdict]}
-          hint={`관제 링크(회선). ${link.cause ?? ""} 유리창 왼쪽 위에 자세히 보여요`}
+          hint={`${verdictDetail(link)}\n유리창 왼쪽 위에 자세히 보여요`}
         />
       )}
       {link?.vpn &&
@@ -145,7 +167,7 @@ export function Annunciators({
             id="vpn"
             lamp={link.vpn.status === "error" ? "alert" : "warn"}
             label={`함대 통신망 ${link.vpn.status === "error" ? "끊김" : "주의"}`}
-            hint={`회사 VPN(Tailscale). ${link.vpn.cause ?? ""} 유리창 왼쪽 위 관제 링크에 자세히 보여요`}
+            hint={`함대 통신망 = 회사 VPN(Tailscale).${link.vpn.cause ? `\n${link.vpn.cause}` : ""}\n유리창 왼쪽 위 관제 링크에 자세히 보여요`}
           />
         )}
     </div>
@@ -613,6 +635,7 @@ export function Dashboard({
   crewById,
   warnings,
   connected,
+  lastAt,
   link,
   now,
   drawerOpen,
@@ -633,6 +656,8 @@ export function Dashboard({
   crewById: Map<string, Crew>;
   warnings: Warnings;
   connected: boolean;
+  /** 본부에서 상태를 마지막으로 받은 때 */
+  lastAt: number;
   link?: Link;
   now: number;
   drawerOpen: boolean;
@@ -656,6 +681,8 @@ export function Dashboard({
           hails={hails}
           warnings={warnings}
           connected={connected}
+          lastAt={lastAt}
+          now={now}
           link={link}
           onList={onList}
           onHail={() => onHail()}

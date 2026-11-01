@@ -4,6 +4,7 @@
 // 평소(ok)에는 작고 흐리게, 불안(warn)이면 호박색, 끊김(down)이면 붉게 빛나며 끊긴 칸에서 사슬이 끊겨 보인다.
 // 측정이 멈추면(off) "관제 신호 없음"으로 회색 점선.
 import type { GaugeStatus, Link } from "@/protocol/v1";
+import { Tip } from "@/ui/kit/Tip";
 import styles from "./link.module.css";
 import {
   type ChainNode,
@@ -13,6 +14,7 @@ import {
   placeLabel,
   VERDICT_LABEL,
   VPN_LABEL,
+  verdictDetail,
   vpnDetail,
   vpnOnlyProblem,
 } from "./model";
@@ -53,9 +55,15 @@ export function LinkHud({ link, now }: { link: Link; now: number }) {
         <span className="font-semibold tracking-[0.16em] text-white/45">
           관제 링크
         </span>
-        <span className={`font-semibold ${VERDICT_COLOR[link.verdict]}`}>
-          {VERDICT_LABEL[link.verdict]}
-        </span>
+        <Tip text={verdictDetail(link)} align="start">
+          <button
+            type="button"
+            data-link-verdict
+            className={`cursor-default font-semibold outline-none ${VERDICT_COLOR[link.verdict]}`}
+          >
+            {VERDICT_LABEL[link.verdict]}
+          </button>
+        </Tip>
         {link.place && (
           <span className="rounded bg-white/[0.08] px-1.5 text-[10.5px] text-white/65">
             {placeLabel(link.place)}
@@ -126,13 +134,22 @@ function VpnRow({ link, vpn }: { link: Link; vpn: NonNullable<Link["vpn"]> }) {
       data-link-vpn
       data-vpn-status={vpn.status}
       className={`mt-1.5 rounded-md border px-2 py-1 text-[10.5px] ${VPN_FRAME[vpn.status]}`}
-      title="함대 통신망 = 회사 VPN(Tailscale)"
     >
       <div className="flex items-center gap-1.5">
         <span
           className={`inline-block h-[7px] w-[7px] rounded-full ${DOT[vpn.status]}`}
         />
-        <span className="text-white/70">함대 통신망</span>
+        <Tip
+          align="start"
+          text={`함대 통신망 = 회사 VPN(Tailscale). 회사 망으로 이어 주는 통로.${detail ? `\n${detail}` : ""}${vpn.cause ? `\n${vpn.cause}` : ""}`}
+        >
+          <button
+            type="button"
+            className="cursor-default text-white/70 outline-none"
+          >
+            함대 통신망
+          </button>
+        </Tip>
         <span className={`font-semibold ${VPN_COLOR[vpn.status]}`}>
           {VPN_LABEL[vpn.status]}
         </span>
@@ -178,7 +195,7 @@ function Chain({
           className={`flex min-w-0 items-start ${i > 0 ? "flex-1" : ""}`}
         >
           {i > 0 && <Segment to={n} verdict={verdict} />}
-          <Node node={n} />
+          <Node node={n} first={i === 0} />
         </li>
       ))}
     </ol>
@@ -206,25 +223,34 @@ function Segment({ to, verdict }: { to: ChainNode; verdict: Link["verdict"] }) {
   return <span className={`mt-[4px] h-[2px] min-w-3 flex-1 ${cls}`} />;
 }
 
-function Node({ node }: { node: ChainNode }) {
+function Node({ node, first }: { node: ChainNode; first?: boolean }) {
+  const tip = [
+    `${node.label}${HOP_MEANING[node.id] ? ` = ${HOP_MEANING[node.id]}` : ""}`,
+    node.value ? `값: ${node.value}` : "",
+    node.why ?? "",
+  ]
+    .filter(Boolean)
+    .join("\n");
   return (
-    <span
-      data-hop={node.id}
-      data-hop-status={node.status}
-      className={`flex max-w-[84px] min-w-[52px] shrink-0 flex-col items-center text-center ${node.cut ? "opacity-40" : ""}`}
-      title={`${node.label}${HOP_MEANING[node.id] ? ` = ${HOP_MEANING[node.id]}` : ""}${node.value ? ` · ${node.value}` : ""}`}
-    >
-      <span
-        className={`inline-block h-[10px] w-[10px] rounded-full ${DOT[node.status]}`}
-      />
-      <span className="mt-0.5 text-[10px] leading-tight whitespace-nowrap text-white/70">
-        {node.label}
-      </span>
-      {node.value && (
-        <span className="max-w-full truncate font-mono text-[9.5px] leading-tight text-white/45">
-          {node.value}
+    <Tip text={tip} align={first ? "start" : "center"} className="shrink-0">
+      <button
+        type="button"
+        data-hop={node.id}
+        data-hop-status={node.status}
+        className={`flex max-w-[84px] min-w-[52px] shrink-0 cursor-default flex-col items-center text-center outline-none ${node.cut ? "opacity-40" : ""}`}
+      >
+        <span
+          className={`inline-block h-[10px] w-[10px] rounded-full ${DOT[node.status]}`}
+        />
+        <span className="mt-0.5 text-[10px] leading-tight whitespace-nowrap text-white/70">
+          {node.label}
         </span>
-      )}
-    </span>
+        {node.value && (
+          <span className="max-w-full truncate font-mono text-[9.5px] leading-tight text-white/45">
+            {node.value}
+          </span>
+        )}
+      </button>
+    </Tip>
   );
 }

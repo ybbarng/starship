@@ -60,7 +60,12 @@ export function buildDemoLink(mode: LinkMode, now = Date.now()): Link {
         hops: [
           { id: "wifi", status: "ok", value: SSID },
           { id: "gateway", status: "ok", value: "3ms" },
-          { id: "internet", status: "warn", value: "240ms" },
+          {
+            id: "internet",
+            status: "warn",
+            value: "240ms",
+            why: "바깥까지 왕복이 평소(18ms)보다 13배 느림",
+          },
           { id: "dns", status: "ok" },
         ],
         drops: { today: 0 },
@@ -76,7 +81,11 @@ export function buildDemoLink(mode: LinkMode, now = Date.now()): Link {
         hops: [
           { id: "wifi", status: "ok", value: SSID },
           { id: "gateway", status: "ok", value: "2ms" },
-          { id: "internet", status: "error" },
+          {
+            id: "internet",
+            status: "error",
+            why: "공유기 너머로 보낸 핑이 모두 돌아오지 않음(20초마다 잼)",
+          },
           { id: "dns", status: "off" },
         ],
         drops: { today: 2, lastAt: now - 2 * MIN, lastSecs: 120 },

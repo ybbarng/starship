@@ -153,7 +153,13 @@ export function useBridge() {
       notice: snap?.notice,
     };
   }, [snap]);
-  return { ...derived, isLoading: query.isLoading, error: query.error };
+  return {
+    ...derived,
+    isLoading: query.isLoading,
+    error: query.error,
+    /** 상태를 마지막으로 받은 때(Unix 밀리초, 아직 없으면 0) */
+    updatedAt: query.dataUpdatedAt,
+  };
 }
 
 /** 할 일·승무원 동작. 결과 한 줄을 토스트로 띄우고 상태를 다시 읽는다. */
