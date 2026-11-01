@@ -226,7 +226,14 @@ void main() {
   // 태양만: 가운데로 갈수록 노란 흰빛으로 바랜다(가장자리 어두워짐을 따라 매끄럽게, 무늬 밝기는 남긴다).
   float m0 = max(max(c.r, c.g), c.b);
   c = mix(c, vec3(1.0, 0.96, 0.86) * m0, 0.6 * pow(mu, 2.0) * uHdr * (1.0 - uIsStar));
-  c *= mix(1.0, mix(1.0, 3.2, pow(mu, 1.4)), uHdr);
+  // HDR일 때 표면 쌀알 무늬(작은 대류 세포)를 더해 눈부셔도 결이 보이게 한다.
+  // 먼 항성은 색이 흰색에 가까워 세 채널이 한꺼번에 날아가기 쉬우니 덜 밝히고 무늬를 더 세게 둔다.
+  float gran = fbm(vLocal * 26.0 + uTime * 0.08);
+  float granAmp = uIsStar > 0.5 ? 0.9 : 0.56;
+  float peak = uIsStar > 0.5 ? 1.0 : 2.0;
+  float expo = uIsStar > 0.5 ? 0.85 : 1.0;
+  c *= mix(1.0, expo * ((1.0 - granAmp * 0.5) + granAmp * gran), uHdr);
+  c *= mix(1.0, mix(1.0, peak, pow(mu, 1.4)), uHdr);
   gl_FragColor = vec4(c * 1.15, 1.0);
 }
 `;

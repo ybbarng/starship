@@ -13,10 +13,11 @@ import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPa
 
 /** 이 밝기를 넘는 빛만 번진다. 보통 색(≤1)은 번지지 않는다. */
 const BLOOM_THRESHOLD = 1.0;
-const BLOOM_STRENGTH = 0.85;
-const BLOOM_RADIUS = 0.55;
+const BLOOM_STRENGTH = 0.6;
+/** 좁게: 넓으면 태양 둘레에 둥근 안개 테두리가 생긴다(2026-11-01 사용자 피드백). 넓은 후광은 태양의 원래 빛무리가 맡는다. */
+const BLOOM_RADIUS = 0.2;
 
-/** 0.9까지는 그대로, 그 위는 1.0에 가까워지게 눌러 담는다(어깨 곡선). */
+/** 0.6까지는 그대로, 그 위는 1.0에 가까워지게 넓게 눌러 담는다(어깨 곡선). */
 const KneeShader = {
   uniforms: { tDiffuse: { value: null } },
   vertexShader: /* glsl */ `
@@ -29,7 +30,8 @@ const KneeShader = {
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
     varying vec2 vUv;
-    const float KNEE = 0.9;
+    // 0.6부터 넓게 눌러 1~2 사이의 밝기 차(별 표면 쌀알 무늬)가 눈부심 속에서도 남게 한다.
+    const float KNEE = 0.6;
     float shoulder(float x) {
       return x <= KNEE ? x : KNEE + (1.0 - KNEE) * (1.0 - exp(-(x - KNEE) / (1.0 - KNEE)));
     }

@@ -19,7 +19,6 @@ import {
 
 export { REAL_RADIUS_KM } from "./bodies";
 
-/** 유명한 별까지 거리(광년) */
 /** 유명한 별의 반지름(태양 = 1). 베텔게우스·안타레스는 측정마다 차이가 크다. */
 export const STAR_RADIUS_SUN: Record<string, number> = {
   "alpha-cen": 1.22,
@@ -28,6 +27,13 @@ export const STAR_RADIUS_SUN: Record<string, number> = {
   polaris: 37.5,
   betelgeuse: 764,
   antares: 680,
+  canopus: 71,
+  rigel: 79,
+  arcturus: 25.4,
+  aldebaran: 45,
+  deneb: 200,
+  procyon: 2.05,
+  altair: 1.8,
 };
 
 /** 보이저 접시 안테나 반지름(km). 화면의 PROBE_SIZE가 이 크기다. */
@@ -35,6 +41,7 @@ export const PROBE_REAL_RADIUS_KM = 0.00183;
 /** 핼리 혜성 핵 반지름(km, 길이 15km의 감자 모양을 공으로 친 값) */
 export const HALLEY_NUCLEUS_KM = 5.5;
 
+/** 유명한 별까지 거리(광년). 데네브는 측정마다 1,400~3,000광년으로 차이가 크다. */
 export const STAR_LY: Record<string, number> = {
   "alpha-cen": 4.37,
   sirius: 8.6,
@@ -42,6 +49,13 @@ export const STAR_LY: Record<string, number> = {
   polaris: 433,
   betelgeuse: 548,
   antares: 550,
+  canopus: 310,
+  rigel: 860,
+  arcturus: 36.7,
+  aldebaran: 65,
+  deneb: 2600,
+  procyon: 11.46,
+  altair: 16.7,
 };
 
 const EPOCH = Date.UTC(2000, 0, 1, 12);

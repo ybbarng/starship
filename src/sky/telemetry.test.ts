@@ -1,12 +1,19 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { AU_KM, type Elements } from "./astro";
-import { DESTINATION_BY_ID, type Destination, sunlightFactor } from "./bodies";
+import {
+  DESTINATION_BY_ID,
+  DESTINATIONS,
+  type Destination,
+  sunlightFactor,
+} from "./bodies";
 import {
   distanceKm,
   formatLightTime,
   formatNearDistance,
   realPositionAU,
+  STAR_LY,
+  STAR_RADIUS_SUN,
 } from "./telemetry";
 
 const sky = JSON.parse(
@@ -70,5 +77,21 @@ describe("가까운 거리 글", () => {
     expect(formatNearDistance(0.027)).toBe("27 m");
     expect(formatNearDistance(559_283.4)).toBe("559,283 km");
     expect(formatNearDistance(5.2 * AU_KM)).toBe("5.2 AU");
+  });
+});
+
+describe("유명한 별", () => {
+  it("별 목적지마다 실제 거리와 반지름이 있다", () => {
+    const stars = DESTINATIONS.filter((d) => d.star);
+    expect(stars.length).toBeGreaterThanOrEqual(13);
+    for (const d of stars) {
+      expect(STAR_LY[d.id], `${d.id} 거리`).toBeGreaterThan(0);
+      expect(STAR_RADIUS_SUN[d.id], `${d.id} 반지름`).toBeGreaterThan(0);
+    }
+  });
+
+  it("카노푸스는 약 310광년", () => {
+    expect(STAR_LY.canopus).toBe(310);
+    expect(DESTINATION_BY_ID.get("canopus")?.ko).toBe("카노푸스");
   });
 });
