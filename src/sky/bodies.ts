@@ -556,9 +556,12 @@ export type DestinationGroup =
   | "작은 천체"
   | "혜성"
   | "탐사선"
-  | "유명한 별";
+  | "유명한 별"
+  | "이름 있는 별";
 
 export type StarTarget = {
+  /** Hipparcos 번호. 하늘 자료(sky.json)의 같은 별과 이어 준다. */
+  hip?: number;
   ra: number;
   dec: number;
   color: string;
@@ -566,11 +569,17 @@ export type StarTarget = {
   radius: number;
   /** 동반성 */
   companion?: { color: string; radius: number; offset: number };
+  /** 거리(광년). 없으면 telemetry의 STAR_LY */
+  ly?: number;
+  /** 실제 반지름(태양 = 1). 없으면 telemetry의 STAR_RADIUS_SUN */
+  radiusSun?: number;
 };
 
 export type Destination = {
   id: string;
   ko: string;
+  /** 영어 이름(검색용) */
+  en?: string;
   group: DestinationGroup;
   /** 한 줄 사실 */
   fact: string;
@@ -587,6 +596,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "overview",
     ko: "태양계 전경",
+    en: "Solar System overview",
     group: "전망",
     view: "overview",
     fact: "위에서 내려다본 오늘의 행성 배치. 어떻게 줄였는지는 창 아래 '축척'에.",
@@ -594,6 +604,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "inner",
     ko: "안쪽 행성",
+    en: "Inner planets",
     group: "전망",
     view: "inner",
     fact: "수성부터 화성, 소행성대까지. 오늘 날짜의 실제 자리.",
@@ -601,6 +612,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "sun",
     ko: "태양",
+    en: "Sun",
     group: "태양과 행성",
     body: "sun",
     fact: "빛이 지구까지 오는 데 8분 20초 걸린다.",
@@ -608,6 +620,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "mercury",
     ko: "수성",
+    en: "Mercury",
     group: "태양과 행성",
     body: "mercury",
     fact: "하루(태양일)가 지구 날로 176일이라 1년보다 길다.",
@@ -615,6 +628,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "venus",
     ko: "금성",
+    en: "Venus",
     group: "태양과 행성",
     body: "venus",
     fact: "두꺼운 구름 아래 표면은 460도. 태양계에서 가장 뜨거운 행성.",
@@ -622,6 +636,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "earth",
     ko: "지구",
+    en: "Earth",
     group: "태양과 행성",
     body: "earth",
     fact: "우리 집. 지금 이 순간의 태양 방향으로 낮과 밤을 칠했다.",
@@ -629,6 +644,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "mars",
     ko: "화성",
+    en: "Mars",
     group: "태양과 행성",
     body: "mars",
     fact: "올림푸스산은 높이 약 22km, 에베레스트의 두 배 반.",
@@ -636,6 +652,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "jupiter",
     ko: "목성",
+    en: "Jupiter",
     group: "태양과 행성",
     body: "jupiter",
     fact: "대적점 폭풍 하나에 지구가 통째로 들어간다.",
@@ -643,6 +660,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "saturn",
     ko: "토성",
+    en: "Saturn",
     group: "태양과 행성",
     body: "saturn",
     fact: "고리의 두께는 대부분 수십 미터에 불과하다.",
@@ -650,6 +668,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "uranus",
     ko: "천왕성",
+    en: "Uranus",
     group: "태양과 행성",
     body: "uranus",
     fact: "자전축이 98도 누워 있어 굴러가듯 태양을 돈다.",
@@ -657,6 +676,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "neptune",
     ko: "해왕성",
+    en: "Neptune",
     group: "태양과 행성",
     body: "neptune",
     fact: "태양계에서 바람이 가장 빠르다. 초속 500m를 넘는다.",
@@ -664,6 +684,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "moon",
     ko: "달",
+    en: "Moon",
     group: "위성",
     body: "moon",
     fact: "늘 같은 면만 지구를 본다. 해마다 3.8cm씩 멀어진다.",
@@ -671,6 +692,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "phobos",
     ko: "포보스",
+    en: "Phobos",
     group: "위성",
     body: "phobos",
     fact: "화성을 하루에 세 번 돈다. 언젠가 부서져 고리가 될 것으로 본다.",
@@ -678,6 +700,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "io",
     ko: "이오",
+    en: "Io",
     group: "위성",
     body: "io",
     fact: "태양계에서 화산 활동이 가장 활발한 천체.",
@@ -685,6 +708,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "europa",
     ko: "유로파",
+    en: "Europa",
     group: "위성",
     body: "europa",
     fact: "얼음 껍질 아래 지구 바다보다 많은 물이 있을 것으로 본다.",
@@ -692,6 +716,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "ganymede",
     ko: "가니메데",
+    en: "Ganymede",
     group: "위성",
     body: "ganymede",
     fact: "태양계에서 가장 큰 위성. 수성보다 크다.",
@@ -699,6 +724,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "titan",
     ko: "타이탄",
+    en: "Titan",
     group: "위성",
     body: "titan",
     fact: "짙은 대기와 메탄 호수가 있는 위성.",
@@ -706,6 +732,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "enceladus",
     ko: "엔켈라두스",
+    en: "Enceladus",
     group: "위성",
     body: "enceladus",
     fact: "남극에서 얼음 물줄기를 우주로 뿜어 올린다.",
@@ -713,6 +740,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "triton",
     ko: "트리톤",
+    en: "Triton",
     group: "위성",
     body: "triton",
     fact: "모행성의 자전과 반대 방향으로 도는 큰 위성.",
@@ -720,6 +748,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "ceres",
     ko: "세레스",
+    en: "Ceres",
     group: "작은 천체",
     body: "ceres",
     fact: "소행성대에서 가장 큰 천체이자 왜소행성.",
@@ -727,6 +756,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "vesta",
     ko: "베스타",
+    en: "Vesta",
     group: "작은 천체",
     body: "vesta",
     fact: "남극에 산 높이 약 20km의 거대한 충돌 흔적이 있다.",
@@ -734,6 +764,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "pluto",
     ko: "명왕성",
+    en: "Pluto",
     group: "작은 천체",
     body: "pluto",
     fact: "하트 모양 얼음 평원(톰보 지역)이 있다.",
@@ -741,12 +772,14 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "halley",
     ko: "핼리 혜성",
+    en: "Halley's Comet",
     group: "혜성",
     fact: "76년마다 돌아온다. 1986년 근일점 무렵의 모습. 다음은 2061년.",
   },
   {
     id: "voyager1",
     ko: "보이저 1호",
+    en: "Voyager 1",
     group: "탐사선",
     probe: "voyager1",
     fact: "1977년에 떠나 2012년 태양권을 벗어났다. 사람이 만든 것 가운데 가장 멀리 간 물체. 화면에서는 아주 크게 그렸다.",
@@ -754,6 +787,7 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "voyager2",
     ko: "보이저 2호",
+    en: "Voyager 2",
     group: "탐사선",
     probe: "voyager2",
     fact: "목성·토성·천왕성·해왕성을 모두 지나간 유일한 탐사선. 2018년 성간 공간에 들어섰다. 화면에서는 아주 크게 그렸다.",
@@ -761,10 +795,12 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "alpha-cen",
     ko: "알파 센타우리",
+    en: "Alpha Centauri",
     group: "유명한 별",
     distance: "4.37광년",
     fact: "태양과 가장 가까운 별 무리. 노란 별 둘이 서로 돈다.",
     star: {
+      hip: 71683,
       ra: 219.9,
       dec: -60.83,
       color: "#fff1c9",
@@ -775,10 +811,12 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "sirius",
     ko: "시리우스",
+    en: "Sirius",
     group: "유명한 별",
     distance: "8.6광년",
     fact: "밤하늘에서 가장 밝은 별. 곁에 작은 백색왜성이 있다.",
     star: {
+      hip: 32349,
       ra: 101.29,
       dec: -16.72,
       color: "#cfe0ff",
@@ -789,83 +827,100 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "vega",
     ko: "베가",
+    en: "Vega",
     group: "유명한 별",
     distance: "25광년",
     fact: "직녀성. 약 1만 2천 년 뒤에는 북극성 자리에 가까워진다.",
-    star: { ra: 279.23, dec: 38.78, color: "#dfe8ff", radius: 3.4 },
+    star: { hip: 91262, ra: 279.23, dec: 38.78, color: "#dfe8ff", radius: 3.4 },
   },
   {
     id: "polaris",
     ko: "북극성",
+    en: "Polaris",
     group: "유명한 별",
     distance: "약 430광년",
     fact: "지구 자전축이 거의 가리키는 별. 사실은 세 별의 무리.",
-    star: { ra: 37.95, dec: 89.26, color: "#fff4d6", radius: 5 },
+    star: { hip: 11767, ra: 37.95, dec: 89.26, color: "#fff4d6", radius: 5 },
   },
   {
     id: "betelgeuse",
     ko: "베텔게우스",
+    en: "Betelgeuse",
     group: "유명한 별",
     distance: "약 550광년",
     fact: "오리온의 어깨. 태양 자리에 두면 화성 궤도를 넘어 소행성대까지 차는 붉은 초거성.",
-    star: { ra: 88.79, dec: 7.41, color: "#ff9a5c", radius: 14 },
+    star: { hip: 27989, ra: 88.79, dec: 7.41, color: "#ff9a5c", radius: 14 },
   },
   {
     id: "antares",
     ko: "안타레스",
+    en: "Antares",
     group: "유명한 별",
     distance: "약 550광년",
     fact: "전갈의 심장. 이름은 '화성의 맞수'라는 뜻.",
-    star: { ra: 247.35, dec: -26.43, color: "#ff8a5c", radius: 11 },
+    star: { hip: 80763, ra: 247.35, dec: -26.43, color: "#ff8a5c", radius: 11 },
   },
   // 아래 일곱은 2026-11-01에 더했다. 방향·거리·반지름·색은 측정값이고, 가까이서 본 표면 무늬만 그림이다.
   {
     id: "canopus",
     ko: "카노푸스",
+    en: "Canopus",
     group: "유명한 별",
     distance: "약 310광년",
     fact: "밤하늘에서 두 번째로 밝은 별. 남쪽 낮게 떠 '노인성'이라 불렸고, 탐사선들이 자세를 잡는 기준 별로 써 왔다.",
-    star: { ra: 95.99, dec: -52.7, color: "#fbf5ea", radius: 6 },
+    star: { hip: 30438, ra: 95.99, dec: -52.7, color: "#fbf5ea", radius: 6 },
   },
   {
     id: "rigel",
     ko: "리겔",
+    en: "Rigel",
     group: "유명한 별",
     distance: "약 860광년",
     fact: "오리온의 발. 태양보다 수만 배 밝은 푸른 초거성.",
-    star: { ra: 78.63, dec: -8.2, color: "#b9ccff", radius: 6.3 },
+    star: { hip: 24436, ra: 78.63, dec: -8.2, color: "#b9ccff", radius: 6.3 },
   },
   {
     id: "arcturus",
     ko: "아크투루스",
+    en: "Arcturus",
     group: "유명한 별",
     distance: "36.7광년",
     fact: "북쪽 하늘에서 가장 밝은 별. 북두칠성 손잡이를 따라 내려가면 닿는 주황색 거성.",
-    star: { ra: 213.92, dec: 19.18, color: "#ffc98f", radius: 4.4 },
+    star: { hip: 69673, ra: 213.92, dec: 19.18, color: "#ffc98f", radius: 4.4 },
   },
   {
     id: "aldebaran",
     ko: "알데바란",
+    en: "Aldebaran",
     group: "유명한 별",
     distance: "65광년",
     fact: "황소의 붉은 눈. 플레이아데스를 '뒤따르는 자'라는 뜻의 이름.",
-    star: { ra: 68.98, dec: 16.51, color: "#ffb978", radius: 5.2 },
+    star: { hip: 21421, ra: 68.98, dec: 16.51, color: "#ffb978", radius: 5.2 },
   },
   {
     id: "deneb",
     ko: "데네브",
+    en: "Deneb",
     group: "유명한 별",
     distance: "약 2,600광년",
     fact: "백조의 꼬리, 여름의 대삼각형 한 꼭짓점. 아주 멀고 아주 밝아 거리 추정이 측정마다 크게 다르다.",
-    star: { ra: 310.36, dec: 45.28, color: "#e6eeff", radius: 8.5 },
+    star: {
+      hip: 102098,
+      ra: 310.36,
+      dec: 45.28,
+      color: "#e6eeff",
+      radius: 8.5,
+    },
   },
   {
     id: "procyon",
     ko: "프로키온",
+    en: "Procyon",
     group: "유명한 별",
     distance: "11.5광년",
     fact: "작은개자리의 별. 시리우스처럼 곁에 작은 백색왜성이 돈다.",
     star: {
+      hip: 37279,
       ra: 114.83,
       dec: 5.22,
       color: "#fff2df",
@@ -876,11 +931,41 @@ export const DESTINATIONS: Destination[] = [
   {
     id: "altair",
     ko: "알타이르",
+    en: "Altair",
     group: "유명한 별",
     distance: "16.7광년",
     fact: "견우성. 아주 빠르게 자전해 적도 쪽이 불룩한 납작한 별.",
-    star: { ra: 297.7, dec: 8.87, color: "#f3f5ff", radius: 3 },
+    star: { hip: 97649, ra: 297.7, dec: 8.87, color: "#f3f5ff", radius: 3 },
   },
 ];
 
 export const DESTINATION_BY_ID = new Map(DESTINATIONS.map((d) => [d.id, d]));
+
+// 하늘 자료가 온 뒤 이름 있는 별을 목적지로 더한다(src/sky/sky3d.ts). 목록이 늘면 구독자에게 알린다.
+let destinationsVersion = 0;
+const destinationListeners = new Set<() => void>();
+
+/** 목적지를 더한다. 이미 있는 id는 건너뛴다. 더한 개수를 돌려준다. */
+export function addDestinations(list: Destination[]): number {
+  let added = 0;
+  for (const d of list) {
+    if (DESTINATION_BY_ID.has(d.id)) continue;
+    DESTINATIONS.push(d);
+    DESTINATION_BY_ID.set(d.id, d);
+    added++;
+  }
+  if (added) {
+    destinationsVersion++;
+    for (const fn of destinationListeners) fn();
+  }
+  return added;
+}
+
+export function subscribeDestinations(fn: () => void): () => void {
+  destinationListeners.add(fn);
+  return () => destinationListeners.delete(fn);
+}
+
+export function getDestinationsVersion(): number {
+  return destinationsVersion;
+}

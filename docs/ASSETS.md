@@ -5,6 +5,8 @@
 | 자료 | 출처 | 라이선스 | 쓰는 곳 |
 |---|---|---|---|
 | 별 위치·밝기·색(6등급까지 5,044개) | [d3-celestial](https://github.com/ofrohn/d3-celestial) 0.7.35 `stars.6.json` (원자료: XHIP, Anderson & Francis 2012 / Hipparcos) | BSD-3-Clause | `public/sky/sky.json` |
+| 별 위치·밝기·색(6~8등급 36,366개) | d3-celestial 0.7.35 `stars.8.json` (원자료 같음) | BSD-3-Clause | `public/sky/faint.json` |
+| 별까지 거리(HIP 번호별 시차·시차 오차 두 숫자, 5,044개) | Hipparcos 새 처리판: van Leeuwen 2007, A&A 474, 653 — [CDS VizieR I/311](https://cdsarc.cds.unistra.fr/viz-bin/cat/I/311) `hip2.dat`. 원자료는 ESA Hipparcos 임무 | ESA·CDS가 공개 배포하는 천문 자료. 자유롭게 쓰되 출처(위 논문·CDS)를 밝히기를 요청한다 | `public/sky/sky.json` `stars` 여섯째·일곱째 칸 |
 | 별 이름(한국어 포함) | d3-celestial `starnames.json` (번역: Stellarium skycultures) | BSD-3-Clause | 같은 파일 |
 | 별자리 선·별자리 이름 | d3-celestial `constellations.lines.json`, `constellations.json` (원자료: IAU) | BSD-3-Clause | 같은 파일 |
 | 행성·소행성 궤도 요소 | d3-celestial `planets.json` (원자료: JPL "Keplerian Elements for Approximate Positions of the Major Planets") | BSD-3-Clause | 같은 파일 |
@@ -16,7 +18,13 @@
 
 > Copyright (c) 2015, Olaf Frohn. All rights reserved. Redistribution and use in source and binary forms, with or without modification, are permitted provided that the conditions of the BSD 3-Clause License are met.
 
+### Hipparcos 시차
+
+시차 원자료 `hip2.dat`(33MB, 117,955줄)은 저장소에 넣지 않는다. `pnpm sky:build`가 `.cache/hip2.dat`(git 밖)에 받아 SHA-256 `c45d6325…e50a4a`로 원본과 같은지 확인한 뒤, 맨눈 별의 HIP 번호별 시차와 오차만 `sky.json`에 옮긴다. 2026-11-01에는 이 환경에서 CDS 접속이 막혀 같은 파일을 담은 [barycorrpy](https://github.com/shbhuk/barycorrpy) 저장소의 사본을 받았고, 체크섬이 CDS 원본 값과 같음을 확인했다. 인용: "This research has made use of the VizieR catalogue access tool, CDS, Strasbourg, France; van Leeuwen, F. 2007, A&A 474, 653 (Hipparcos, the New Reduction of the Raw Data)". 거리 규칙은 `docs/sky-3d.md`.
+
 ## 들이지 않은 것
+
+- HYG 별 목록(거리 포함): CC BY-SA 4.0이라 파생 파일에 같은 조건이 붙는다. Hipparcos 원자료에서 직접 뽑았다.
 
 - d3-celestial의 은하수 윤곽(`mw.json`): 원자료(Jose R. Vieira) 라이선스가 분명하지 않아 쓰지 않는다. 은하수는 코드로 그린다.
 - 영화·드라마·책·게임 속 캐릭터와 함선: 저작권·상표 문제로 쓰지 않는다. 이벤트의 외계인(모아·포포·도르·끙)은 모두 이 저장소에서 지어냈다.

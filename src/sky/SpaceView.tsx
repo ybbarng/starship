@@ -37,7 +37,7 @@ import {
   sunDistanceAU,
   sunlightFactor,
 } from "./bodies";
-import { loadCatalog, type SkyCatalog } from "./catalog";
+import { loadCatalog, loadFaint, type SkyCatalog } from "./catalog";
 import { Hdr, useHdrEnabled } from "./Hdr";
 import { projector } from "./projector";
 import { ScaleNote } from "./ScaleNote";
@@ -45,11 +45,21 @@ import { SunGlare } from "./SunGlare";
 import { useScale } from "./scale";
 import * as S from "./shaders";
 import {
+  auToSkyLy,
+  loadSky,
+  type StarField,
+  skyDirection,
+  skyObserver,
+  starField,
+} from "./sky3d";
+import { FAR_LY, farFade, NEAR_HIDE_LY, seenFrom } from "./stars3d";
+import {
   distanceKm,
   HALLEY_NUCLEUS_KM,
   PROBE_REAL_RADIUS_KM,
   REAL_RADIUS_KM,
   realPositionAU,
+  STAR_LY,
   STAR_RADIUS_SUN,
   telemetry,
 } from "./telemetry";
@@ -109,12 +119,14 @@ export function SpaceView({
   const glareRef = useRef<HTMLDivElement>(null);
   const warpRef = useRef<HTMLCanvasElement>(null);
   const warp = useRef(0);
+  const hideStar = useRef(-1);
   const mode = useScale((s) => s.mode);
   const hdr = useHdrEnabled();
 
   useEffect(() => {
     let alive = true;
-    loadCatalog().then((c) => alive && setCatalog(c));
+    // 하늘 자료가 오면 이름 있는 별을 목적지로 더한 뒤 그린다.
+    loadSky().then(({ catalog: c }) => alive && setCatalog(c));
     return () => {
       alive = false;
     };
@@ -148,11 +160,12 @@ export function SpaceView({
               constellations={constellations}
               starScale={starScale}
               grid={grid}
+              hide={hideStar}
             />
             {/* 축척이 바뀌면 크기·자리를 다시 계산하도록 통째로 다시 만든다. */}
             <group key={mode}>
               <SolarSystem catalog={catalog} onPick={onPick} hdr={hdr} />
-              <StarTargets hdr={hdr} />
+              <StarTargets hdr={hdr} catalog={catalog} hideRef={hideStar} />
               <CameraRig lookAround={lookAround} drift={drift} warp={warp} />
               {labels !== "none" && (
                 <LabelLayer
@@ -214,68 +227,78 @@ function SkyDome({
   constellations,
   starScale,
   grid,
+  hide,
 }: {
   catalog: SkyCatalog;
   constellations: boolean;
   starScale: number;
   grid: boolean;
+  /** 하늘에서 숨길 별의 자리(StarTargets가 정한다), 없으면 -1 */
+  hide: RefObject<number>;
 }) {
   const gridGeo = useMemo(() => equatorialGrid(), []);
   const group = useRef<THREE.Group>(null);
   const { camera, gl } = useThree();
+  const field = useMemo(() => starField(catalog), [catalog]);
+  const [faint, setFaint] = useState<THREE.BufferGeometry | null>(null);
 
-  const stars = useMemo(() => {
-    const n = catalog.stars.length;
-    const pos = new Float32Array(n * 3);
-    const col = new Float32Array(n * 3);
-    const size = new Float32Array(n);
-    const seed = new Float32Array(n);
-    catalog.stars.forEach(([ra, dec, mag, bv], i) => {
-      pos.set(skyPoint(ra, dec), i * 3);
-      const [r, g, b] = bvToRgb(bv);
-      col.set([0.55 + 0.45 * r, 0.55 + 0.45 * g, 0.55 + 0.45 * b], i * 3);
-      size[i] = Math.min(9, Math.max(1.2, 6.2 - mag * 0.85));
-      seed[i] = (i * 0.618_034) % 1;
-    });
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    geo.setAttribute("aColor", new THREE.BufferAttribute(col, 3));
-    geo.setAttribute("aSize", new THREE.BufferAttribute(size, 1));
-    geo.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
-    return geo;
-  }, [catalog]);
+  // 맨눈 별: 거리(광년)를 붙인 3D 위치. 방향과 등급은 셰이더가 관측자 자리에서 다시 셈한다.
+  const stars = useMemo(
+    () => starGeometry(field.pos, field.mag, field.bv, field.far, field.count),
+    [field],
+  );
+
+  // 6~8등급 별은 첫 화면 뒤에 받아 먼 천구에 둔다.
+  useEffect(() => {
+    let alive = true;
+    loadFaint()
+      .then((f) => {
+        if (!alive) return;
+        const n = Math.floor(f.stars.length / 4);
+        const pos = new Float32Array(n * 3);
+        const mag = new Float32Array(n);
+        const bv = new Float32Array(n);
+        for (let i = 0; i < n; i++) {
+          const [x, y, z] = skyDirection(
+            f.stars[i * 4] ?? 0,
+            f.stars[i * 4 + 1] ?? 0,
+          );
+          pos.set([x * FAR_LY, y * FAR_LY, z * FAR_LY], i * 3);
+          mag[i] = f.stars[i * 4 + 2] ?? 8;
+          bv[i] = f.stars[i * 4 + 3] ?? 0.6;
+        }
+        // 흐린 별은 숨길 일이 없어 맨눈 별과 겹치지 않는 번호를 준다.
+        setFaint(starGeometry(pos, mag, bv, new Uint8Array(n).fill(1), n, 1e6));
+      })
+      .catch(() => {
+        // 흐린 별이 없어도 맨눈 별만으로 그린다.
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const milky = useMemo(() => milkyWayGeometry(), []);
 
-  const lines = useMemo(() => {
-    const pts: number[] = [];
-    for (const c of catalog.constellations) {
-      for (const line of c.lines) {
-        for (let k = 0; k < line.length - 1; k++) {
-          const a = line[k];
-          const b = line[k + 1];
-          if (!a || !b) continue;
-          pts.push(
-            ...skyPoint(a[0], a[1], SKY_RADIUS * 0.99),
-            ...skyPoint(b[0], b[1], SKY_RADIUS * 0.99),
-          );
-        }
-      }
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.Float32BufferAttribute(pts, 3));
-    return geo;
-  }, [catalog]);
+  const lines = useMemo(
+    () => constellationGeometry(catalog, field),
+    [catalog, field],
+  );
 
   const starMat = useMemo(
     () =>
       new THREE.ShaderMaterial({
-        vertexShader: S.starVertex,
+        vertexShader: S.sky3dVertex,
         fragmentShader: S.starFragment,
         uniforms: {
           uPixelRatio: { value: gl.getPixelRatio() },
           uTime: { value: 0 },
           uScale: { value: starScale },
+          uObserver: { value: new THREE.Vector3() },
+          uRadius: { value: SKY_RADIUS },
+          uNearHide: { value: NEAR_HIDE_LY },
+          uFarFade: { value: 1 },
+          uHide: { value: -1 },
         },
         transparent: true,
         depthWrite: false,
@@ -284,10 +307,36 @@ function SkyDome({
     [gl, starScale],
   );
 
+  const lineMat = useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        vertexShader: S.constellation3dVertex,
+        fragmentShader: S.lineFragment,
+        uniforms: {
+          uObserver: { value: new THREE.Vector3() },
+          uRadius: { value: SKY_RADIUS * 0.99 },
+          uColor: { value: new THREE.Color("#6f8fd8") },
+          uOpacity: { value: 0.32 },
+        },
+        transparent: true,
+        depthWrite: false,
+      }),
+    [],
+  );
+
   useFrame((state) => {
     group.current?.position.copy(camera.position);
-    if (starMat.uniforms.uTime)
-      starMat.uniforms.uTime.value = state.clock.elapsedTime;
+    const u = starMat.uniforms;
+    if (u.uTime) u.uTime.value = state.clock.elapsedTime;
+    const [ox, oy, oz] = skyObserver.ly;
+    (u.uObserver?.value as THREE.Vector3 | undefined)?.set(ox, oy, oz);
+    if (u.uFarFade) u.uFarFade.value = farFade(skyObserver.fromSun);
+    if (u.uHide) u.uHide.value = hide.current ?? -1;
+    (lineMat.uniforms.uObserver?.value as THREE.Vector3 | undefined)?.set(
+      ox,
+      oy,
+      oz,
+    );
   });
 
   return (
@@ -310,6 +359,14 @@ function SkyDome({
           ]}
         />
       </points>
+      {faint && (
+        <points
+          geometry={faint}
+          material={starMat}
+          renderOrder={-11}
+          frustumCulled={false}
+        />
+      )}
       <points
         geometry={stars}
         material={starMat}
@@ -331,17 +388,97 @@ function SkyDome({
         </lineSegments>
       )}
       {constellations && (
-        <lineSegments geometry={lines} renderOrder={-11} frustumCulled={false}>
-          <lineBasicMaterial
-            color="#6f8fd8"
-            transparent
-            opacity={0.32}
-            depthWrite={false}
-          />
-        </lineSegments>
+        <lineSegments
+          geometry={lines}
+          material={lineMat}
+          renderOrder={-11}
+          frustumCulled={false}
+        />
       )}
     </group>
   );
+}
+
+/** 별 점 지오메트리. pos는 태양 중심 위치(광년), far=1이면 거리를 모르는 별. */
+function starGeometry(
+  pos: Float32Array,
+  mag: Float32Array,
+  bv: Float32Array,
+  far: Uint8Array,
+  n: number,
+  /** 별마다 aIndex = indexBase + i. 숨길 별(uHide)을 고를 때 쓴다. */
+  indexBase = 0,
+): THREE.BufferGeometry {
+  const col = new Float32Array(n * 3);
+  const seed = new Float32Array(n);
+  const farF = new Float32Array(n);
+  const index = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    index[i] = indexBase + i;
+    const [r, g, b] = bvToRgb(bv[i] ?? 0.6);
+    col.set([0.55 + 0.45 * r, 0.55 + 0.45 * g, 0.55 + 0.45 * b], i * 3);
+    seed[i] = (i * 0.618_034) % 1;
+    farF[i] = far[i] ?? 0;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("aMag", new THREE.BufferAttribute(mag, 1));
+  geo.setAttribute("aColor", new THREE.BufferAttribute(col, 3));
+  geo.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
+  geo.setAttribute("aFar", new THREE.BufferAttribute(farF, 1));
+  geo.setAttribute("aIndex", new THREE.BufferAttribute(index, 1));
+  return geo;
+}
+
+/** 별자리 선 한 토막을 나누는 수. 별 가까이에서는 하늘에서 큰 호가 되어 잘게 나눈다. */
+const LINE_PIECES = 24;
+
+/**
+ * 별자리 선: 토막마다 두 끝 별의 3D 위치(광년)를 넣고 LINE_PIECES로 나눈다. 셰이더가 관측자 자리에서 잇는다.
+ * 꼭짓점과 맞춘 별이 없거나 거리를 모르면 그 방향의 먼 천구 점을 쓴다.
+ */
+function constellationGeometry(
+  catalog: SkyCatalog,
+  field: StarField,
+): THREE.BufferGeometry {
+  const a: number[] = [];
+  const b: number[] = [];
+  const t: number[] = [];
+  const at = (hip: number, ra: number, dec: number): Vec3 => {
+    const i = field.index.get(hip);
+    if (hip && i !== undefined)
+      return [
+        field.pos[i * 3] ?? 0,
+        field.pos[i * 3 + 1] ?? 0,
+        field.pos[i * 3 + 2] ?? 0,
+      ];
+    const [x, y, z] = skyDirection(ra, dec);
+    return [x * FAR_LY, y * FAR_LY, z * FAR_LY];
+  };
+  for (const c of catalog.constellations) {
+    c.lines.forEach((line, li) => {
+      const hips = c.hips?.[li] ?? [];
+      for (let k = 0; k < line.length - 1; k++) {
+        const p = line[k];
+        const q = line[k + 1];
+        if (!p || !q) continue;
+        const pa = at(hips[k] ?? 0, p[0], p[1]);
+        const pb = at(hips[k + 1] ?? 0, q[0], q[1]);
+        for (let j = 0; j < LINE_PIECES; j++) {
+          for (const s of [j / LINE_PIECES, (j + 1) / LINE_PIECES]) {
+            a.push(...pa);
+            b.push(...pb);
+            t.push(s);
+          }
+        }
+      }
+    });
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(a, 3));
+  geo.setAttribute("aB", new THREE.Float32BufferAttribute(b, 3));
+  geo.setAttribute("aT", new THREE.Float32BufferAttribute(t, 1));
+  return geo;
 }
 
 /** 은하수: 은하면을 따라 흐린 점을 뿌린다(외부 자료 없이 은하 좌표로 만든다). */
@@ -1205,15 +1342,64 @@ function starSurface(color: string) {
   });
 }
 
-function StarTargets({ hdr }: { hdr: boolean }) {
+/** 관측자가 태양에서 이보다 멀면(약 1,300 AU) 태양계 밖으로 본다. */
+const SOLAR_SYSTEM_LY = 0.02;
+
+/** 별 목적지의 태양 중심 위치(광년, three.js 축). 하늘 자료의 같은 별과 같은 값이다. */
+function starLy(d: Destination): Vec3 {
+  const s = d.star;
+  if (!s) return [0, 0, 0];
+  const ly = s.ly ?? STAR_LY[d.id] ?? 10;
+  const [x, y, z] = skyDirection(s.ra, s.dec);
+  return [x * ly, y * ly, z * ly];
+}
+
+/**
+ * 별 목적지를 장면의 구로 그리나. 목적지는 늘, 유명한 별 13개는 태양계 안에서만(예전 화면 그대로),
+ * 그 밖에는 관측자가 0.5광년 안에 있을 때만(하늘의 점과 겹치지 않게).
+ */
+function starMeshVisible(d: Destination, destinationId: string): boolean {
+  if (d.id === destinationId) return true;
+  if (d.group === "유명한 별" && skyObserver.fromSun < SOLAR_SYSTEM_LY)
+    return true;
+  const [x, y, z] = starLy(d);
+  const [ox, oy, oz] = skyObserver.ly;
+  return Math.hypot(x - ox, y - oy, z - oz) < NEAR_HIDE_LY;
+}
+
+function StarTargets({
+  hdr,
+  catalog,
+  hideRef,
+}: {
+  hdr: boolean;
+  catalog: SkyCatalog;
+  /** 하늘에서 숨길 별(장면의 구가 대신 그린다)의 자리. SkyDome이 읽는다. */
+  hideRef: RefObject<number>;
+}) {
   const { camera } = useThree();
   const refs = useRef<(THREE.Mesh | null)[]>([]);
-  const stars = useMemo(() => DESTINATIONS.filter((d) => d.star), []);
-  const surfaces = useMemo(
-    () =>
-      new Map(stars.map((d) => [d.id, starSurface(d.star?.color ?? "#fff")])),
-    [stars],
-  );
+  const groups = useRef<Map<string, THREE.Group>>(new Map());
+  const destinationId = useVoyage((s) => s.destinationId);
+  const previousId = useVoyage((s) => s.previousId);
+  const field = useMemo(() => starField(catalog), [catalog]);
+  // 유명한 별 13개와, 이름 있는 별 가운데 지금 목적지·출발지인 별
+  const stars = useMemo(() => {
+    const out = DESTINATIONS.filter((d) => d.star && d.group === "유명한 별");
+    for (const id of [destinationId, previousId]) {
+      const d = id ? DESTINATION_BY_ID.get(id) : undefined;
+      if (d?.star && !out.includes(d)) out.push(d);
+    }
+    return out;
+  }, [destinationId, previousId]);
+  const surfaceCache = useRef(new Map<string, THREE.ShaderMaterial>());
+  const surfaces = useMemo(() => {
+    const cache = surfaceCache.current;
+    for (const d of stars)
+      if (!cache.has(d.id))
+        cache.set(d.id, starSurface(d.star?.color ?? "#fff"));
+    return cache;
+  }, [stars]);
   // 태양처럼 항성도 HDR이면 가운데가 1.0을 넘게 밝아져 번진다.
   useEffect(() => {
     for (const m of surfaces.values())
@@ -1221,6 +1407,15 @@ function StarTargets({ hdr }: { hdr: boolean }) {
   }, [surfaces, hdr]);
   useFrame(() => {
     for (const m of refs.current) m?.quaternion.copy(camera.quaternion);
+    for (const d of stars) {
+      const g = groups.current.get(d.id);
+      if (g) g.visible = starMeshVisible(d, destinationId);
+    }
+    // 태양계 밖에서는 목적지 별의 하늘 점을 숨긴다(장면의 구와 자리가 조금 달라 둘로 보인다).
+    const dest = DESTINATION_BY_ID.get(destinationId);
+    const i = dest?.star?.hip ? field.index.get(dest.star.hip) : undefined;
+    hideRef.current =
+      i !== undefined && skyObserver.fromSun >= SOLAR_SYSTEM_LY ? i : -1;
   });
   return (
     <group>
@@ -1235,7 +1430,13 @@ function StarTargets({ hdr }: { hdr: boolean }) {
           ? p.clone().add(perp.multiplyScalar(s.companion.offset))
           : null;
         return (
-          <group key={d.id}>
+          <group
+            key={d.id}
+            ref={(g) => {
+              if (g) groups.current.set(d.id, g);
+              else groups.current.delete(d.id);
+            }}
+          >
             <mesh position={p} material={surfaces.get(d.id)}>
               <sphereGeometry args={[s.radius, 64, 48]} />
             </mesh>
@@ -1444,7 +1645,8 @@ function surfaceDistanceKm(
     return fromSurface(
       starTargetPosition(dest),
       dest.star.radius,
-      (REAL_RADIUS_KM.sun ?? 696_340) * (STAR_RADIUS_SUN[dest.id] ?? 1),
+      (REAL_RADIUS_KM.sun ?? 696_340) *
+        (STAR_RADIUS_SUN[dest.id] ?? dest.star.radiusSun ?? 1),
     );
   if (dest.id === "halley")
     return fromSurface(
@@ -1461,6 +1663,9 @@ function surfaceDistanceKm(
     realKm,
   );
 }
+
+/** 별 목적지의 기본 거리에서 하늘 관측자가 별에서 비켜 서는 거리(광년). 이웃 별까지(수 광년)에 비해 작다. */
+const NEAR_STAR_OFFSET_LY = 0.05;
 
 /** 끌 때 1픽셀당 도는 각도 */
 const DRAG_RAD_PER_PX = 0.005;
@@ -1500,7 +1705,11 @@ function CameraRig({
     far: boolean;
     /** 출발할 때의 실제 위치(AU) */
     fromReal: Vec3;
+    /** 출발할 때 하늘 관측자의 별 곁 어긋남(광년) */
+    fromOffset: Vec3;
   } | null>(null);
+  /** 지난 프레임 하늘 관측자의 별 곁 어긋남(광년) */
+  const lastOffset = useRef<Vec3>([0, 0, 0]);
   const look = useRef(new THREE.Vector3());
   const lastInteract = useRef(0);
   const lastReal = useRef<Vec3 | null>(null);
@@ -1545,6 +1754,7 @@ function CameraRig({
       duration: Math.min(7, 2.4 + 1.1 * Math.log10(1 + d)) * 1000,
       far: d > (scaleMode() === "real" ? 200_000 : 3000),
       fromReal: [...telemetry.position] as Vec3,
+      fromOffset: [...lastOffset.current] as Vec3,
     };
     yaw.current = 0;
     pitch.current = 0;
@@ -1677,7 +1887,46 @@ function CameraRig({
     camera.lookAt(look.current);
     fitClipRange(camera as THREE.PerspectiveCamera, p.dist);
     updateTelemetry(dest, orbits, p, t0, dt);
+    updateObserver(dest, p, t0, target);
   });
+
+  /**
+   * 하늘을 보는 자리: 실제 위치(telemetry.position)에, 별 목적지에서는 카메라가 별에서 떨어진 쪽으로
+   * 조금(기본 거리에서 NEAR_STAR_OFFSET_LY) 비켜 둔다. 별 한가운데에 서면 그 별에서 뻗는 별자리 선의
+   * 방향이 정해지지 않는다. 비킨 방향이 장면에서 카메라가 별을 보는 방향과 같아서, 선 끝이 장면의 별 구에 닿는다.
+   */
+  function updateObserver(
+    dest: Destination,
+    p: Pose,
+    t0: typeof trip.current,
+    target: THREE.Vector3,
+  ) {
+    const offsetAt = (cam: THREE.Vector3): Vec3 => {
+      if (!dest.star) return [0, 0, 0];
+      const k = NEAR_STAR_OFFSET_LY / (dest.star.radius * 12);
+      return [
+        (cam.x - p.center.x) * k,
+        (cam.y - p.center.y) * k,
+        (cam.z - p.center.z) * k,
+      ];
+    };
+    let off: Vec3;
+    if (t0) {
+      const e = easeInOut(
+        Math.min(1, (performance.now() - t0.start) / t0.duration),
+      );
+      const to = offsetAt(target);
+      off = [0, 1, 2].map(
+        (i) => (t0.fromOffset[i] ?? 0) * (1 - e) + (to[i] ?? 0) * e,
+      ) as Vec3;
+    } else {
+      off = offsetAt(camera.position);
+    }
+    lastOffset.current = off;
+    const [x, y, z] = auToSkyLy(telemetry.position);
+    skyObserver.ly = [x + off[0], y + off[1], z + off[2]];
+    skyObserver.fromSun = Math.hypot(...skyObserver.ly);
+  }
 
   /** 계기판의 진짜 값: 위치·지구 거리·고도·속도·남은 거리·보는 방향 */
   function updateTelemetry(
@@ -1773,17 +2022,27 @@ type LabelSpec = {
   body?: BodyDef;
   /** 누르면 날아갈 목적지 */
   target?: string;
+  /** 별 이름표: 태양 중심 위치(광년)와 지구에서 본 등급. 방향·등급을 관측자 자리에서 다시 셈한다. */
+  sky?: { pos: Vec3; mag: number; far: boolean };
+  /** 별자리 이름표: 꼭짓점 별 위치(광년)와 지구에서 본 꼭짓점 평균 방향 */
+  figure?: { verts: { pos: Vec3; far: boolean }[]; home: THREE.Vector3 };
 };
 
-/** 이름표 별 중 목적지가 있는 것 */
-const STAR_TARGET: Record<string, string> = {
-  Sirius: "sirius",
-  Vega: "vega",
-  Betelgeuse: "betelgeuse",
-  Antares: "antares",
-  Polaris: "polaris",
-  "Rigil Kentaurus": "alpha-cen",
-};
+/** 별자리 꼭짓점들을 관측자 자리에서 본 평균 방향 */
+function figureDirection(
+  verts: { pos: Vec3; far: boolean }[],
+  observer: Vec3,
+  out: THREE.Vector3,
+): THREE.Vector3 {
+  out.set(0, 0, 0);
+  for (const v of verts) {
+    const { dir } = seenFrom(v.pos, 0, observer, v.far);
+    out.x += dir[0];
+    out.y += dir[1];
+    out.z += dir[2];
+  }
+  return out.normalize();
+}
 
 const LABEL_STYLE: Record<LabelSpec["kind"], string> = {
   star: "font-size:11px;color:rgba(235,240,255,.72);",
@@ -1816,26 +2075,53 @@ function LabelLayer({
 
   const specs = useMemo<LabelSpec[]>(() => {
     const out: LabelSpec[] = [];
-    const magLimit = amount === "all" ? 2.4 : 1.4;
+    const field = starField(catalog);
+    // HIP → 목적지(유명한 별과 이름 있는 별)
+    const targetOf = new Map<number, string>();
+    for (const d of DESTINATIONS)
+      if (d.star?.hip) targetOf.set(d.star.hip, d.id);
+    const skyOf = (hip: number) => {
+      const i = field.index.get(hip);
+      if (i === undefined) return undefined;
+      return {
+        pos: [
+          field.pos[i * 3] ?? 0,
+          field.pos[i * 3 + 1] ?? 0,
+          field.pos[i * 3 + 2] ?? 0,
+        ] as Vec3,
+        mag: field.mag[i] ?? 6,
+        far: field.far[i] === 1,
+      };
+    };
     for (const s of catalog.named) {
-      if (s.mag > magLimit) continue;
       const [x, y, z] = toThree(raDecToEcliptic(s.ra, s.dec));
       out.push({
         key: `s-${s.hip}`,
         text: s.ko,
         kind: "star",
-        target: STAR_TARGET[s.en],
+        target: targetOf.get(s.hip),
         dir: new THREE.Vector3(x, y, z),
+        sky: skyOf(s.hip),
       });
     }
     for (const c of constellations ? catalog.constellations : []) {
       if (amount === "few" && c.rank > 1) continue;
       const [x, y, z] = toThree(raDecToEcliptic(c.label[0], c.label[1]));
+      const hips = new Set((c.hips ?? []).flat().filter(Boolean));
+      const verts = [...hips]
+        .map((h) => skyOf(h))
+        .filter((v) => v !== undefined);
       out.push({
         key: `c-${c.id}`,
         text: c.ko,
         kind: "constellation",
         dir: new THREE.Vector3(x, y, z),
+        figure: verts.length
+          ? {
+              verts,
+              home: figureDirection(verts, [0, 0, 0], new THREE.Vector3()),
+            }
+          : undefined,
       });
     }
     for (const b of BODIES) {
@@ -1928,6 +2214,9 @@ function LabelLayer({
   }, [specs, container, onPick]);
 
   const v = useMemo(() => new THREE.Vector3(), []);
+  const fig = useMemo(() => new THREE.Vector3(), []);
+  const destinationId = useVoyage((s) => s.destinationId);
+  const magLimit = amount === "all" ? 2.4 : 1.4;
   // 행성 이름표가 먼저 자리를 잡고, 별·별자리는 남는 자리에.
   const ordered = useMemo(() => {
     const rank = {
@@ -1945,10 +2234,16 @@ function LabelLayer({
         r: b.radius,
         at: () =>
           new THREE.Vector3(...bodyPosition(b, catalog.orbits, Date.now())),
+        on: () => true,
       })),
       ...DESTINATIONS.filter((d) => d.star).map((d) => {
         const p = starTargetPosition(d);
-        return { r: d.star?.radius ?? 1, at: () => p };
+        return {
+          r: d.star?.radius ?? 1,
+          at: () => p,
+          // 장면에 그린 별만 이름표를 가린다.
+          on: () => starMeshVisible(d, useVoyage.getState().destinationId),
+        };
       }),
     ],
     [catalog],
@@ -1965,6 +2260,7 @@ function LabelLayer({
     // 화면에서 천체가 차지하는 원(이름표를 가리는 것)
     const discs: { x: number; y: number; r: number; d: number }[] = [];
     for (const o of occluderBodies) {
+      if (!o.on()) continue;
       const p = o.at();
       const d = camera.position.distanceTo(p);
       const rpx = (o.r / d) * focal;
@@ -1985,7 +2281,22 @@ function LabelLayer({
       let show = true;
       let offsetY = 8;
       let depth = Number.POSITIVE_INFINITY;
-      if (s.dir) {
+      if (s.sky) {
+        // 별: 관측자 자리에서 본 방향과 등급. 가까운 별(목적지)은 장면의 구가 그리고 이름표도 숨긴다.
+        const seen = seenFrom(s.sky.pos, s.sky.mag, skyObserver.ly, s.sky.far);
+        show =
+          seen.dist >= NEAR_HIDE_LY &&
+          (seen.mag <= magLimit || s.target === destinationId);
+        v.set(...seen.dir)
+          .multiplyScalar(1000)
+          .add(camera.position);
+      } else if (s.figure) {
+        // 별자리 이름: 꼭짓점 별들이 지구에서 본 자리에서 움직인 만큼 옮긴다(태양계 안에서는 그대로).
+        figureDirection(s.figure.verts, skyObserver.ly, fig)
+          .sub(s.figure.home)
+          .add(s.dir ?? fig);
+        v.copy(fig.normalize()).multiplyScalar(1000).add(camera.position);
+      } else if (s.dir) {
         v.copy(s.dir).multiplyScalar(1000).add(camera.position);
       } else if (s.at) {
         v.copy(s.at());
