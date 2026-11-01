@@ -308,7 +308,7 @@ function SchematicDefs() {
         <feDisplacementMap
           in="SourceGraphic"
           in2="noise"
-          scale="14"
+          scale="10"
           xChannelSelector="R"
           yChannelSelector="G"
           result="shaken"
@@ -633,15 +633,27 @@ function PipeRun({
   );
 }
 
-/** 노즐 출구(x, y)에서 오른쪽으로 len만큼 뻗는 불꽃 모양(끝이 가늘어지는 물방울). */
-function flameShape(x: number, y: number, len: number, half: number) {
+/**
+ * (x, y)에서 오른쪽으로 len만큼 뻗는 불꽃 모양. 시작 반높이 h0(노즐 입구보다 좁게)에서
+ * 조금 부풀었다가(hMax) 끝으로 가늘어진다.
+ */
+function flameShape(
+  x: number,
+  y: number,
+  len: number,
+  h0: number,
+  hMax: number,
+) {
   return [
-    `M ${x} ${y - half}`,
-    `C ${x + len * 0.22} ${y - half * 1.25}, ${x + len * 0.62} ${y - half * 0.75}, ${x + len} ${y}`,
-    `C ${x + len * 0.62} ${y + half * 0.75}, ${x + len * 0.22} ${y + half * 1.25}, ${x} ${y + half}`,
+    `M ${x} ${y - h0}`,
+    `C ${x + len * 0.18} ${y - hMax}, ${x + len * 0.55} ${y - hMax * 0.8}, ${x + len} ${y}`,
+    `C ${x + len * 0.55} ${y + hMax * 0.8}, ${x + len * 0.18} ${y + hMax}, ${x} ${y + h0}`,
     "Z",
   ].join(" ");
 }
+
+/** 노즐 출구 안쪽으로 불꽃을 숨겨 시작하는 거리. 일렁이는 왼쪽 끝을 노즐 종이 가린다. */
+const PLUME_INSET = 8;
 
 /**
  * 배기 불꽃: 번진 빛 · 겉불꽃(영역 색) · 속불꽃(주황) · 흰 심 · 충격파 무늬(마하 다이아몬드).
@@ -658,24 +670,33 @@ function Plume({
   len: number;
   area: Area;
 }) {
+  // x는 노즐 출구. 불꽃은 출구 안쪽(PLUME_INSET)에서 노즐 입구(반높이 38)보다 좁게 시작한다.
+  const sx = x - PLUME_INSET;
   const diamonds = [0.16, 0.3, 0.43].filter((t) => t * len > 14);
   return (
     <g style={{ mixBlendMode: "screen" }}>
+      {/* 번진 빛은 출구 밖에서만(노즐 몸통 뒤로 번지면 얼룩처럼 보였다) */}
       <path
-        d={flameShape(x, y, len * 1.05, 40)}
+        d={flameShape(x + 6, y, len, 22, 34)}
         fill={COLOR[area]}
-        fillOpacity="0.35"
+        fillOpacity="0.3"
         filter="url(#fr-glow)"
       />
       <g className="fuel-plume">
         <g filter="url(#fr-fire)">
-          <path d={flameShape(x, y, len, 34)} fill={`url(#fr-plume-${area})`} />
           <path
-            d={flameShape(x, y, len * 0.72, 22)}
+            d={flameShape(sx, y, len + PLUME_INSET, 27, 33)}
+            fill={`url(#fr-plume-${area})`}
+          />
+          <path
+            d={flameShape(sx, y, len * 0.72, 18, 21)}
             fill="url(#fr-plume-mid)"
           />
         </g>
-        <path d={flameShape(x, y, len * 0.48, 10)} fill="url(#fr-plume-core)" />
+        <path
+          d={flameShape(sx, y, len * 0.48, 9, 10)}
+          fill="url(#fr-plume-core)"
+        />
         {diamonds.map((t, i) => (
           <ellipse
             key={t}
@@ -709,7 +730,7 @@ function Engine({
   return (
     <g data-engine={area}>
       {/* 배기 불꽃: 노즐 안쪽에서 시작해 노즐 뒤에 그린다(일렁이는 왼쪽 끝을 노즐이 가린다) */}
-      {plume > 0 && <Plume x={x + 132} y={y} len={plume + 10} area={area} />}
+      {plume > 0 && <Plume x={x + 142} y={y} len={plume} area={area} />}
       {/* 연소실 */}
       <rect
         x={x}
