@@ -1,13 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { buildDemoLink } from "@/demo/link";
-import { Snapshot } from "@/protocol/v1";
-import { chainNodes, clockKst, dropLine, formatSecs } from "./model";
+import { Link, Snapshot } from "@/protocol/v1";
+import {
+  chainNodes,
+  clockKst,
+  dropLine,
+  formatSecs,
+  vpnDetail,
+  vpnOnlyProblem,
+} from "./model";
 
 const now = Date.parse("2026-10-29T03:00:00+09:00");
 
 describe("관제 링크 프로토콜", () => {
-  it("데모 네 가지가 스키마를 지킨다", () => {
-    for (const mode of ["ok", "warn", "down", "off"] as const) {
+  it("데모 여섯 가지가 스키마를 지킨다", () => {
+    for (const mode of [
+      "ok",
+      "warn",
+      "down",
+      "off",
+      "vpn-warn",
+      "vpn-down",
+    ] as const) {
       const link = buildDemoLink(mode, now);
       const snap = Snapshot.parse({
         protocol: "starship/1",
@@ -18,7 +32,13 @@ describe("관제 링크 프로토콜", () => {
         gauges: [],
         link,
       });
-      expect(snap.link?.verdict).toBe(mode);
+      if (mode === "vpn-warn" || mode === "vpn-down") {
+        // 인터넷은 정상이고 회사 VPN만 문제다.
+        expect(snap.link?.verdict).toBe("ok");
+        expect(snap.link?.vpn?.status).toBe(
+          mode === "vpn-warn" ? "warn" : "error",
+        );
+      } else expect(snap.link?.verdict).toBe(mode);
     }
   });
 
@@ -83,5 +103,44 @@ describe("글", () => {
     ).toBe("오늘 1번 끊김 · 마지막 1분 43초, 2:17");
     expect(dropLine({ today: 0 })).toBe("오늘 끊김 없음");
     expect(dropLine({ today: 3 })).toBe("오늘 3번 끊김");
+  });
+});
+
+describe("회사 VPN", () => {
+  it("비서가 주는 값을 그대로 받는다", () => {
+    const link = Link.parse({
+      ...buildDemoLink("ok", now),
+      vpn: { status: "ok", keyDays: 7, routers: { online: 3, total: 3 } },
+    });
+    expect(link.vpn).toEqual({
+      status: "ok",
+      keyDays: 7,
+      routers: { online: 3, total: 3 },
+    });
+  });
+
+  it("vpn 모양이 틀려도 링크 전체는 버리지 않는다", () => {
+    const link = Link.parse({
+      ...buildDemoLink("ok", now),
+      vpn: { status: "?" },
+    });
+    expect(link.vpn).toBeUndefined();
+    expect(link.verdict).toBe("ok");
+  });
+
+  it("작은 글: 키 남은 날과 라우터, 3일 안이면 '남음'", () => {
+    expect(
+      vpnDetail({ status: "ok", keyDays: 7, routers: { online: 3, total: 3 } }),
+    ).toBe("키 7일 · 라우터 3/3");
+    expect(vpnDetail({ status: "warn", keyDays: 2 })).toBe("키 2일 남음");
+    expect(vpnDetail({ status: "error" })).toBe("");
+  });
+
+  it("인터넷은 되는데 VPN만 문제일 때를 가른다", () => {
+    expect(vpnOnlyProblem(buildDemoLink("vpn-down", now))).toBe(true);
+    expect(vpnOnlyProblem(buildDemoLink("vpn-warn", now))).toBe(true);
+    expect(vpnOnlyProblem(buildDemoLink("ok", now))).toBe(false);
+    // 인터넷이 끊겼으면 VPN 문제는 그 결과라 따로 가르지 않는다.
+    expect(vpnOnlyProblem(buildDemoLink("down", now))).toBe(false);
   });
 });

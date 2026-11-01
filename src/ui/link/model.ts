@@ -97,3 +97,30 @@ export function dropLine(drops: Link["drops"]): string {
       : "";
   return `오늘 ${drops.today}번 끊김${last}`;
 }
+
+export const VPN_LABEL: Record<GaugeStatus, string> = {
+  ok: "정상",
+  warn: "주의",
+  error: "끊김",
+  off: "꺼짐",
+};
+
+/** 회사 VPN 줄의 작은 글: "키 7일 · 라우터 3/3". 키가 3일 안이면 "키 2일 남음". */
+export function vpnDetail(vpn: NonNullable<Link["vpn"]>): string {
+  const parts: string[] = [];
+  if (vpn.keyDays !== undefined)
+    parts.push(
+      vpn.keyDays <= 3 ? `키 ${vpn.keyDays}일 남음` : `키 ${vpn.keyDays}일`,
+    );
+  if (vpn.routers)
+    parts.push(`라우터 ${vpn.routers.online}/${vpn.routers.total}`);
+  return parts.join(" · ");
+}
+
+/** 인터넷은 되는데 VPN만 문제인가. 화면은 이때 "인터넷은 정상"을 붙여 둘을 가른다. */
+export function vpnOnlyProblem(link: Link): boolean {
+  const vpn = link.vpn;
+  if (!vpn || vpn.status === "ok") return false;
+  const internet = link.hops.find((h) => h.id === "internet");
+  return link.verdict !== "down" && internet?.status !== "error";
+}

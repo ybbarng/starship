@@ -262,8 +262,29 @@ export const Link = z.object({
     /** 마지막 끊김이 이어진 초 */
     lastSecs: z.number().nonnegative().optional(),
   }),
-  /** 비밀 통로(VPN·터널) 상태 */
+  /** 비밀 통로(VPN·터널) 상태. vpn이 있으면 화면은 vpn을 쓴다 */
   tunnel: GaugeStatus.optional(),
+  /**
+   * 회사 VPN. 인터넷은 되는데 VPN만 안 되는 경우를 따로 보이려고 둔다.
+   * error: 꺼짐·키 만료·회사 망 오프라인·라우터 모두 꺼짐, warn: 건강 경고·키 3일 안 만료·라우터 일부 꺼짐.
+   */
+  vpn: z
+    .object({
+      status: GaugeStatus,
+      /** warn·error일 때 사람 말 한 줄 */
+      cause: z.string().optional(),
+      /** 기기 키가 만료되기까지 남은 날 */
+      keyDays: z.number().optional(),
+      /** 회사 망으로 이어 주는 라우터 */
+      routers: z
+        .object({
+          online: z.number().int().nonnegative(),
+          total: z.number().int().nonnegative(),
+        })
+        .optional(),
+    })
+    .optional()
+    .catch(undefined),
 });
 export type Link = z.infer<typeof Link>;
 

@@ -145,14 +145,21 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
     { "id": "dns", "status": "off" }
   ],
   "drops": { "today": 1, "lastAt": 1792899000000, "lastSecs": 103 }, // 오늘 끊긴 횟수, 마지막 끊김 때와 길이(초)
-  "tunnel": "ok"                // 선택. 비밀 통로(VPN·터널) 상태
+  "tunnel": "ok",               // 선택. 비밀 통로(VPN·터널) 상태. vpn이 있으면 화면은 vpn을 쓴다
+  "vpn": {                      // 선택. 회사 VPN
+    "status": "ok",             // ok · warn · error · off
+    "cause": "기기 키가 2일 뒤 만료돼요", // 선택. warn·error일 때 사람 말
+    "keyDays": 7,               // 선택. 기기 키가 만료되기까지 남은 날
+    "routers": { "online": 3, "total": 3 } // 선택. 회사 망으로 이어 주는 라우터
+  }
 }
 ```
 
 - `hops[].status`는 `Gauge.status`와 같은 `ok`·`warn`·`error`·`off`다. 처음 `error`인 칸에서 사슬이 끊겨 보이고, 그 뒤 칸은 흐려진다.
 - 모르는 `hops[].id`는 id를 그대로 이름으로 그린다.
 - `link`의 형식이 틀리면 Starship은 스냅샷 전체를 버리지 않고 `link`만 뺀다.
-- 데모 모드에서는 주소 뒤 `?link=ok|warn|down|off`로 네 가지 모습을 볼 수 있다.
+- `vpn`은 사슬 아래 따로 한 줄("회사 VPN")로 그린다. 인터넷은 되는데 VPN만 안 되는 경우를 가르려는 칸이다. `warn`·`error`면 그 줄만 호박색·붉은색이 되고, 인터넷이 정상이면 "인터넷은 정상"을 붙이고, 경고등 줄에도 "회사 VPN 주의/끊김" 등을 켠다. 판정(error: 꺼짐·키 만료·회사 망 오프라인·라우터 모두 꺼짐, warn: 건강 경고·키 3일 안 만료·라우터 일부 꺼짐)은 서버가 한다. `vpn`의 형식이 틀리면 `vpn`만 뺀다.
+- 데모 모드에서는 주소 뒤 `?link=ok|warn|down|off|vpn-warn|vpn-down`으로 여섯 가지 모습을 볼 수 있다.
 
 ## 버전
 

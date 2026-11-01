@@ -1,13 +1,16 @@
 // 데모 모드의 관제 링크(회선 상태). SSID와 장소는 지어낸 것이다.
-// 주소 뒤 ?link=ok|warn|down|off 로 네 가지 모습을 고른다. 기본은 ok(오늘 한 번 끊겼다 돌아옴).
+// 주소 뒤 ?link=ok|warn|down|off|vpn-warn|vpn-down 으로 모습을 고른다. 기본은 ok(오늘 한 번 끊겼다 돌아옴).
+// vpn-warn·vpn-down은 인터넷은 정상인데 회사 VPN만 문제인 경우다.
 import type { Link } from "@/protocol/v1";
 
 const MIN = 60_000;
 
-export type LinkMode = Link["verdict"];
+export type LinkMode = Link["verdict"] | "vpn-warn" | "vpn-down";
+
+const MODES: LinkMode[] = ["ok", "warn", "down", "off", "vpn-warn", "vpn-down"];
 
 export function parseLinkMode(value: string | null | undefined): LinkMode {
-  return value === "warn" || value === "down" || value === "off" ? value : "ok";
+  return MODES.find((m) => m === value) ?? "ok";
 }
 
 const SSID = "별빛정거장-5G";
@@ -27,6 +30,26 @@ export function buildDemoLink(mode: LinkMode, now = Date.now()): Link {
         ],
         drops: { today: 1, lastAt: now - 47 * MIN, lastSecs: 103 },
         tunnel: "ok",
+        vpn: { status: "ok", keyDays: 7, routers: { online: 3, total: 3 } },
+      };
+    case "vpn-warn":
+    case "vpn-down":
+      return {
+        ...buildDemoLink("ok", now),
+        vpn:
+          mode === "vpn-warn"
+            ? {
+                status: "warn",
+                cause: "기기 키가 2일 뒤 만료돼요. 다시 로그인해 주세요",
+                keyDays: 2,
+                routers: { online: 2, total: 3 },
+              }
+            : {
+                status: "error",
+                cause: "회사 망 라우터가 모두 꺼졌어요",
+                keyDays: 6,
+                routers: { online: 0, total: 3 },
+              },
       };
     case "warn":
       return {
@@ -42,6 +65,7 @@ export function buildDemoLink(mode: LinkMode, now = Date.now()): Link {
         ],
         drops: { today: 0 },
         tunnel: "warn",
+        vpn: { status: "ok", keyDays: 7, routers: { online: 3, total: 3 } },
       };
     case "down":
       return {
@@ -57,6 +81,12 @@ export function buildDemoLink(mode: LinkMode, now = Date.now()): Link {
         ],
         drops: { today: 2, lastAt: now - 2 * MIN, lastSecs: 120 },
         tunnel: "error",
+        vpn: {
+          status: "error",
+          cause: "인터넷이 끊겨 회사 망에 닿지 않아요",
+          keyDays: 7,
+          routers: { online: 0, total: 3 },
+        },
       };
     case "off":
       return {

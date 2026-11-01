@@ -11,6 +11,9 @@ import {
   dropLine,
   placeLabel,
   VERDICT_LABEL,
+  VPN_LABEL,
+  vpnDetail,
+  vpnOnlyProblem,
 } from "./model";
 
 const DOT: Record<GaugeStatus, string> = {
@@ -72,7 +75,7 @@ export function LinkHud({ link, now }: { link: Link; now: number }) {
         <span data-link-drops className="truncate">
           {dropLine(link.drops)}
         </span>
-        {link.tunnel && (
+        {!link.vpn && link.tunnel && (
           <span
             className="ml-auto flex shrink-0 items-center gap-1"
             title="비밀 통로(VPN·터널) 상태"
@@ -92,7 +95,64 @@ export function LinkHud({ link, now }: { link: Link; now: number }) {
           {link.cause}
         </p>
       )}
+      {link.vpn && <VpnRow link={link} vpn={link.vpn} />}
     </section>
+  );
+}
+
+const VPN_FRAME: Record<GaugeStatus, string> = {
+  ok: "border-white/[0.08]",
+  warn: "border-[#ffcf5c]/60 bg-[#ffcf5c]/[0.08]",
+  error: `border-[#ff6b6b]/80 bg-[#ff6b6b]/[0.12] ${styles.down}`,
+  off: "border-dashed border-white/20",
+};
+
+const VPN_COLOR: Record<GaugeStatus, string> = {
+  ok: "text-white/60",
+  warn: "text-[#ffd84a]",
+  error: "text-[#ff8f8f]",
+  off: "text-white/45",
+};
+
+/**
+ * 회사 VPN: 사슬 아래 따로 한 줄. 본부(회사 망)로 가는 비밀 통로다.
+ * 문제가 있으면 이 줄만 호박색·붉은색이 되고 원인을 보인다. 인터넷이 멀쩡하면 "인터넷은 정상"을 붙인다.
+ */
+function VpnRow({ link, vpn }: { link: Link; vpn: NonNullable<Link["vpn"]> }) {
+  const detail = vpnDetail(vpn);
+  return (
+    <div
+      data-link-vpn
+      data-vpn-status={vpn.status}
+      className={`mt-1.5 rounded-md border px-2 py-1 text-[10.5px] ${VPN_FRAME[vpn.status]}`}
+      title="본부(회사 망)로 가는 비밀 통로"
+    >
+      <div className="flex items-center gap-1.5">
+        <span
+          className={`inline-block h-[7px] w-[7px] rounded-full ${DOT[vpn.status]}`}
+        />
+        <span className="text-white/70">회사 VPN</span>
+        <span className={`font-semibold ${VPN_COLOR[vpn.status]}`}>
+          {VPN_LABEL[vpn.status]}
+        </span>
+        {vpnOnlyProblem(link) && (
+          <span className="text-white/50">· 인터넷은 정상</span>
+        )}
+        {detail && (
+          <span className="ml-auto font-mono text-[9.5px] text-white/40 tabular-nums">
+            {detail}
+          </span>
+        )}
+      </div>
+      {vpn.cause && vpn.status !== "ok" && (
+        <p
+          data-vpn-cause
+          className="mt-0.5 text-[11px] leading-snug text-white/85"
+        >
+          {vpn.cause}
+        </p>
+      )}
+    </div>
   );
 }
 
