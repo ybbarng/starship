@@ -66,6 +66,46 @@ describe("parseDesk", () => {
       expect(result.problems).toEqual([]);
     });
 
+    it("선택지와 확인 항목에 파일 절대 경로(path)를 받는다", () => {
+      const result = parseDesk(
+        desk([
+          {
+            ...decide,
+            options: [
+              { ...decide.options[0], path: "/Users/me/Desktop/photo.png" },
+              decide.options[1],
+            ],
+          },
+          {
+            id: "report",
+            type: "check",
+            title: "보고서 확인",
+            items: [{ label: "보고서", path: "/Users/me/Documents/r.pdf" }],
+          },
+        ]),
+      );
+      expect(result.ok).toBe(true);
+      expect(result.desk?.waiting[1]?.items?.[0]?.path).toBe(
+        "/Users/me/Documents/r.pdf",
+      );
+    });
+
+    it("상대 경로나 ~로 시작하는 path는 걸린다", () => {
+      for (const path of ["Desktop/a.png", "~/Desktop/a.png", ""]) {
+        const result = parseDesk(
+          desk([
+            {
+              id: "report",
+              type: "check",
+              title: "보고서 확인",
+              items: [{ label: "보고서", path }],
+            },
+          ]),
+        );
+        expect(result.ok).toBe(false);
+      }
+    });
+
     it("모르는 필드는 버리고 받는다", () => {
       const result = parseDesk({
         ...(desk([{ ...decide, color: "red" }]) as object),
