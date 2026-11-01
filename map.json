@@ -227,12 +227,13 @@
       "parent": "cabin",
       "status": "done",
       "size": 2,
-      "summary": "스크린샷·PDF를 경로 복사 없이 링크로 보거나 프로그램으로 연다. 허용 폴더·실행 파일 금지",
+      "summary": "스크린샷·PDF를 경로 복사 없이 링크로 보거나 프로그램으로 연다. 허용 폴더·실행 파일 금지. 앱으로 설치하면 Dock 아이콘에 기다림 수",
       "since": "2026-11-01",
       "found": "2026-11-01",
       "links": [
         { "label": "files.md", "path": "docs/files.md" },
-        { "label": "files.ts", "path": "src/server/files.ts" }
+        { "label": "files.ts", "path": "src/server/files.ts" },
+        { "label": "AppBadge.tsx", "path": "src/ui/AppBadge.tsx" }
       ],
       "signs": [
         {
