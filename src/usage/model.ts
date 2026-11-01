@@ -99,8 +99,20 @@ export const PRICES: Record<string, Price> = {
   "claude-haiku-4-5": { input: 1, output: 5, cacheRead: 0.1 },
 };
 
+/** 가격을 정하는 값: 요청 하나(UsageRecord)도, 미리 합친 값(UsageBucket)도 이 모양을 갖는다. */
+export type Tokens = Pick<
+  UsageRecord,
+  | "model"
+  | "fast"
+  | "input"
+  | "cacheWrite5m"
+  | "cacheWrite1h"
+  | "cacheRead"
+  | "output"
+>;
+
 /** 캐시 쓰기는 입력값의 1.25배(5분), 2배(1시간). */
-export function costOf(r: UsageRecord): number | undefined {
+export function costOf(r: Tokens): number | undefined {
   const p = PRICES[r.model];
   if (!p) return undefined;
   const usd =
@@ -139,15 +151,102 @@ export function emptyTotals(): Totals {
   };
 }
 
-function add(t: Totals, r: UsageRecord) {
-  t.requests++;
-  t.input += r.input;
-  t.cacheWrite += r.cacheWrite5m + r.cacheWrite1h;
-  t.cacheRead += r.cacheRead;
-  t.output += r.output;
-  const c = costOf(r);
-  if (c === undefined) t.unpriced++;
+function add(t: Totals, b: UsageBucket) {
+  t.requests += b.requests;
+  t.input += b.input;
+  t.cacheWrite += b.cacheWrite5m + b.cacheWrite1h;
+  t.cacheRead += b.cacheRead;
+  t.output += b.output;
+  const c = costOf(b);
+  if (c === undefined) t.unpriced += b.requests;
   else t.cost += c;
+}
+
+/* ───────────── 미리 합치기 ───────────── */
+
+/**
+ * 날·프로젝트·세션·모델마다 미리 합친 값. 서버는 요청 하나하나 대신 이것만 남기고,
+ * 화면은 이것만 읽는다(30일이면 수천 개).
+ */
+export type UsageBucket = Tokens & {
+  /** 이 컴퓨터 시간대의 날짜("2026-11-01") */
+  day: string;
+  project: string;
+  session: string;
+  requests: number;
+  first: number;
+  last: number;
+};
+
+export function dayKey(t: number): string {
+  const d = new Date(t);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/** 합계 칸의 열쇠: 날·프로젝트·세션·모델·fast */
+export function keyOf(
+  b: Pick<UsageBucket, "day" | "project" | "session" | "model" | "fast">,
+): string {
+  return `${b.day}\t${b.project}\t${b.session}\t${b.model}\t${b.fast ? "fast" : ""}`;
+}
+
+export function bucketKey(r: UsageRecord): string {
+  return keyOf({ ...r, day: dayKey(r.t) });
+}
+
+/**
+ * 요청 하나를 합계에 더하거나(1) 뺀다(-1). 같은 요청의 줄이 다시 오면 앞 줄 값을 빼고 새 줄 값을 더한다.
+ * 뺄 때 first·last는 그대로 둔다(같은 요청이라 시각이 거의 같다).
+ */
+export function applyRecord(
+  buckets: Map<string, UsageBucket>,
+  r: UsageRecord,
+  sign: 1 | -1,
+) {
+  const key = bucketKey(r);
+  let b = buckets.get(key);
+  if (!b) {
+    if (sign < 0) return;
+    b = {
+      day: dayKey(r.t),
+      project: r.project,
+      session: r.session,
+      model: r.model,
+      fast: r.fast,
+      requests: 0,
+      input: 0,
+      cacheWrite5m: 0,
+      cacheWrite1h: 0,
+      cacheRead: 0,
+      output: 0,
+      first: r.t,
+      last: r.t,
+    };
+    buckets.set(key, b);
+  }
+  b.requests += sign;
+  b.input += sign * r.input;
+  b.cacheWrite5m += sign * r.cacheWrite5m;
+  b.cacheWrite1h += sign * r.cacheWrite1h;
+  b.cacheRead += sign * r.cacheRead;
+  b.output += sign * r.output;
+  if (sign > 0) {
+    b.first = Math.min(b.first, r.t);
+    b.last = Math.max(b.last, r.t);
+  }
+  if (b.requests <= 0) buckets.delete(key);
+}
+
+/** 요청들을 합계로 묶는다(같은 id는 마지막 것만). 데모와 시험이 쓴다. */
+export function bucketsFrom(
+  records: Iterable<UsageRecord>,
+): Map<string, UsageBucket> {
+  const last = new Map<string, UsageRecord>();
+  for (const r of records) last.set(r.id, r);
+  const out = new Map<string, UsageBucket>();
+  for (const r of last.values()) applyRecord(out, r, 1);
+  return out;
 }
 
 export type UsageRange = "today" | "7d" | "30d";
@@ -178,7 +277,7 @@ export type SessionUsage = Totals & {
 };
 
 export type ProjectUsage = Totals & {
-  /** 기록 폴더 이름 */
+  /** 작업 폴더 경로(모르면 기록 폴더 이름) */
   key: string;
   /** 화면에 적을 이름(작업 폴더 이름) */
   name: string;
@@ -205,14 +304,8 @@ export type UsageReport = {
 /** 프로젝트(기록 폴더) → 작업 폴더 경로. 서버가 기록의 cwd에서 정한다. */
 export type ProjectPaths = Record<string, string | undefined>;
 
-function dayKey(t: number): string {
-  const d = new Date(t);
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
-
 export function buildReport(
-  records: Iterable<UsageRecord>,
+  buckets: Iterable<UsageBucket>,
   opts: {
     range: UsageRange;
     now: number;
@@ -240,43 +333,47 @@ export function buildReport(
     days.set(k, { day: k, work: 0, personal: 0, other: 0 });
   }
 
-  for (const r of records) {
-    if (r.t < from || r.t > opts.now) continue;
+  const fromDay = dayKey(from);
+  const toDay = dayKey(opts.now);
+  for (const r of buckets) {
+    if (r.day < fromDay || r.day > toDay) continue;
     const path = opts.paths[r.project];
     const area = areaOf(path, opts.rules);
     add(total, r);
     add(areas[area], r);
 
-    let p = projects.get(r.project);
+    // 프로젝트는 작업 폴더로 묶는다. 폴더 이름을 바꾸면 기록 폴더가 둘로 나뉘는데, 사람에게는 한 프로젝트다.
+    const pk = path ?? r.project;
+    let p = projects.get(pk);
     if (!p) {
       p = {
         ...emptyTotals(),
-        key: r.project,
+        key: pk,
         name: path ? (path.split("/").pop() ?? r.project) : r.project,
         path,
         area,
         sessions: [],
       };
-      projects.set(r.project, p);
+      projects.set(pk, p);
     }
     add(p, r);
 
     const sk = `${r.project}\n${r.session}`;
     let s = sessions.get(sk);
     if (!s) {
-      s = { ...emptyTotals(), id: r.session, first: r.t, last: r.t };
+      s = { ...emptyTotals(), id: r.session, first: r.first, last: r.last };
       sessions.set(sk, s);
       p.sessions.push(s);
     }
     add(s, r);
-    s.first = Math.min(s.first, r.t);
-    s.last = Math.max(s.last, r.t);
+    s.first = Math.min(s.first, r.first);
+    s.last = Math.max(s.last, r.last);
 
-    const day = days.get(dayKey(r.t));
+    const day = days.get(r.day);
     if (day) day[area] += r.output;
 
     const m = models.get(r.model) ?? { requests: 0, output: 0 };
-    m.requests++;
+    m.requests += r.requests;
     m.output += r.output;
     const c = costOf(r);
     if (c !== undefined) m.cost = (m.cost ?? 0) + c;
@@ -302,59 +399,121 @@ export function buildReport(
 /* ───────────── 기록 한 줄 읽기 ───────────── */
 
 /**
- * 기록(jsonl) 한 줄에서 요청 하나를 뽑는다. assistant 줄의 message.usage만 본다.
- * project는 줄이 아니라 파일이 놓인 폴더에서 온다(worktree 서브에이전트는 cwd가 다른 폴더라서).
+ * assistant 줄의 차례: parentUuid·isSidechain → message{model, id, …, content, …, usage} → (wireToolInputs …) →
+ * type·timestamp·cwd·sessionId. 본문과 도구 입력은 수십 KB까지 길어져 글자로 바꾸지 않고 세 창만 본다.
+ * - 앞 2KB: model·id(오류 줄은 type·timestamp도 여기)
+ * - "usage":{부터 4KB: usage 객체
+ * - 끝 4KB: 맨 위 type·timestamp·cwd·sessionId
+ * JSON 글 안의 따옴표는 늘 \"로 바뀌므로 줄 원문의 "usage":{는 진짜 키에서만 나온다. 그래서 첫 번째 것을 쓴다.
  */
+export const HEAD_BYTES = 2 * 1024;
+export const USAGE_BYTES = 4 * 1024;
+export const TAIL_BYTES = 4 * 1024;
+export const USAGE_KEY = '"usage":{';
+
+/** 줄 하나(테스트·짧은 줄용). 세 창을 잘라 recordFromWindows로 읽는다. */
 export function recordFromLine(
   line: string,
   project: string,
-): { record: UsageRecord; cwd?: string; sidechain: boolean } | undefined {
-  // JSON.parse가 비싸서 글자로 먼저 거른다.
-  if (!line.includes('"usage"') || !line.includes('"assistant"'))
-    return undefined;
-  let row: unknown;
+): ReturnType<typeof recordFromWindows> {
+  const at = line.indexOf(USAGE_KEY);
+  if (at < 0) return undefined;
+  return recordFromWindows(
+    line.slice(0, HEAD_BYTES),
+    line.slice(at, at + USAGE_BYTES),
+    line.slice(-TAIL_BYTES),
+    project,
+  );
+}
+
+const STRING_FIELD = (key: string) =>
+  new RegExp(`"${key}":"((?:[^"\\\\]|\\\\.)*)"`, "g");
+
+function jsonString(v: string): string {
   try {
-    row = JSON.parse(line);
+    return JSON.parse(`"${v}"`) as string;
+  } catch {
+    return v;
+  }
+}
+
+function firstString(s: string, key: string, from = 0): string | undefined {
+  const re = STRING_FIELD(key);
+  re.lastIndex = from;
+  const m = re.exec(s);
+  return m?.[1] === undefined ? undefined : jsonString(m[1]);
+}
+
+function lastString(s: string, key: string): string | undefined {
+  let last: string | undefined;
+  for (const m of s.matchAll(STRING_FIELD(key))) last = m[1];
+  return last === undefined ? undefined : jsonString(last);
+}
+
+type RawUsage = {
+  input_tokens?: number;
+  cache_creation_input_tokens?: number;
+  cache_read_input_tokens?: number;
+  output_tokens?: number;
+  speed?: string;
+  cache_creation?: {
+    ephemeral_5m_input_tokens?: number;
+    ephemeral_1h_input_tokens?: number;
+  };
+};
+
+/**
+ * 세 창(앞부분, "usage":{부터, 끝부분)에서 요청 하나를 뽑는다. 맨 위 필드(type·timestamp·cwd·sessionId)는
+ * 끝부분에서 찾고, 없으면(API 오류 줄) message 앞에서 찾는다.
+ * project는 줄이 아니라 파일이 놓인 폴더에서 온다(worktree 서브에이전트는 cwd가 다른 폴더라서).
+ */
+export function recordFromWindows(
+  head: string,
+  usage: string,
+  tail: string,
+  project: string,
+): { record: UsageRecord; cwd?: string; sidechain: boolean } | undefined {
+  if (!usage.startsWith(USAGE_KEY)) return undefined;
+  const open = USAGE_KEY.length - 1;
+  let depth = 0;
+  let close = -1;
+  for (let i = open; i < usage.length; i++) {
+    const c = usage[i];
+    if (c === "{") depth++;
+    else if (c === "}" && --depth === 0) {
+      close = i + 1;
+      break;
+    }
+  }
+  if (close < 0) return undefined;
+  let u: RawUsage;
+  try {
+    u = JSON.parse(usage.slice(open, close)) as RawUsage;
   } catch {
     return undefined;
   }
-  if (typeof row !== "object" || row === null) return undefined;
-  const o = row as {
-    type?: string;
-    timestamp?: string;
-    sessionId?: string;
-    cwd?: string;
-    isSidechain?: boolean;
-    message?: {
-      id?: string;
-      model?: string;
-      usage?: {
-        input_tokens?: number;
-        cache_creation_input_tokens?: number;
-        cache_read_input_tokens?: number;
-        output_tokens?: number;
-        speed?: string;
-        cache_creation?: {
-          ephemeral_5m_input_tokens?: number;
-          ephemeral_1h_input_tokens?: number;
-        };
-      };
-    };
-  };
-  const u = o.message?.usage;
-  if (o.type !== "assistant" || !u || !o.message?.id || !o.sessionId)
+  const msgAt = head.indexOf('"message":{');
+  if (msgAt < 0) return undefined;
+  const before = head.slice(0, msgAt);
+  const top = (key: string) => lastString(tail, key) ?? lastString(before, key);
+  if (
+    !tail.includes('"type":"assistant"') &&
+    !before.includes('"type":"assistant"')
+  )
     return undefined;
-  const t = Date.parse(o.timestamp ?? "");
-  if (Number.isNaN(t)) return undefined;
+  const id = firstString(head, "id", msgAt);
+  const session = top("sessionId");
+  const t = Date.parse(top("timestamp") ?? "");
+  if (!id || !session || Number.isNaN(t)) return undefined;
   const write = u.cache_creation_input_tokens ?? 0;
   const w1h = u.cache_creation?.ephemeral_1h_input_tokens ?? 0;
   return {
     record: {
-      id: o.message.id,
+      id,
       t,
       project,
-      session: o.sessionId,
-      model: o.message.model ?? "?",
+      session,
+      model: firstString(head, "model", msgAt) ?? "?",
       fast: u.speed === "fast" || undefined,
       input: u.input_tokens ?? 0,
       cacheWrite5m: Math.max(0, write - w1h),
@@ -362,8 +521,8 @@ export function recordFromLine(
       cacheRead: u.cache_read_input_tokens ?? 0,
       output: u.output_tokens ?? 0,
     },
-    cwd: o.cwd,
-    sidechain: o.isSidechain === true,
+    cwd: top("cwd"),
+    sidechain: before.includes('"isSidechain":true'),
   };
 }
 
@@ -378,7 +537,8 @@ export type UsageMeta = {
   /** 지난번 훑기에서 새로 읽은 바이트 */
   readBytes: number;
   files: number;
-  records: number;
+  /** 남겨 둔 합계 칸 수 */
+  buckets: number;
   /** 업무·개인 규칙이 있나 */
   rules: boolean;
 };

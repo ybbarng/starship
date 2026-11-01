@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyRecord,
   areaOf,
+  bucketsFrom,
   buildReport,
   costOf,
   parseAreaRules,
   rangeStart,
   recordFromLine,
+  type UsageBucket,
   type UsageRecord,
 } from "./model";
 
@@ -20,18 +23,19 @@ function line(over: {
   cwd?: string;
   sidechain?: boolean;
   usage?: Record<string, unknown>;
+  content?: unknown[];
 }): string {
+  // 실제 기록과 같은 차례: message(model·id·content·usage) 다음에 맨 위 type·timestamp·cwd·sessionId
   return JSON.stringify({
     parentUuid: "p",
     isSidechain: over.sidechain ?? false,
-    type: "assistant",
-    cwd: over.cwd ?? `${HOME}/personal/projects/starship`,
-    sessionId: over.session ?? "s-1",
-    timestamp: over.t ?? "2026-10-29T08:18:03.295Z",
     message: {
-      id: over.id ?? "msg_1",
       model: over.model ?? "claude-opus-5-5",
+      id: over.id ?? "msg_1",
+      type: "message",
       role: "assistant",
+      content: over.content ?? [{ type: "text", text: "고쳤어요" }],
+      stop_reason: "end_turn",
       usage: over.usage ?? {
         input_tokens: 2,
         cache_creation_input_tokens: 45951,
@@ -44,8 +48,17 @@ function line(over: {
           ephemeral_5m_input_tokens: 45951,
         },
         speed: "standard",
+        iterations: [{ type: "message", output_tokens: 366 }],
       },
     },
+    requestId: "req_1",
+    type: "assistant",
+    uuid: "u-1",
+    timestamp: over.t ?? "2026-10-29T08:18:03.295Z",
+    userType: "external",
+    cwd: over.cwd ?? `${HOME}/personal/projects/starship`,
+    sessionId: over.session ?? "s-1",
+    version: "2.1.316",
   });
 }
 
@@ -127,6 +140,44 @@ describe("기록 한 줄 읽기", () => {
       "x",
     );
     expect(got?.record.fast).toBe(true);
+  });
+
+  it("본문에 usage 글자가 있어도 진짜 usage(본문 뒤)를 읽는다", () => {
+    const got = recordFromLine(
+      line({
+        content: [
+          {
+            type: "tool_use",
+            name: "Write",
+            input: {
+              content:
+                '{"type":"assistant","usage":{"input_tokens":999,"output_tokens":999},"cwd":"/elsewhere","sessionId":"fake"}',
+            },
+          },
+        ],
+      }),
+      "x",
+    );
+    expect(got?.record).toMatchObject({ output: 366, session: "s-1" });
+    expect(got?.cwd).toBe(`${HOME}/personal/projects/starship`);
+  });
+
+  it("본문이 길어도 앞뒤만 보고 읽는다", () => {
+    const got = recordFromLine(
+      line({ content: [{ type: "text", text: "가".repeat(200_000) }] }),
+      "x",
+    );
+    expect(got?.record).toMatchObject({
+      id: "msg_1",
+      model: "claude-opus-5-5",
+      output: 366,
+    });
+  });
+
+  it("서브에이전트 줄을 알아본다", () => {
+    expect(recordFromLine(line({ sidechain: true }), "x")?.sidechain).toBe(
+      true,
+    );
   });
 });
 
@@ -235,7 +286,12 @@ describe("묶기", () => {
   });
 
   it("기간 안의 요청만 영역·프로젝트·세션으로 센다", () => {
-    const r = buildReport(records, { range: "7d", now, rules, paths });
+    const r = buildReport(bucketsFrom(records).values(), {
+      range: "7d",
+      now,
+      rules,
+      paths,
+    });
     expect(r.total.requests).toBe(4);
     expect(r.areas.work.output).toBe(100);
     expect(r.areas.personal.output).toBe(350);
@@ -251,7 +307,12 @@ describe("묶기", () => {
   });
 
   it("날마다 영역별 출력을 빈 날까지 채운다", () => {
-    const r = buildReport(records, { range: "7d", now, rules, paths });
+    const r = buildReport(bucketsFrom(records).values(), {
+      range: "7d",
+      now,
+      rules,
+      paths,
+    });
     expect(r.days).toHaveLength(7);
     expect(r.days.at(-1)).toEqual({
       day: "2026-10-31",
@@ -267,8 +328,72 @@ describe("묶기", () => {
     });
   });
 
+  it("작업 폴더가 같은 기록 폴더 둘은 한 프로젝트로 묶는다(폴더 이름을 바꾼 경우)", () => {
+    const r = buildReport(
+      bucketsFrom([
+        rec({
+          id: "x1",
+          t: day(31),
+          project: "-old-name",
+          session: "a",
+          output: 5,
+        }),
+        rec({
+          id: "x2",
+          t: day(31),
+          project: "-pe-starship",
+          session: "b",
+          output: 7,
+        }),
+      ]).values(),
+      {
+        range: "7d",
+        now,
+        rules,
+        paths: { ...paths, "-old-name": `${HOME}/personal/projects/starship` },
+      },
+    );
+    expect(
+      r.projects.map((p) => [p.name, p.output, p.sessions.length]),
+    ).toEqual([["starship", 12, 2]]);
+  });
+
   it("오늘만 고르면 어제 것은 빠진다", () => {
-    const r = buildReport(records, { range: "today", now, rules, paths });
+    const r = buildReport(bucketsFrom(records).values(), {
+      range: "today",
+      now,
+      rules,
+      paths,
+    });
     expect(r.total.output).toBe(400);
+  });
+});
+
+describe("미리 합치기", () => {
+  it("같은 요청의 줄이 다시 오면 앞 값을 빼고 새 값으로 바꾼다", () => {
+    const buckets = new Map<string, UsageBucket>();
+    const first = rec({ id: "m1", output: 10, cacheRead: 100 });
+    applyRecord(buckets, first, 1);
+    const later = { ...first, output: 40 };
+    applyRecord(buckets, first, -1);
+    applyRecord(buckets, later, 1);
+    const [b] = [...buckets.values()];
+    expect(b).toMatchObject({ requests: 1, output: 40, cacheRead: 100 });
+  });
+
+  it("날·프로젝트·세션·모델이 같으면 한 칸에 더하고, 다 빼면 칸을 지운다", () => {
+    const a = rec({ id: "a", output: 1 });
+    const b = rec({ id: "b", output: 2, t: a.t + 60_000 });
+    const buckets = bucketsFrom([a, b, { ...a, output: 5 }]);
+    expect(buckets.size).toBe(1);
+    expect([...buckets.values()][0]).toMatchObject({
+      requests: 2,
+      output: 7,
+      first: a.t,
+      last: a.t + 60_000,
+    });
+    applyRecord(buckets, { ...a, output: 5 }, -1);
+    applyRecord(buckets, b, -1);
+    expect(buckets.size).toBe(0);
   });
 });
