@@ -72,10 +72,41 @@ body {
 .fuel-dash {
   animation: fuel-dash linear infinite;
 }
+/* 배기 불꽃: 길이·밝기가 고르지 않게 떤다(같은 박자로 커졌다 줄면 기계처럼 보인다) */
+@keyframes fuel-plume {
+  0% {
+    transform: scaleX(1) scaleY(1);
+    opacity: 1;
+  }
+  17% {
+    transform: scaleX(0.93) scaleY(1.03);
+    opacity: 0.9;
+  }
+  31% {
+    transform: scaleX(1.04) scaleY(0.98);
+    opacity: 1;
+  }
+  52% {
+    transform: scaleX(0.9) scaleY(1.02);
+    opacity: 0.88;
+  }
+  68% {
+    transform: scaleX(0.98) scaleY(0.97);
+    opacity: 0.97;
+  }
+  84% {
+    transform: scaleX(0.95) scaleY(1.01);
+    opacity: 0.92;
+  }
+  100% {
+    transform: scaleX(1) scaleY(1);
+    opacity: 1;
+  }
+}
 .fuel-plume {
   transform-box: fill-box;
   transform-origin: left center;
-  animation: fuel-flame 0.16s ease-in-out infinite;
+  animation: fuel-plume 0.47s linear infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .fuel-dash,

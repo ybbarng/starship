@@ -271,13 +271,53 @@ function SchematicDefs() {
         <stop offset="0.5" stopColor="#0d1420" />
         <stop offset="1" stopColor="#05080d" />
       </linearGradient>
+      {/* 배기 불꽃: 겉불꽃(영역 색) · 속불꽃(주황) · 심(흰빛) 세 겹 */}
       {AREAS.map((a) => (
         <linearGradient key={a} id={`fr-plume-${a}`} x1="0" x2="1">
-          <stop offset="0" stopColor="#fffaf0" stopOpacity="0.95" />
-          <stop offset="0.18" stopColor={COLOR[a]} stopOpacity="0.85" />
+          <stop offset="0" stopColor={COLOR[a]} stopOpacity="0.9" />
+          <stop offset="0.5" stopColor={COLOR[a]} stopOpacity="0.45" />
           <stop offset="1" stopColor={COLOR[a]} stopOpacity="0" />
         </linearGradient>
       ))}
+      <linearGradient id="fr-plume-mid" x1="0" x2="1">
+        <stop offset="0" stopColor="#fff1c2" stopOpacity="1" />
+        <stop offset="0.35" stopColor="#ffb347" stopOpacity="0.9" />
+        <stop offset="1" stopColor="#ff5a1f" stopOpacity="0" />
+      </linearGradient>
+      <linearGradient id="fr-plume-core" x1="0" x2="1">
+        <stop offset="0" stopColor="#ffffff" stopOpacity="1" />
+        <stop offset="0.6" stopColor="#dff1ff" stopOpacity="0.85" />
+        <stop offset="1" stopColor="#bfe3ff" stopOpacity="0" />
+      </linearGradient>
+      {/* 가장자리가 일렁이게: 흐르는 노이즈로 불꽃 모양을 흔든다 */}
+      <filter id="fr-fire" x="-5%" y="-40%" width="115%" height="180%">
+        <feTurbulence
+          type="fractalNoise"
+          baseFrequency="0.03 0.11"
+          numOctaves="3"
+          seed="7"
+          result="noise"
+        >
+          <animate
+            attributeName="baseFrequency"
+            dur="0.9s"
+            values="0.03 0.11;0.036 0.15;0.028 0.12;0.03 0.11"
+            repeatCount="indefinite"
+          />
+        </feTurbulence>
+        <feDisplacementMap
+          in="SourceGraphic"
+          in2="noise"
+          scale="14"
+          xChannelSelector="R"
+          yChannelSelector="G"
+          result="shaken"
+        />
+        <feGaussianBlur in="shaken" stdDeviation="0.8" />
+      </filter>
+      <filter id="fr-glow" x="-30%" y="-80%" width="160%" height="260%">
+        <feGaussianBlur stdDeviation="9" />
+      </filter>
       <pattern
         id="fr-grid"
         width="20"
@@ -593,6 +633,65 @@ function PipeRun({
   );
 }
 
+/** 노즐 출구(x, y)에서 오른쪽으로 len만큼 뻗는 불꽃 모양(끝이 가늘어지는 물방울). */
+function flameShape(x: number, y: number, len: number, half: number) {
+  return [
+    `M ${x} ${y - half}`,
+    `C ${x + len * 0.22} ${y - half * 1.25}, ${x + len * 0.62} ${y - half * 0.75}, ${x + len} ${y}`,
+    `C ${x + len * 0.62} ${y + half * 0.75}, ${x + len * 0.22} ${y + half * 1.25}, ${x} ${y + half}`,
+    "Z",
+  ].join(" ");
+}
+
+/**
+ * 배기 불꽃: 번진 빛 · 겉불꽃(영역 색) · 속불꽃(주황) · 흰 심 · 충격파 무늬(마하 다이아몬드).
+ * 겉·속불꽃은 흐르는 노이즈로 가장자리가 일렁이고(fr-fire), 무리 전체가 불규칙하게 떤다.
+ */
+function Plume({
+  x,
+  y,
+  len,
+  area,
+}: {
+  x: number;
+  y: number;
+  len: number;
+  area: Area;
+}) {
+  const diamonds = [0.16, 0.3, 0.43].filter((t) => t * len > 14);
+  return (
+    <g style={{ mixBlendMode: "screen" }}>
+      <path
+        d={flameShape(x, y, len * 1.05, 40)}
+        fill={COLOR[area]}
+        fillOpacity="0.35"
+        filter="url(#fr-glow)"
+      />
+      <g className="fuel-plume">
+        <g filter="url(#fr-fire)">
+          <path d={flameShape(x, y, len, 34)} fill={`url(#fr-plume-${area})`} />
+          <path
+            d={flameShape(x, y, len * 0.72, 22)}
+            fill="url(#fr-plume-mid)"
+          />
+        </g>
+        <path d={flameShape(x, y, len * 0.48, 10)} fill="url(#fr-plume-core)" />
+        {diamonds.map((t, i) => (
+          <ellipse
+            key={t}
+            cx={x + t * len}
+            cy={y}
+            rx={4.5 - i}
+            ry={7 - i * 1.5}
+            fill="#ffffff"
+            fillOpacity={0.75 - i * 0.2}
+          />
+        ))}
+      </g>
+    </g>
+  );
+}
+
 function Engine({
   y,
   area,
@@ -609,6 +708,8 @@ function Engine({
   const plume = perMin > 0 ? 40 + thrust * 150 : 0;
   return (
     <g data-engine={area}>
+      {/* 배기 불꽃: 노즐 안쪽에서 시작해 노즐 뒤에 그린다(일렁이는 왼쪽 끝을 노즐이 가린다) */}
+      {plume > 0 && <Plume x={x + 132} y={y} len={plume + 10} area={area} />}
       {/* 연소실 */}
       <rect
         x={x}
@@ -642,27 +743,6 @@ function Engine({
         stroke="#000"
         strokeOpacity="0.5"
       />
-      {/* 배기 불꽃 */}
-      {plume > 0 && (
-        <g className="fuel-plume">
-          <ellipse
-            cx={x + 142 + plume / 2}
-            cy={y}
-            rx={plume / 2}
-            ry={30}
-            fill={`url(#fr-plume-${area})`}
-            style={{ filter: `blur(2px) drop-shadow(0 0 10px ${c})` }}
-          />
-          <ellipse
-            cx={x + 142 + plume / 4}
-            cy={y}
-            rx={plume / 4}
-            ry={12}
-            fill="#fffaf0"
-            fillOpacity="0.75"
-          />
-        </g>
-      )}
       {/* 이름판 */}
       <text
         x={x + 37}
