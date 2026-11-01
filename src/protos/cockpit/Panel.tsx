@@ -1,11 +1,5 @@
 "use client";
 
-// 계기판: 유리창 아래 짜임새 있는 판. 장식 램프 없이, 등과 단추마다 뜻이 있다.
-//   맨 위 차양(글레어실드) = 경고등 줄(등마다 글, 누르면 해당 목록)
-//   왼쪽 = 승무원 상태판(업무/개인 두 줄, 프로젝트마다 작은 등)
-//   가운데 = 주 표시창(지금 할 일 하나)
-//   오른쪽 = 교신 수신등·칩, 항법 소형 표시(행성 단추·더 먼 곳·이동 중 속도)
-import NextLink from "next/link";
 import type {
   Context,
   Crew,
@@ -19,6 +13,12 @@ import { useTelemetry } from "@/sky/useTelemetry";
 import { useDestination, useVoyage } from "@/sky/voyage";
 import { ago, CONTEXT_COLOR, CONTEXT_LABEL, sourceLabel, Tip } from "@/ui/kit";
 import { VERDICT_LABEL, verdictDetail } from "@/ui/link/model";
+// 계기판: 유리창 아래 짜임새 있는 판. 장식 램프 없이, 등과 단추마다 뜻이 있다.
+//   맨 위 차양(글레어실드) = 경고등 줄(등마다 글, 누르면 해당 목록)
+//   왼쪽 = 승무원 상태판(업무/개인 두 줄, 프로젝트마다 작은 등)
+//   가운데 = 주 표시창(지금 할 일 하나)
+//   오른쪽 = 교신 수신등·칩, 항법 소형 표시(행성 단추·더 먼 곳·이동 중 속도)
+import { FuelChip } from "@/ui/usage/FuelChip";
 import styles from "./cockpit.module.css";
 import { MainDisplay } from "./MainDisplay";
 import { type Lamp, PILE_WARN, selecting, type useWarnings } from "./util";
@@ -349,18 +349,7 @@ export function CrewBoard({
       aria-label="승무원 상태판"
       className={`${styles.bay} flex h-full min-h-0 flex-col gap-2 overflow-hidden rounded-lg px-2.5 pt-2 pb-2`}
     >
-      <Heading
-        title="승무원"
-        right={
-          <NextLink
-            href="/usage"
-            data-usage-link
-            className="tracking-normal text-white/40 hover:text-white/80"
-          >
-            연료 기록 →
-          </NextLink>
-        }
-      />
+      <Heading title="승무원" right={<FuelChip />} />
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
         <CrewRow
           context="work"

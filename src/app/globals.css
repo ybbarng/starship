@@ -28,3 +28,37 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
 }
+
+/* 연료실: 배관의 연료 점이 오른쪽(추진체)으로 흐르고, 불꽃이 떨린다 */
+@keyframes fuel-flow {
+  from {
+    background-position: 0 0;
+  }
+  to {
+    background-position: 18px 0;
+  }
+}
+.fuel-flow {
+  animation: fuel-flow linear infinite;
+}
+@keyframes fuel-flame {
+  0%,
+  100% {
+    transform: scaleX(1);
+    opacity: 0.95;
+  }
+  50% {
+    transform: scaleX(0.86);
+    opacity: 0.8;
+  }
+}
+.fuel-flame {
+  transform-origin: left center;
+  animation: fuel-flame 0.18s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fuel-flow,
+  .fuel-flame {
+    animation: none;
+  }
+}

@@ -1,7 +1,8 @@
 "use client";
 
 // 갑판 4 왼쪽 도킹 베이: 사람이 부른 교신선이 포트에 붙어 있다. 포트를 누르면 해치가 열린다.
-// 오른쪽 기관실: 원자로 옆 기관 계기판(정기 작업·서비스 상태 = gauges).
+// 오른쪽 기관실: 원자로 옆 기관 계기판(정기 작업·서비스 상태 = gauges)과 연료실(/fuel)로 가는 문.
+import Link from "next/link";
 import { useEffect, useRef } from "react";
 import type { Gauge } from "@/protocol/v1";
 import { ago } from "@/ui/kit";
@@ -184,6 +185,16 @@ export function DockDeck({
       >
         원자로
       </div>
+      {/* 연료실 문: 토큰 사용량을 연료로 본 방 */}
+      <Link
+        href="/fuel"
+        data-fuel-door
+        title="연료실 = 토큰 사용량을 연료로 본 방"
+        className="absolute rounded border border-[#ffb45c]/50 bg-[#2a1f12]/80 px-1.5 text-[9px] leading-[15px] font-semibold text-[#ffd9a8] hover:border-[#ffb45c]"
+        style={{ left: e.x0 + 52, top: f - 22 }}
+      >
+        연료실 ▸
+      </Link>
     </>
   );
 }

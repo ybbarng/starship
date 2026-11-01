@@ -67,16 +67,16 @@ export function UsagePage() {
     <main className={`min-h-dvh text-white ${cockpit.panel}`}>
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-black/50 px-4 py-2.5 shadow-[0_1px_0_rgba(255,255,255,0.04)]">
         <Link
-          href="/"
+          href="/fuel"
           className="rounded px-2 py-1 text-[12px] text-white/55 hover:bg-white/[0.06] hover:text-white"
         >
-          ← 갑판으로
+          ← 연료실로
         </Link>
         <h1 className="flex items-baseline gap-2">
           <span className="text-[10px] font-semibold tracking-[0.3em] text-[#ffb45c]/80">
-            FUEL LOG
+            FUEL LOG BOOK
           </span>
-          <span className="text-[15px] font-semibold">연료 기록</span>
+          <span className="text-[15px] font-semibold">연료 기록 노트</span>
           <span className="text-[12px] text-white/45">
             · 항해 일지(토큰 사용량)
           </span>
