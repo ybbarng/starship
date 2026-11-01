@@ -573,6 +573,8 @@ export type StarTarget = {
   ly?: number;
   /** 실제 반지름(태양 = 1). 없으면 telemetry의 STAR_RADIUS_SUN */
   radiusSun?: number;
+  /** 표면 온도(K). 원반 가운데 밝기를 정한다(stars3d.ts surfacePeak). 없으면 안타레스와 같은 밝기 */
+  tempK?: number;
 };
 
 export type Destination = {
@@ -805,6 +807,7 @@ export const DESTINATIONS: Destination[] = [
       dec: -60.83,
       color: "#fff1c9",
       radius: 2.4,
+      tempK: 5790,
       companion: { color: "#ffd9a0", radius: 1.8, offset: 9 },
     },
   },
@@ -821,6 +824,7 @@ export const DESTINATIONS: Destination[] = [
       dec: -16.72,
       color: "#cfe0ff",
       radius: 3.2,
+      tempK: 9940,
       companion: { color: "#ffffff", radius: 0.5, offset: 7 },
     },
   },
@@ -831,7 +835,14 @@ export const DESTINATIONS: Destination[] = [
     group: "유명한 별",
     distance: "25광년",
     fact: "직녀성. 약 1만 2천 년 뒤에는 북극성 자리에 가까워진다.",
-    star: { hip: 91262, ra: 279.23, dec: 38.78, color: "#dfe8ff", radius: 3.4 },
+    star: {
+      hip: 91262,
+      ra: 279.23,
+      dec: 38.78,
+      color: "#dfe8ff",
+      radius: 3.4,
+      tempK: 9600,
+    },
   },
   {
     id: "polaris",
@@ -840,7 +851,14 @@ export const DESTINATIONS: Destination[] = [
     group: "유명한 별",
     distance: "약 430광년",
     fact: "지구 자전축이 거의 가리키는 별. 사실은 세 별의 무리.",
-    star: { hip: 11767, ra: 37.95, dec: 89.26, color: "#fff4d6", radius: 5 },
+    star: {
+      hip: 11767,
+      ra: 37.95,
+      dec: 89.26,
+      color: "#fff4d6",
+      radius: 5,
+      tempK: 6000,
+    },
   },
   {
     id: "betelgeuse",
@@ -849,7 +867,14 @@ export const DESTINATIONS: Destination[] = [
     group: "유명한 별",
     distance: "약 550광년",
     fact: "오리온의 어깨. 태양 자리에 두면 화성 궤도를 넘어 소행성대까지 차는 붉은 초거성.",
-    star: { hip: 27989, ra: 88.79, dec: 7.41, color: "#ff9a5c", radius: 14 },
+    star: {
+      hip: 27989,
+      ra: 88.79,
+      dec: 7.41,
+      color: "#ff9a5c",
+      radius: 14,
+      tempK: 3600,
+    },
   },
   {
     id: "antares",
@@ -858,7 +883,14 @@ export const DESTINATIONS: Destination[] = [
     group: "유명한 별",
     distance: "약 550광년",
     fact: "전갈의 심장. 이름은 '화성의 맞수'라는 뜻.",
-    star: { hip: 80763, ra: 247.35, dec: -26.43, color: "#ff8a5c", radius: 11 },
+    star: {
+      hip: 80763,
+      ra: 247.35,
+      dec: -26.43,
+      color: "#ff8a5c",
+      radius: 11,
+      tempK: 3500,
+    },
   },
   // 아래 일곱은 2026-11-01에 더했다. 방향·거리·반지름·색은 측정값이고, 가까이서 본 표면 무늬만 그림이다.
   {
@@ -868,7 +900,14 @@ export const DESTINATIONS: Destination[] = [
     group: "유명한 별",
     distance: "약 310광년",
     fact: "밤하늘에서 두 번째로 밝은 별. 남쪽 낮게 떠 '노인성'이라 불렸고, 탐사선들이 자세를 잡는 기준 별로 써 왔다.",
-    star: { hip: 30438, ra: 95.99, dec: -52.7, color: "#fbf5ea", radius: 6 },
+    star: {
+      hip: 30438,
+      ra: 95.99,
+      dec: -52.7,
+      color: "#fbf5ea",
+      radius: 6,
+      tempK: 7350,
+    },
   },
   {
     id: "rigel",
@@ -877,7 +916,14 @@ export const DESTINATIONS: Destination[] = [
     group: "유명한 별",
     distance: "약 860광년",
     fact: "오리온의 발. 태양보다 수만 배 밝은 푸른 초거성.",
-    star: { hip: 24436, ra: 78.63, dec: -8.2, color: "#b9ccff", radius: 6.3 },
+    star: {
+      hip: 24436,
+      ra: 78.63,
+      dec: -8.2,
+      color: "#b9ccff",
+      radius: 6.3,
+      tempK: 12100,
+    },
   },
   {
     id: "arcturus",
@@ -886,7 +932,14 @@ export const DESTINATIONS: Destination[] = [
     group: "유명한 별",
     distance: "36.7광년",
     fact: "북쪽 하늘에서 가장 밝은 별. 북두칠성 손잡이를 따라 내려가면 닿는 주황색 거성.",
-    star: { hip: 69673, ra: 213.92, dec: 19.18, color: "#ffc98f", radius: 4.4 },
+    star: {
+      hip: 69673,
+      ra: 213.92,
+      dec: 19.18,
+      color: "#ffc98f",
+      radius: 4.4,
+      tempK: 4290,
+    },
   },
   {
     id: "aldebaran",
@@ -895,7 +948,14 @@ export const DESTINATIONS: Destination[] = [
     group: "유명한 별",
     distance: "65광년",
     fact: "황소의 붉은 눈. 플레이아데스를 '뒤따르는 자'라는 뜻의 이름.",
-    star: { hip: 21421, ra: 68.98, dec: 16.51, color: "#ffb978", radius: 5.2 },
+    star: {
+      hip: 21421,
+      ra: 68.98,
+      dec: 16.51,
+      color: "#ffb978",
+      radius: 5.2,
+      tempK: 3900,
+    },
   },
   {
     id: "deneb",
@@ -910,6 +970,7 @@ export const DESTINATIONS: Destination[] = [
       dec: 45.28,
       color: "#e6eeff",
       radius: 8.5,
+      tempK: 8500,
     },
   },
   {
@@ -925,6 +986,7 @@ export const DESTINATIONS: Destination[] = [
       dec: 5.22,
       color: "#fff2df",
       radius: 3.1,
+      tempK: 6530,
       companion: { color: "#ffffff", radius: 0.45, offset: 7 },
     },
   },
@@ -935,7 +997,14 @@ export const DESTINATIONS: Destination[] = [
     group: "유명한 별",
     distance: "16.7광년",
     fact: "견우성. 아주 빠르게 자전해 적도 쪽이 불룩한 납작한 별.",
-    star: { hip: 97649, ra: 297.7, dec: 8.87, color: "#f3f5ff", radius: 3 },
+    star: {
+      hip: 97649,
+      ra: 297.7,
+      dec: 8.87,
+      color: "#f3f5ff",
+      radius: 3,
+      tempK: 7700,
+    },
   },
 ];
 

@@ -52,7 +52,14 @@ import {
   skyObserver,
   starField,
 } from "./sky3d";
-import { FAR_LY, farFade, NEAR_HIDE_LY, seenFrom } from "./stars3d";
+import {
+  FAR_LY,
+  farFade,
+  NEAR_HIDE_LY,
+  SURFACE_REF_K,
+  seenFrom,
+  surfacePeak,
+} from "./stars3d";
 import {
   distanceKm,
   HALLEY_NUCLEUS_KM,
@@ -1322,14 +1329,44 @@ function Comet() {
 
 // ── 유명한 별(목적지) ─────────────────────────────────
 
-function starTargetPosition(d: Destination): THREE.Vector3 {
+/** 태양에서 본 방향으로 starDistance만큼 떨어진 자리(태양계 안에서 보는 별 구의 기본 자리). */
+function starHomePosition(d: Destination): THREE.Vector3 {
   const s = d.star;
   if (!s) return new THREE.Vector3();
   const [x, y, z] = toThree(raDecToEcliptic(s.ra, s.dec));
   return new THREE.Vector3(x, y, z).multiplyScalar(starDistance());
 }
 
-function starSurface(color: string) {
+/**
+ * 별로 출발할 때 정한 도착 자리. 장면의 별 자리는 태양 기준 가짜 거리라, 다른 별(베텔게우스 등)에서
+ * 그대로 날아가면 하늘의 별자리와 전혀 다른 곳에 닿았다(2026-11-01 사용자 지적). 출발하는 순간
+ * 관측자 자리에서 하늘의 그 별이 보이는 방향으로 카메라에서 starDistance만큼 떨어진 곳에 둔다.
+ * back은 별에서 출발점 쪽 방향(카메라가 별을 바라볼 자리를 정한다).
+ */
+const starPlacement = new Map<
+  string,
+  { center: THREE.Vector3; back: THREE.Vector3 }
+>();
+
+/** 지금 프레임에 그린 별 구의 자리(이름표 가림 계산에 쓴다). StarTargets가 매 프레임 채운다. */
+const starSceneNow = new Map<string, THREE.Vector3>();
+
+function placeStar(d: Destination, from: THREE.Vector3) {
+  const [sx, sy, sz] = starLy(d);
+  const [ox, oy, oz] = skyObserver.ly;
+  const dir = new THREE.Vector3(sx - ox, sy - oy, sz - oz).normalize();
+  starPlacement.set(d.id, {
+    center: from.clone().add(dir.clone().multiplyScalar(starDistance())),
+    back: dir.negate(),
+  });
+}
+
+/** 별 목적지의 장면 자리: 출발 때 정한 자리, 없으면 기본 자리. */
+function starTargetPosition(d: Destination): THREE.Vector3 {
+  return starPlacement.get(d.id)?.center.clone() ?? starHomePosition(d);
+}
+
+function starSurface(color: string, tempK: number) {
   return new THREE.ShaderMaterial({
     vertexShader: S.planetVertex,
     fragmentShader: S.sunFragment,
@@ -1338,8 +1375,14 @@ function starSurface(color: string) {
       uTint: { value: new THREE.Color(color) },
       uIsStar: { value: 1 },
       uHdr: { value: 0 },
+      uPeak: { value: surfacePeak(tempK) },
     },
   });
+}
+
+/** 항성의 원반 가운데 밝기 배율. 온도를 모르면 기준(안타레스)과 같다. */
+function starPeak(d: Destination): number {
+  return surfacePeak(d.star?.tempK ?? SURFACE_REF_K);
 }
 
 /** 관측자가 태양에서 이보다 멀면(약 1,300 AU) 태양계 밖으로 본다. */
@@ -1397,7 +1440,10 @@ function StarTargets({
     const cache = surfaceCache.current;
     for (const d of stars)
       if (!cache.has(d.id))
-        cache.set(d.id, starSurface(d.star?.color ?? "#fff"));
+        cache.set(
+          d.id,
+          starSurface(d.star?.color ?? "#fff", d.star?.tempK ?? SURFACE_REF_K),
+        );
     return cache;
   }, [stars]);
   // 태양처럼 항성도 HDR이면 가운데가 1.0을 넘게 밝아져 번진다.
@@ -1407,9 +1453,19 @@ function StarTargets({
   }, [surfaces, hdr]);
   useFrame(() => {
     for (const m of refs.current) m?.quaternion.copy(camera.quaternion);
+    const { phase } = useVoyage.getState();
     for (const d of stars) {
       const g = groups.current.get(d.id);
-      if (g) g.visible = starMeshVisible(d, destinationId);
+      if (!g) continue;
+      g.visible = starMeshVisible(d, destinationId);
+      // 구는 태양 기준 유한한 거리(starDistance)에 놓여, 카메라가 태양에서 멀면(보이저 2호 등)
+      // 하늘의 별 점·이름표와 시차만큼 어긋났다. 가는 중·도착한 별이 아니면 카메라를 따라가게 해
+      // 하늘 점과 같은 방향에 둔다(2026-11-01 사용자 지적).
+      const real =
+        d.id === destinationId || (phase === "travel" && d.id === previousId);
+      if (real) g.position.copy(starTargetPosition(d));
+      else g.position.copy(camera.position).add(starHomePosition(d));
+      starSceneNow.set(d.id, g.position.clone());
     }
     // 태양계 밖에서는 목적지 별의 하늘 점을 숨긴다(장면의 구와 자리가 조금 달라 둘로 보인다).
     const dest = DESTINATION_BY_ID.get(destinationId);
@@ -1422,12 +1478,13 @@ function StarTargets({
       {stars.map((d, i) => {
         const s = d.star;
         if (!s) return null;
-        const p = starTargetPosition(d);
+        // 그룹 자리(별 가운데)는 useFrame이 매 프레임 정한다. 자식은 그룹 기준이다.
+        const p = new THREE.Vector3();
         const perp = new THREE.Vector3()
-          .crossVectors(p.clone().normalize(), UP)
+          .crossVectors(starHomePosition(d).normalize(), UP)
           .normalize();
         const comp = s.companion
-          ? p.clone().add(perp.multiplyScalar(s.companion.offset))
+          ? perp.multiplyScalar(s.companion.offset)
           : null;
         return (
           <group
@@ -1454,7 +1511,9 @@ function StarTargets({
                     fragmentShader: S.glowFragment,
                     uniforms: {
                       uColor: { value: new THREE.Color(s.color) },
-                      uIntensity: { value: 1 },
+                      // 후광도 원반 밝기를 따라가되 조금만 키운다. 후광 판이 원반 위에 더해져
+                      // 세게 하면(리겔 2배) 원반 무늬가 뿌옇게 덮였다.
+                      uIntensity: { value: 1 + 0.15 * (starPeak(d) - 1) },
                     },
                     transparent: true,
                     depthWrite: false,
@@ -1539,7 +1598,9 @@ function poseFor(dest: Destination, orbits: SkyCatalog["orbits"] | null): Pose {
   }
   if (dest.star) {
     const center = starTargetPosition(dest);
-    const back = center.clone().normalize().negate();
+    const back =
+      starPlacement.get(dest.id)?.back.clone() ??
+      center.clone().normalize().negate();
     const perp = new THREE.Vector3().crossVectors(back, UP).normalize();
     const dir = back
       .multiplyScalar(0.8)
@@ -1744,6 +1805,8 @@ function CameraRig({
       setPhase("cruise");
       return;
     }
+    // 별로 갈 때는 지금 하늘에서 그 별이 보이는 방향으로 도착 자리를 정한다.
+    if (dest.star) placeStar(dest, camera.position);
     const p = poseFor(dest, orbits);
     const to = p.center.clone().add(p.dir.clone().multiplyScalar(p.dist));
     const d = camera.position.distanceTo(to);
@@ -2237,10 +2300,9 @@ function LabelLayer({
         on: () => true,
       })),
       ...DESTINATIONS.filter((d) => d.star).map((d) => {
-        const p = starTargetPosition(d);
         return {
           r: d.star?.radius ?? 1,
-          at: () => p,
+          at: () => starSceneNow.get(d.id) ?? starTargetPosition(d),
           // 장면에 그린 별만 이름표를 가린다.
           on: () => starMeshVisible(d, useVoyage.getState().destinationId),
         };

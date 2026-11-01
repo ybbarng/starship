@@ -14,8 +14,10 @@ import {
   farFade,
   PC_LY,
   parallaxToLy,
+  SURFACE_REF_K,
   seenFrom,
   starSceneRadius,
+  surfacePeak,
 } from "./stars3d";
 import { STAR_LY, STAR_RADIUS_SUN } from "./telemetry";
 
@@ -125,6 +127,42 @@ describe("반지름 어림", () => {
     expect(starSceneRadius(0.1)).toBe(1.6);
     expect(starSceneRadius(1e5)).toBe(14);
     expect(starSceneRadius(700)).toBeGreaterThan(starSceneRadius(40));
+  });
+});
+
+describe("표면 온도 → 원반 밝기", () => {
+  const peakOf = (id: string) => {
+    const t = DESTINATIONS.find((d) => d.id === id)?.star?.tempK;
+    if (t === undefined) throw new Error(`${id} 온도 없음`);
+    return surfacePeak(t);
+  };
+
+  it("안타레스(기준 온도)는 정한 밝기 그대로 1배", () => {
+    expect(surfacePeak(SURFACE_REF_K)).toBe(1);
+    expect(peakOf("antares")).toBe(1);
+  });
+
+  it("뜨거울수록 밝고, 태양보다 뜨거운 별은 태양 온도보다 밝다", () => {
+    const sun = surfacePeak(5772);
+    expect(peakOf("aldebaran")).toBeGreaterThan(1);
+    expect(peakOf("arcturus")).toBeGreaterThan(peakOf("aldebaran"));
+    expect(peakOf("sirius")).toBeGreaterThan(sun);
+    expect(peakOf("rigel")).toBeGreaterThan(peakOf("sirius"));
+  });
+
+  it("실제 비율(가시광 같은 넓이)의 네제곱근으로 줄여 담는다", () => {
+    // 플랑크 식으로 시리우스(9,940K)는 안타레스(3,500K)의 약 136배 → 네제곱근 약 3.4
+    expect(peakOf("sirius")).toBeCloseTo(3.4, 1);
+  });
+
+  it("아주 뜨겁거나 차가운 별도 정한 범위 안", () => {
+    expect(surfacePeak(40_000)).toBe(6);
+    expect(surfacePeak(2_000)).toBe(0.6);
+  });
+
+  it("유명한 별은 모두 온도가 있다", () => {
+    const famous = DESTINATIONS.filter((d) => d.group === "유명한 별");
+    for (const d of famous) expect(d.star?.tempK, d.id).toBeGreaterThan(0);
   });
 });
 

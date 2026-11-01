@@ -109,6 +109,26 @@ export function estimateRadiusSun(absMagV: number, bv: number): number {
   return Math.sqrt(lum) * (5772 / t) ** 2;
 }
 
+/** 가시광(550nm)에서 같은 넓이가 내는 빛(플랑크 식, 상수는 비율이라 뺀다). */
+function visibleSurfaceBrightness(kelvin: number): number {
+  return 1 / Math.expm1(26_160 / kelvin);
+}
+
+/** 표면 밝기의 기준 온도. 안타레스(약 3,500K)를 지금 화면(가운데 1배)으로 둔다. */
+export const SURFACE_REF_K = 3500;
+
+/**
+ * 표면 온도 → 원반 가운데 밝기 배율(셰이더 uPeak). 가까이서 본 원반의 눈부심은 거리와 상관없이
+ * 표면 온도로 정해진다(같은 넓이의 가시광, 태양 = 1이면 안타레스 약 1/16, 시리우스 약 7배, 스피카 약 50배).
+ * 그대로 쓰면 뜨거운 별은 하얗게 타고 붉은 별은 너무 어두워, 네제곱근으로 차이를 줄인다.
+ * 기준(3,500K)이 1이라 안타레스는 2026-11-01에 정한 밝기 그대로다.
+ */
+export function surfacePeak(kelvin: number): number {
+  const ratio =
+    visibleSurfaceBrightness(kelvin) / visibleSurfaceBrightness(SURFACE_REF_K);
+  return Math.min(6, Math.max(0.6, ratio ** 0.25));
+}
+
 /**
  * 실제 반지름(태양 = 1) → 화면 반지름. 손으로 정한 유명한 별 13개(알파 센타우리 2.4 … 베텔게우스 14)의
  * 크기 차이를 따라가도록 반지름의 0.27제곱으로 줄인다.

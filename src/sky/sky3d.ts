@@ -5,6 +5,7 @@ import { addDestinations, DESTINATIONS, type Destination } from "./bodies";
 import { loadCatalog, type SkyCatalog } from "./catalog";
 import {
   absoluteMag,
+  bvToKelvin,
   distanceFromParallax,
   estimateRadiusSun,
   FAR_LY,
@@ -162,6 +163,7 @@ export function makeStarDestinations(
         radius: starSceneRadius(radiusSun),
         ly: dist.ly,
         radiusSun,
+        tempK: Math.round(bvToKelvin(bv)),
       },
     });
   }

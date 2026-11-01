@@ -282,6 +282,7 @@ uniform float uIsStar;
 uniform sampler2D uMap;
 uniform float uHasMap;
 uniform float uHdr;
+uniform float uPeak;
 varying vec3 vNormalW;
 varying vec3 vPosW;
 varying vec3 vLocal;
@@ -308,7 +309,9 @@ void main() {
   // 항성의 눈부심은 더 밝혀서가 아니라 빛번짐을 가장 센 채널로 고르는 것(Hdr.tsx)으로 낸다.
   // 더 밝히면 붉은 거성은 원반 전체가 번져 무늬가 묻혔다(2026-11-01 "안타레스가 덜 눈부심" 피드백).
   float granAmp = uIsStar > 0.5 ? 0.9 : 0.56;
-  float peak = uIsStar > 0.5 ? 1.0 : 2.0;
+  // 항성의 가운데 밝기는 표면 온도로 정한다(stars3d.ts surfacePeak, 안타레스 = 1, 뜨거운 별일수록 크다).
+  // 1.6을 넘기면 원반이 통째로 하얗게 번져 무늬가 사라져(리겔 3.9배), 넘는 몫은 후광이 맡는다.
+  float peak = uIsStar > 0.5 ? min(uPeak, 1.6) : 2.0;
   float expo = uIsStar > 0.5 ? 0.85 : 1.0;
   c *= mix(1.0, expo * ((1.0 - granAmp * 0.5) + granAmp * gran), uHdr);
   c *= mix(1.0, mix(1.0, peak, pow(mu, 1.4)), uHdr);
