@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useBridge, useUsage } from "@/data/hooks";
+import cockpit from "@/protos/cockpit/cockpit.module.css";
 import {
   AREA_LABEL,
   type Area,
@@ -63,17 +64,22 @@ export function UsagePage() {
   const [refreshing, setRefreshing] = useState(false);
   const data = query.data;
   return (
-    <main className="min-h-dvh bg-hull-950 text-white">
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-white/[0.07] px-4 py-2.5">
+    <main className={`min-h-dvh text-white ${cockpit.panel}`}>
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-black/50 px-4 py-2.5 shadow-[0_1px_0_rgba(255,255,255,0.04)]">
         <Link
           href="/proto/cockpit"
           className="rounded px-2 py-1 text-[12px] text-white/55 hover:bg-white/[0.06] hover:text-white"
         >
           ← 갑판으로
         </Link>
-        <h1 className="text-[15px] font-semibold">
-          연료 기록{" "}
-          <span className="font-normal text-white/45">· 토큰 사용량</span>
+        <h1 className="flex items-baseline gap-2">
+          <span className="text-[10px] font-semibold tracking-[0.3em] text-[#ffb45c]/80">
+            FUEL LOG
+          </span>
+          <span className="text-[15px] font-semibold">연료 기록</span>
+          <span className="text-[12px] text-white/45">
+            · 항해 일지(토큰 사용량)
+          </span>
         </h1>
         <div
           data-usage-ranges
@@ -208,7 +214,7 @@ function Body({ data }: { data: UsageResponse }) {
       <section data-usage-projects>
         <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-2 text-[12px] text-white/55">
           <h2 className="text-[10.5px] font-semibold tracking-[0.18em] text-white/40">
-            프로젝트 순위 {projects.length}
+            승무원별 연료 소비 {projects.length}
           </h2>
           <Pills
             value={area}
@@ -232,7 +238,7 @@ function Body({ data }: { data: UsageResponse }) {
             />
           </span>
         </div>
-        <div className="overflow-x-auto rounded-md border border-white/[0.07]">
+        <div className={`overflow-x-auto rounded-lg ${cockpit.bay}`}>
           <table className="w-full min-w-[860px] text-[12.5px] tabular-nums">
             <thead className="bg-white/[0.03] text-[11px] text-white/45">
               <tr>
@@ -290,6 +296,10 @@ function Body({ data }: { data: UsageResponse }) {
   );
 }
 
+/**
+ * 연료 탱크 하나(합계·업무·개인·기타). 왼쪽 세로 게이지가 출력(추진 연소) 몫만큼 찬다.
+ * 우주선 말 옆에 원래 말(출력·입력·캐시 쓰기·캐시 읽기)을 작게 함께 적어 숫자의 뜻을 놓치지 않게 한다.
+ */
 function AreaCard({
   label,
   color,
@@ -301,46 +311,78 @@ function AreaCard({
   t: Totals;
   share?: number;
 }) {
-  const row = (name: string, v: number, hint?: string) => (
+  const level = share ?? 1;
+  const row = (name: string, plain: string, v: number, hint?: string) => (
     <div className="flex justify-between gap-2" title={hint}>
-      <span className="text-white/45">{name}</span>
+      <span className="text-white/50">
+        {name} <span className="text-white/30">{plain}</span>
+      </span>
       <span className="text-white/80">{tokens(v)}</span>
     </div>
   );
   return (
     <div
       data-area-card={label}
-      className="rounded-md border border-white/[0.08] bg-white/[0.03] px-3.5 py-3"
-      style={{ borderTop: `2px solid ${color}` }}
+      className={`flex gap-3 rounded-lg px-3 py-3 ${cockpit.bay}`}
     >
-      <div className="flex items-baseline justify-between">
-        <span className="text-[12px] font-semibold" style={{ color }}>
-          {label}
-        </span>
-        {share !== undefined && (
-          <span className="text-[11px] text-white/40">
-            출력의 {Math.round(share * 100)}%
+      {/* 탱크 게이지: 눈금 네 칸, 아래부터 찬다 */}
+      <div
+        className="relative w-[18px] shrink-0 overflow-hidden rounded-[5px] border border-white/15 bg-black/40"
+        title={`출력의 ${Math.round(level * 100)}%`}
+      >
+        <div
+          className="absolute inset-x-0 bottom-0 transition-[height] duration-700"
+          style={{
+            height: `${Math.max(2, level * 100)}%`,
+            background: `linear-gradient(180deg, ${color}, ${color}88)`,
+            boxShadow: `0 0 10px ${color}66`,
+          }}
+        />
+        {[25, 50, 75].map((y) => (
+          <div
+            key={y}
+            className="absolute inset-x-0 h-px bg-black/50"
+            style={{ bottom: `${y}%` }}
+          />
+        ))}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between">
+          <span className="text-[12px] font-semibold" style={{ color }}>
+            {label} 탱크
           </span>
-        )}
-      </div>
-      <div className="mt-1 flex items-baseline gap-2">
-        <span className="text-[24px] font-semibold tabular-nums">
-          {tokens(t.output)}
-        </span>
-        <span className="text-[11.5px] text-white/45">출력 토큰</span>
-      </div>
-      <div className="text-[12px] text-white/60 tabular-nums">
-        추정 {usd(t.cost)} · 요청 {t.requests.toLocaleString("ko-KR")}
-      </div>
-      <div className="mt-2 space-y-0.5 border-t border-white/[0.06] pt-2 text-[11.5px] tabular-nums">
-        {row("입력", t.input, "캐시를 거치지 않은 입력")}
-        {row("캐시 쓰기", t.cacheWrite, "다음 요청을 위해 캐시에 적은 입력")}
-        {row(
-          "캐시 읽기",
-          t.cacheRead,
-          "캐시에서 다시 읽은 입력. 값이 싸서 토큰 수는 크다",
-        )}
-        {row("출력", t.output)}
+          {share !== undefined && (
+            <span className="font-mono text-[11px] text-white/45">
+              {Math.round(share * 100)}%
+            </span>
+          )}
+        </div>
+        <div className="mt-1 flex items-baseline gap-2">
+          <span className="font-mono text-[24px] font-semibold tabular-nums">
+            {tokens(t.output)}
+          </span>
+          <span className="text-[11.5px] text-white/45">추진 연소(출력)</span>
+        </div>
+        <div className="text-[12px] text-white/60 tabular-nums">
+          연료비 추정 {usd(t.cost)} · 점화 {t.requests.toLocaleString("ko-KR")}
+          번
+        </div>
+        <div className="mt-2 space-y-0.5 border-t border-white/[0.06] pt-2 text-[11.5px] tabular-nums">
+          {row("신선 연료", "입력", t.input, "캐시를 거치지 않은 입력")}
+          {row(
+            "연료 저장",
+            "캐시 쓰기",
+            t.cacheWrite,
+            "다음 요청을 위해 캐시에 적은 입력",
+          )}
+          {row(
+            "재순환 연료",
+            "캐시 읽기",
+            t.cacheRead,
+            "캐시에서 다시 읽은 입력. 값이 싸서 토큰 수는 크다",
+          )}
+          {row("추진 연소", "출력", t.output)}
+        </div>
       </div>
     </div>
   );
@@ -354,9 +396,11 @@ function Days({ data }: { data: UsageResponse }) {
   return (
     <section data-usage-days>
       <h2 className="mb-2 text-[10.5px] font-semibold tracking-[0.18em] text-white/40">
-        날마다 출력 토큰
+        항해 일지 · 날마다 추진 연소(출력)
       </h2>
-      <div className="flex h-[120px] items-end gap-[3px] rounded-md border border-white/[0.07] px-3 pt-3 pb-1">
+      <div
+        className={`flex h-[130px] items-end gap-[3px] rounded-lg border border-white/10 px-3 pt-3 pb-1 ${cockpit.screen}`}
+      >
         {data.days.map((d) => {
           const sum = d.work + d.personal + d.other;
           return (
@@ -459,15 +503,7 @@ function ProjectRows({
         </td>
         <td className="px-2 py-1.5 text-right text-white/75">{usd(p.cost)}</td>
         <td className="px-2 py-1.5">
-          <div className="h-[6px] overflow-hidden rounded-full bg-white/[0.06]">
-            <div
-              className="h-full rounded-full"
-              style={{
-                width: `${Math.max(1, bar * 100)}%`,
-                background: AREA_COLOR[p.area],
-              }}
-            />
-          </div>
+          <LedGauge level={bar} color={AREA_COLOR[p.area]} />
         </td>
       </tr>
       {open &&
@@ -525,7 +561,7 @@ function Models({ data }: { data: UsageResponse }) {
   return (
     <section>
       <h2 className="mb-2 text-[10.5px] font-semibold tracking-[0.18em] text-white/40">
-        모델별
+        엔진별(모델)
       </h2>
       <table className="w-full text-[12px] tabular-nums">
         <tbody>
@@ -558,7 +594,7 @@ function Limits() {
       className="rounded-md border border-white/[0.07] bg-white/[0.02] px-4 py-3 text-[12px] leading-relaxed text-white/60"
     >
       <h2 className="mb-1.5 text-[10.5px] font-semibold tracking-[0.18em] text-white/40">
-        이 숫자를 읽을 때
+        계기 읽는 법
       </h2>
       <ul className="list-disc space-y-1 pl-4">
         <li>
@@ -619,5 +655,26 @@ function Pills<T extends string>({
         </button>
       ))}
     </span>
+  );
+}
+
+/** 계기판 LED 막대: 10칸 가운데 몫만큼 켠다(가장 많이 쓴 승무원이 10칸). */
+function LedGauge({ level, color }: { level: number; color: string }) {
+  const lit = Math.max(level > 0 ? 1 : 0, Math.round(level * 10));
+  return (
+    <div className="flex gap-[2px]" title={`${Math.round(level * 100)}%`}>
+      {Array.from({ length: 10 }, (_, i) => (
+        <span
+          // biome-ignore lint/suspicious/noArrayIndexKey: 칸 자리가 곧 열쇠다
+          key={i}
+          className="h-[8px] flex-1 rounded-[1px]"
+          style={
+            i < lit
+              ? { background: color, boxShadow: `0 0 4px ${color}aa` }
+              : { background: "rgba(255,255,255,0.06)" }
+          }
+        />
+      ))}
+    </div>
   );
 }
