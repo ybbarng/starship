@@ -336,6 +336,21 @@
       ]
     },
     {
+      "id": "crew-views",
+      "title": "승무원 세 화면 역할",
+      "status": "done",
+      "size": 1,
+      "summary": "결재함=처리, 승무원 정보=엿보기, 선실=한 승무원 전부(할 일·지도·브리핑)",
+      "since": "2026-11-02",
+      "found": "2026-11-02",
+      "links": [
+        {
+          "label": "crew-views.md",
+          "path": "docs/crew-views.md"
+        }
+      ]
+    },
+    {
       "id": "fuel",
       "title": "연료 기록",
       "status": "done",

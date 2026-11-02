@@ -287,7 +287,7 @@ function SheetHeader({
 }
 
 /** 마지막 답변: 터미널에서 이미 읽었을 수 있어 한 줄로 접어 두고, 펼치면 서류처럼 답할 수 있다. */
-function ReplyNote({ task, now }: { task: Task; now: number }) {
+export function ReplyNote({ task, now }: { task: Task; now: number }) {
   const [open, setOpen] = useState(false);
   if (open)
     return <Paper task={task} now={now} showFrom={false} showContext={false} />;
@@ -307,7 +307,7 @@ function ReplyNote({ task, now }: { task: Task; now: number }) {
 }
 
 /** 결재 서류 한 장: 무엇을·언제부터·전문·단추. 세부가 길면 접어 두고 펼친다. */
-function Paper({
+export function Paper({
   task,
   now,
   showFrom,

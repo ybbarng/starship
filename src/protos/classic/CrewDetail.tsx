@@ -88,20 +88,7 @@ export function CrewDetail({
       </section>
 
       {brief ? (
-        <section className="space-y-2.5 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <div className="flex items-baseline justify-between">
-            <h3 className="text-xs font-semibold tracking-widest text-white/45">
-              브리핑
-            </h3>
-            <span className="text-[11px] text-white/40">
-              {ago(brief.at, now)} 전에 만듦
-            </span>
-          </div>
-          <p className="leading-relaxed text-white/90">{brief.summary}</p>
-          <BriefList title="오늘" items={brief.today} />
-          <BriefList title="다음" items={brief.next} />
-          <BriefList title="위험" items={brief.risks} tone="risk" />
-        </section>
+        <CrewBrief brief={brief} now={now} />
       ) : (
         <p className="text-white/50">아직 브리핑이 없어요.</p>
       )}
@@ -127,6 +114,35 @@ export function CrewDetail({
         )}
       </div>
     </div>
+  );
+}
+
+/** 승무원 브리핑 전체(요약·오늘·다음·위험). 선실 "브리핑" 판과 옛 시안이 같이 쓴다. */
+export function CrewBrief({
+  brief,
+  now,
+}: {
+  brief: NonNullable<Crew["brief"]>;
+  now: number;
+}) {
+  return (
+    <section
+      data-crew-brief
+      className="space-y-2.5 rounded-lg border border-white/10 bg-white/[0.03] p-3 text-sm"
+    >
+      <div className="flex items-baseline justify-between">
+        <h3 className="text-xs font-semibold tracking-widest text-white/45">
+          브리핑
+        </h3>
+        <span className="text-[11px] text-white/40">
+          {ago(brief.at, now)} 전에 만듦
+        </span>
+      </div>
+      <p className="leading-relaxed text-white/90">{brief.summary}</p>
+      <BriefList title="오늘" items={brief.today} />
+      <BriefList title="다음" items={brief.next} />
+      <BriefList title="위험" items={brief.risks} tone="risk" />
+    </section>
   );
 }
 

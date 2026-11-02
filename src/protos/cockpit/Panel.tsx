@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import type { Crew, CrewStatus, Hail, Link, Task } from "@/protocol/v1";
 import { formatSpeed } from "@/sky/telemetry";
 import { useTelemetry } from "@/sky/useTelemetry";
@@ -505,6 +505,8 @@ export function Dashboard({
   onCrew,
   onPicker,
   onInterior,
+  picked,
+  onPick,
 }: {
   tasks: Task[];
   hails: Hail[];
@@ -523,6 +525,9 @@ export function Dashboard({
   onCrew: (id: string) => void;
   onPicker: () => void;
   onInterior: () => void;
+  /** 결재함에서 고른 승무원 묶음 열쇠(없으면 첫 묶음) */
+  picked: string | null;
+  onPick: (key: string) => void;
 }) {
   const groups = useMemo(
     () => inboxGroups(tasks, crewById, now),
@@ -530,7 +535,6 @@ export function Dashboard({
   );
   const replies = useMemo(() => lastReplies(tasks), [tasks]);
   const decisions = useMemo(() => tasks.filter((t) => !isNews(t)), [tasks]);
-  const [picked, setPicked] = useState<string | null>(null);
   const group = pickGroup(groups, picked);
   return (
     <div className={`relative flex h-full flex-col ${styles.panel}`}>
@@ -554,7 +558,7 @@ export function Dashboard({
           selected={group?.key}
           crew={crew}
           now={now}
-          onSelect={setPicked}
+          onSelect={onPick}
           onCrew={onCrew}
         />
         <InboxSheet

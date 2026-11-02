@@ -17,8 +17,8 @@ import {
   summarizeMap,
 } from "@/protocol/map";
 import type { Crew, Task } from "@/protocol/v1";
-import { CrewHeader } from "@/protos/classic/CrewDetail";
-import { DeskPanel } from "@/ui/desk/DeskPanel";
+import { CrewBrief, CrewHeader } from "@/protos/classic/CrewDetail";
+import { CrewTasks, crewTaskCount } from "@/ui/desk/CrewTasks";
 import { Toasts } from "@/ui/kit";
 import { FrontierView } from "./frontier/FrontierView";
 import { agoLabel, SIGN_ICON } from "./labels";
@@ -132,11 +132,10 @@ export function Cabin({
               </div>
             )}
           </Center>
-          {desk && (
-            <aside className="w-[380px] shrink-0 overflow-y-auto border-l border-white/[0.07] px-4 py-4">
-              <DeskPanel crewId={crewId} desk={desk} tasks={tasks} now={now} />
-            </aside>
-          )}
+          <aside className="flex w-[380px] shrink-0 flex-col gap-5 overflow-y-auto border-l border-white/[0.07] px-4 py-4">
+            <CrewTasks crewId={crewId} desk={desk} tasks={tasks} now={now} />
+            {crew?.brief && <CrewBrief brief={crew.brief} now={now} />}
+          </aside>
         </div>
       )}
       <Toasts />
@@ -201,7 +200,8 @@ function TopLine({
   );
 }
 
-type SideTab = "desk" | "map";
+/** 옆판: 할 일(책상 + 책상 밖 일 + 마지막 답변) · 지도(개요·구역) · 브리핑. 역할은 docs/crew-views.md */
+type SideTab = "tasks" | "map" | "brief";
 
 function MapRoom({
   map,
@@ -223,9 +223,16 @@ function MapRoom({
   const [selected, setSelected] = useState<string | null>(map.here ?? null);
   // 고르기 전에는 기다리는 것이 있으면 책상, 없으면 지도. 책상이 늦게 와도 따라간다.
   const [pickedTab, setTab] = useState<SideTab | null>(null);
-  const tab: SideTab = !desk
-    ? "map"
-    : (pickedTab ?? (desk.waiting.length > 0 ? "desk" : "map"));
+  const waiting = crewTaskCount(desk, tasks);
+  const tabs: SideTab[] = crew?.brief
+    ? ["tasks", "map", "brief"]
+    : ["tasks", "map"];
+  const tab: SideTab =
+    pickedTab && tabs.includes(pickedTab)
+      ? pickedTab
+      : waiting > 0
+        ? "tasks"
+        : "map";
   const select = (id: string) => {
     setTab("map");
     setSelected(id);
@@ -288,42 +295,44 @@ function MapRoom({
         </footer>
       </div>
       <aside className="w-[380px] shrink-0 overflow-y-auto border-l border-white/[0.07] px-4 py-4">
-        {desk && (
-          <div
-            data-side-tabs
-            className="mb-4 flex gap-1 rounded-md bg-white/[0.04] p-0.5 text-[12.5px]"
-          >
-            {(["desk", "map"] as const).map((t) => (
-              <button
-                key={t}
-                type="button"
-                data-side-tab={t}
-                aria-pressed={tab === t}
-                onClick={() => setTab(t)}
-                className={`flex-1 rounded px-2 py-1 ${
-                  tab === t
-                    ? "bg-white/[0.1] font-semibold text-white"
-                    : "text-white/50 hover:text-white/80"
-                }`}
-              >
-                {t === "desk" ? (
-                  <>
-                    책상
-                    {desk.waiting.length > 0 && (
-                      <b className="ml-1.5 rounded-full bg-[#ffd84a] px-1.5 text-[11px] text-hull-950">
-                        {desk.waiting.length}
-                      </b>
-                    )}
-                  </>
-                ) : (
-                  "지도"
-                )}
-              </button>
-            ))}
-          </div>
-        )}
-        {tab === "desk" && desk ? (
-          <DeskPanel crewId={crewId} desk={desk} tasks={tasks} now={now} />
+        <div
+          data-side-tabs
+          className="mb-4 flex gap-1 rounded-md bg-white/[0.04] p-0.5 text-[12.5px]"
+        >
+          {tabs.map((t) => (
+            <button
+              key={t}
+              type="button"
+              data-side-tab={t}
+              aria-pressed={tab === t}
+              onClick={() => setTab(t)}
+              className={`flex-1 rounded px-2 py-1 ${
+                tab === t
+                  ? "bg-white/[0.1] font-semibold text-white"
+                  : "text-white/50 hover:text-white/80"
+              }`}
+            >
+              {t === "tasks" ? (
+                <>
+                  할 일
+                  {waiting > 0 && (
+                    <b className="ml-1.5 rounded-full bg-[#ffd84a] px-1.5 text-[11px] text-hull-950">
+                      {waiting}
+                    </b>
+                  )}
+                </>
+              ) : t === "map" ? (
+                "지도"
+              ) : (
+                "브리핑"
+              )}
+            </button>
+          ))}
+        </div>
+        {tab === "tasks" ? (
+          <CrewTasks crewId={crewId} desk={desk} tasks={tasks} now={now} />
+        ) : tab === "brief" && crew?.brief ? (
+          <CrewBrief brief={crew.brief} now={now} />
         ) : visibleSelected ? (
           <RegionPanel
             map={map}

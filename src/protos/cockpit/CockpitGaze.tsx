@@ -12,7 +12,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useBridge } from "@/data/hooks";
 import type { Crew, Task } from "@/protocol/v1";
-import { CrewDetail, CrewHeader } from "@/protos/classic/CrewDetail";
+import { CrewHeader } from "@/protos/classic/CrewDetail";
 import { HailScreen } from "@/protos/open-bridge/cockpit/Hails";
 import { lightTime } from "@/protos/open-bridge/cockpit/ui";
 import { Interior } from "@/protos/open-bridge/interior/Interior";
@@ -30,6 +30,7 @@ import {
   useScrollStage,
 } from "@/ui/kit";
 import { LinkHud } from "@/ui/link/LinkHud";
+import { CrewPeek } from "./CrewPeek";
 import styles from "./cockpit.module.css";
 import { GazeLayer } from "./Gaze";
 import { GlassFrame, type GlassShape } from "./Glass";
@@ -99,6 +100,8 @@ export function CockpitGaze() {
   // 별자리 선(이름 포함). 유리창과 감상 모드가 함께 쓴다.
   const [lines, setLines] = useState(true);
   const [modal, setModal] = useState<ModalState>(null);
+  /** 결재함에서 고른 승무원 묶음(승무원 정보의 "결재함에서 보기"가 바꾼다) */
+  const [inboxPick, setInboxPick] = useState<string | null>(null);
 
   const hails = useMemo(
     () => [...bridge.hails].sort((a, b) => b.since - a.since),
@@ -332,6 +335,8 @@ export function CockpitGaze() {
           onCrew={(id) => setModal({ type: "crew", id })}
           onPicker={() => setModal({ type: "nav" })}
           onInterior={() => goTo(1)}
+          picked={inboxPick}
+          onPick={setInboxPick}
         />
       </div>
 
@@ -438,10 +443,14 @@ export function CockpitGaze() {
         width={560}
       >
         {modalCrew && (
-          <CrewDetail
+          <CrewPeek
             crew={modalCrew}
             tasks={bridge.tasksByCrew.get(modalCrew.id) ?? []}
             now={now}
+            onInbox={() => {
+              setInboxPick(modalCrew.id);
+              close();
+            }}
           />
         )}
         {modalCrew && <CabinLink crew={modalCrew} />}
