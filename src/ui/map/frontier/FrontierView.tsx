@@ -58,6 +58,7 @@ import styles from "./frontier.module.css";
 import { FrontierLegend } from "./Legend";
 import { planetFor } from "./planet";
 import { diffSeen, loadSeen, type Seen, saveSeen, seenOf } from "./seen";
+import { type Weather, weatherOf } from "./weather";
 
 const LEGEND_SEEN = "starship.frontier.legend-seen";
 
@@ -578,6 +579,8 @@ export function FrontierView({
       {legend && (
         <FrontierLegend crew={crew} onClose={() => setLegend(false)} />
       )}
+      <WeatherTag weather={weatherOf(crew)} />
+
       {map.goal && (
         <div
           className="pointer-events-none absolute bottom-2 left-3 max-w-[46%] rounded bg-black/60 px-2 py-0.5 text-[11.5px] leading-snug backdrop-blur-[2px]"
@@ -590,6 +593,30 @@ export function FrontierView({
         </div>
       )}
     </section>
+  );
+}
+
+/** 아래 오른쪽: 지금 날씨가 무슨 뜻인지 한 줄로(맑은 낮이면 없음) */
+function WeatherTag({ weather }: { weather: Weather }) {
+  const lines = [
+    weather.night && "🌙 밤 · 세션이 꺼져 있어요",
+    weather.storm && "🌪 모래 폭풍 · 지도가 일보다 뒤처졌어요",
+  ].filter(Boolean);
+  if (!lines.length) return null;
+  return (
+    <div
+      data-weather-tag
+      className="pointer-events-none absolute right-3 bottom-2 flex flex-col items-end gap-1 text-[11.5px]"
+    >
+      {lines.map((l) => (
+        <span
+          key={String(l)}
+          className="rounded bg-black/60 px-2 py-0.5 text-white/75 backdrop-blur-[2px]"
+        >
+          {l}
+        </span>
+      ))}
+    </div>
   );
 }
 
@@ -809,6 +836,8 @@ function Scene({
         : undefined
     : undefined;
   const animalSize = Math.max(26, Math.min(58, s * 1.55));
+  /** 날씨와 낮밤(weather.ts) */
+  const weather = weatherOf(crew);
   /** 프로젝트마다 다른 행성(planet.ts) */
   const planet = planetFor(crew?.id ?? map.title);
 
@@ -1408,7 +1437,12 @@ function Scene({
           strokeOpacity="0.25"
           strokeWidth={s * 0.08}
         />
-        <Lander x={center.x} y={center.y} s={Math.min(s, 40)} />
+        <Lander
+          x={center.x}
+          y={center.y}
+          s={Math.min(s, 40)}
+          dark={weather.night}
+        />
       </g>
 
       {/* 구역 땅 */}
@@ -1511,6 +1545,18 @@ function Scene({
           />
         ))}
       </g>
+
+      {/* 밤: 세션이 꺼져 있으면 땅이 어두워진다(표지·이름표는 위에 그려 밝게 남는다) */}
+      {weather.night && (
+        <rect
+          data-weather="night"
+          width={w}
+          height={h}
+          fill="#030616"
+          opacity="0.42"
+          pointerEvents="none"
+        />
+      )}
 
       {/* 막힘: 붉은 울타리 */}
       <g pointerEvents="none">
@@ -1628,6 +1674,37 @@ function Scene({
         </g>
       )}
 
+      {/* 모래 폭풍: 지도가 일보다 뒤처졌다 */}
+      {weather.storm && (
+        <g data-weather="storm" pointerEvents="none">
+          <rect width={w} height={h} fill="#b8915c" opacity="0.14" />
+          <rect width={w} height={h} fill={`url(#dust${uid})`} opacity="0.7" />
+          <g className={styles.drift} fill="#e3c79a">
+            <ellipse
+              cx={w * 0.3}
+              cy={h * 0.45}
+              rx={w * 0.32}
+              ry={h * 0.12}
+              opacity="0.12"
+            />
+            <ellipse
+              cx={w * 0.7}
+              cy={h * 0.62}
+              rx={w * 0.28}
+              ry={h * 0.1}
+              opacity="0.1"
+            />
+            <ellipse
+              cx={w * 0.5}
+              cy={h * 0.3}
+              rx={w * 0.25}
+              ry={h * 0.08}
+              opacity="0.08"
+            />
+          </g>
+        </g>
+      )}
+
       {/* 완공 폭죽 */}
       {parties.map((pt) => {
         const c = centerOf(pt.id);
@@ -1682,6 +1759,18 @@ function Scene({
             y={hereCenter.y + ds * 0.45 - animalSize * 1.3}
             crew={crew}
           />
+          {weather.night && (
+            <text
+              className={styles.zzz}
+              x={hereCenter.x - animalSize * 0.85}
+              y={hereCenter.y + ds * 0.45 - animalSize * 1.05}
+              fontSize={Math.max(10, animalSize * 0.3)}
+              fontWeight="700"
+              fill="#c9d6ff"
+            >
+              z z
+            </text>
+          )}
         </g>
       )}
 
@@ -2113,7 +2202,18 @@ export function Crack({ x, y, s }: { x: number; y: number; s: number }) {
   );
 }
 
-export function Lander({ x, y, s }: { x: number; y: number; s: number }) {
+export function Lander({
+  x,
+  y,
+  s,
+  dark = false,
+}: {
+  x: number;
+  y: number;
+  s: number;
+  /** 밤(세션이 꺼짐): 창과 불이 꺼진다 */
+  dark?: boolean;
+}) {
   const u = s / 14;
   return (
     <g transform={`translate(${x} ${y}) scale(${u})`}>
@@ -2135,19 +2235,23 @@ export function Lander({ x, y, s }: { x: number; y: number; s: number }) {
         cx="0"
         cy="-4"
         r="4"
-        fill="#7ce0ff"
+        fill={dark ? "#24323d" : "#7ce0ff"}
         stroke="#2a5d73"
         strokeWidth="1"
       />
       <path d="M-11 3 h22" stroke="#7f8aa3" strokeWidth="1" />
-      <circle
-        cx="-6"
-        cy="5"
-        r="1.1"
-        fill="#ffd84a"
-        className={styles.twinkle}
-      />
-      <circle cx="6" cy="5" r="1.1" fill="#ffd84a" />
+      {!dark && (
+        <>
+          <circle
+            cx="-6"
+            cy="5"
+            r="1.1"
+            fill="#ffd84a"
+            className={styles.twinkle}
+          />
+          <circle cx="6" cy="5" r="1.1" fill="#ffd84a" />
+        </>
+      )}
     </g>
   );
 }
@@ -2162,7 +2266,7 @@ function HereAnimal({ crew, size }: { crew?: Crew; size: number }) {
   return (
     <Animal
       kind={animalFor(crew.id)}
-      pose={crew.status === "off" ? "stand" : poseFor(crew.status)}
+      pose={crew.status === "off" ? "sleep" : poseFor(crew.status)}
       context={crew.context}
       size={size}
       furniture={false}

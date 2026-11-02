@@ -152,6 +152,24 @@
   }
 }
 
+/* 밤: 잠자는 승무원 머리 위 z z가 떠오른다 */
+.zzz {
+  animation: zzz 2.6s ease-in-out infinite;
+}
+@keyframes zzz {
+  0% {
+    transform: translateY(4px);
+    opacity: 0;
+  }
+  40% {
+    opacity: 0.9;
+  }
+  100% {
+    transform: translateY(-8px);
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .flag,
   .breathe,
@@ -160,7 +178,8 @@
   .signal,
   .dig,
   .twinkle,
-  .bob {
+  .bob,
+  .zzz {
     animation: none;
   }
   .ping {

@@ -339,6 +339,14 @@ export function FrontierLegend({
               />
             </ul>
 
+            <H>날씨</H>
+            <ul className="space-y-1 text-[11.5px] text-white/60">
+              <li>
+                🌙 밤: 세션이 꺼져 있어요. 착륙선 불이 꺼지고 승무원이 자요
+              </li>
+              <li>🌪 모래 폭풍: 지도가 실제 일보다 뒤처졌어요</li>
+            </ul>
+
             <H>다니기</H>
             <ul className="space-y-1 text-[11.5px] text-white/60">
               <li>
