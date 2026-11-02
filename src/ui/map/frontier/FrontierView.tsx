@@ -26,6 +26,7 @@ import type { Crew } from "@/protocol/v1";
 import { Animal, animalFor, poseFor } from "@/ui/crew";
 import { REGION_STATUS_LABEL } from "@/ui/map/labels";
 import type { MapViewProps } from "@/ui/map/MapView";
+import { PARTY_MS, Party, WALK_MS, WaitBubble, Walker } from "./alive";
 import {
   type Box,
   boxOf,
@@ -55,6 +56,7 @@ import {
 } from "./camera";
 import styles from "./frontier.module.css";
 import { FrontierLegend } from "./Legend";
+import { diffSeen, loadSeen, type Seen, saveSeen, seenOf } from "./seen";
 
 const LEGEND_SEEN = "starship.frontier.legend-seen";
 
@@ -804,6 +806,45 @@ function Scene({
         : undefined
     : undefined;
   const animalSize = Math.max(26, Math.min(58, s * 1.55));
+
+  /* ── 살아 있는 지도: 지난번 본 것과 달라졌으면 걷고, 완공을 축하한다(seen.ts, alive.tsx) ── */
+  const who = crew?.id ?? map.title;
+  const toWorld = (p: P): P => ({ x: (p.x - ox) / s, y: (p.y - oy) / s });
+  const [walk, setWalk] = useState<{ from: P; to: P; t0: number } | null>(null);
+  const [parties, setParties] = useState<{ id: string; t0: number }[]>([]);
+  const seenRef = useRef<Seen | undefined>(undefined);
+  const seenLoaded = useRef<string | null>(null);
+  // 지도가 새로 올 때만 비교한다(카메라가 움직일 때는 아니다). 화면 자리는 이번 그림의 값을 쓴다.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 지도·승무원이 바뀔 때만
+  useEffect(() => {
+    if (seenLoaded.current !== who) {
+      seenRef.current = loadSeen(who);
+      seenLoaded.current = who;
+    }
+    const diff = diffSeen(seenRef.current, map);
+    seenRef.current = seenOf(map);
+    saveSeen(who, seenRef.current);
+    if (reducedMotion()) return;
+    const t0 = performance.now();
+    const fromP = diff.walkFrom
+      ? (spots.get(diff.walkFrom)?.slots[0] ?? centerOf(diff.walkFrom))
+      : undefined;
+    if (fromP && hereCenter)
+      setWalk({ from: toWorld(fromP), to: toWorld(hereCenter), t0 });
+    const shown = diff.newlyDone.filter((id) => visible(id) && centerOf(id));
+    if (shown.length)
+      setParties((cur) => [...cur, ...shown.map((id) => ({ id, t0 }))]);
+  }, [map, who]);
+  useEffect(() => {
+    if (!walk) return;
+    const t = setTimeout(() => setWalk(null), WALK_MS + 100);
+    return () => clearTimeout(t);
+  }, [walk]);
+  useEffect(() => {
+    if (!parties.length) return;
+    const t = setTimeout(() => setParties([]), PARTY_MS + 100);
+    return () => clearTimeout(t);
+  }, [parties]);
 
   /* ── 장애물: 착륙선, 동물, 내 깃발 ── */
   const center = { x: ox, y: oy };
@@ -1582,8 +1623,32 @@ function Scene({
         </g>
       )}
 
+      {/* 완공 폭죽 */}
+      {parties.map((pt) => {
+        const c = centerOf(pt.id);
+        return c ? (
+          <Party key={`${pt.id}-${pt.t0}`} x={c.x} y={c.y} s={s} />
+        ) : null;
+      })}
+
+      {/* 걸어오는 승무원(걷는 동안은 제자리 동물 대신) */}
+      {walk && (
+        <Walker
+          from={walk.from}
+          to={walk.to}
+          t0={walk.t0}
+          ox={ox}
+          oy={oy}
+          s={s}
+          size={animalSize}
+          lift={ds * 0.45}
+        >
+          <HereAnimal crew={crew} size={animalSize} />
+        </Walker>
+      )}
+
       {/* 지금 여기: 동물 선원 */}
-      {hereCenter && (
+      {hereCenter && !walk && (
         <g pointerEvents="none">
           <ellipse
             cx={hereCenter.x}
@@ -1607,6 +1672,11 @@ function Scene({
           >
             <HereAnimal crew={crew} size={animalSize} />
           </g>
+          <WaitBubble
+            x={hereCenter.x + animalSize * 0.45}
+            y={hereCenter.y + ds * 0.45 - animalSize * 1.3}
+            crew={crew}
+          />
         </g>
       )}
 

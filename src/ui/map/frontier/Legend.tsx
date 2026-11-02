@@ -266,7 +266,40 @@ export function FrontierLegend({
                   </div>
                 }
                 name="승무원"
-                say="지금 일하는 땅(🐾 지금 여기)"
+                say="지금 일하는 땅. 일터가 바뀌면 걸어가고, 땅이 완공되면 폭죽이 터져요"
+              />
+              <Row
+                pic={
+                  <svg
+                    width={D}
+                    height={D}
+                    viewBox={`0 0 ${T} ${T}`}
+                    aria-hidden
+                    className="shrink-0"
+                  >
+                    <rect
+                      x="7"
+                      y="13"
+                      width="30"
+                      height="18"
+                      rx="9"
+                      fill="#ffd84a"
+                      stroke="#7a5a00"
+                    />
+                    <text
+                      x="22"
+                      y="26"
+                      textAnchor="middle"
+                      fontSize="12"
+                      fontWeight="800"
+                      fill="#1a1405"
+                    >
+                      ! 3
+                    </text>
+                  </svg>
+                }
+                name="말풍선"
+                say="나를 기다리는 것 수. 옆판 '할 일'에 있어요"
               />
               <Row
                 pic={
