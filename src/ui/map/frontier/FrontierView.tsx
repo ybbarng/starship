@@ -54,6 +54,10 @@ import {
   zoomRange,
 } from "./camera";
 import styles from "./frontier.module.css";
+import { FrontierLegend } from "./Legend";
+
+const LEGEND_SEEN = "starship.frontier.legend-seen";
+
 import {
   add,
   clip,
@@ -73,7 +77,7 @@ import {
 } from "./hex";
 
 /** 지역 색. 지도에 적힌 차례대로 고른다. 상태 색(초록·빨강·노랑)과 겹치지 않게 골랐다 */
-const TERRITORY_COLORS = [
+export const TERRITORY_COLORS = [
   "#e9b872",
   "#9db4ff",
   "#cf9ef5",
@@ -83,7 +87,7 @@ const TERRITORY_COLORS = [
 ];
 
 /** 상태별 땅 바탕 */
-const GROUND: Record<RegionStatus, string> = {
+export const GROUND: Record<RegionStatus, string> = {
   fog: "#454c5e",
   building: "#6a4627",
   done: "#2e7350",
@@ -168,6 +172,18 @@ export function FrontierView({
   }, []);
   const [hover, setHover] = useState<string | null>(null);
   const uid = useId().replace(/[^a-zA-Z0-9]/g, "");
+  // 도움말: 처음 한 번은 저절로 연다(이 브라우저에서 본 적이 없으면)
+  const [legend, setLegend] = useState(false);
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem(LEGEND_SEEN)) {
+        setLegend(true);
+        localStorage.setItem(LEGEND_SEEN, "1");
+      }
+    } catch {
+      // 저장소를 못 쓰면 저절로 열지 않는다
+    }
+  }, []);
 
   const layout = useMemo(() => layoutFrontier(map), [map]);
   const dropped = useMemo(() => droppedIds(map), [map]);
@@ -418,8 +434,10 @@ export function FrontierView({
     else if (k === "0") showAll();
     else if (k === "h" || k === "H") goHere();
     else if (k === "f" || k === "F") nextFork();
+    else if (k === "?") setLegend((v) => !v);
     else if (k === "Escape") {
-      if (selected) onSelect(selected);
+      if (legend) setLegend(false);
+      else if (selected) onSelect(selected);
     } else if (k.startsWith("Arrow")) {
       const dx =
         k === "ArrowLeft" ? PAN_STEP : k === "ArrowRight" ? -PAN_STEP : 0;
@@ -526,6 +544,13 @@ export function FrontierView({
           <CamButton name="fit" title="전체 보기 (0)" onClick={showAll}>
             ⤢ 전체
           </CamButton>
+          <CamButton
+            name="help"
+            title="이 지도 읽는 법 (?)"
+            onClick={() => setLegend((v) => !v)}
+          >
+            ? 도움말
+          </CamButton>
         </div>
         {map.here && visible(map.here) && (
           <CamButton name="here" title="지금 여기로 (h)" boxed onClick={goHere}>
@@ -544,6 +569,9 @@ export function FrontierView({
           </CamButton>
         )}
       </div>
+      {legend && (
+        <FrontierLegend crew={crew} onClose={() => setLegend(false)} />
+      )}
       {map.goal && (
         <div
           className="pointer-events-none absolute bottom-2 left-3 max-w-[46%] rounded bg-black/60 px-2 py-0.5 text-[11.5px] leading-snug backdrop-blur-[2px]"
@@ -1713,7 +1741,7 @@ function Scene({
 
 /* ───────────── 칸 무늬 ───────────── */
 
-function CellDecor({
+export function CellDecor({
   st,
   p,
   s,
@@ -1811,7 +1839,7 @@ function Dome({ x, y, s }: { x: number; y: number; s: number }) {
   );
 }
 
-function Rig({ x, y, s }: { x: number; y: number; s: number }) {
+export function Rig({ x, y, s }: { x: number; y: number; s: number }) {
   const u = s / 20;
   return (
     <g transform={`translate(${x - 9 * u} ${y - 2 * u}) scale(${u})`}>
@@ -1841,7 +1869,7 @@ function Rig({ x, y, s }: { x: number; y: number; s: number }) {
   );
 }
 
-function NoEntry({ x, y, s }: { x: number; y: number; s: number }) {
+export function NoEntry({ x, y, s }: { x: number; y: number; s: number }) {
   const r = Math.max(5, s * 0.3);
   return (
     <g>
@@ -1865,7 +1893,7 @@ function NoEntry({ x, y, s }: { x: number; y: number; s: number }) {
 }
 
 /** 내가 정할 갈림길: 땅에 꽂힌 큰 노란 깃발 */
-function MyFlag({
+export function MyFlag({
   x,
   y,
   s,
@@ -1922,7 +1950,7 @@ function MyFlag({
 }
 
 /** 남이 정할 갈림길: 낮은 회색 깃발 */
-function OtherFlag({ x, y, s }: { x: number; y: number; s: number }) {
+export function OtherFlag({ x, y, s }: { x: number; y: number; s: number }) {
   const top = y - s * 0.75;
   return (
     <g>
@@ -1942,7 +1970,7 @@ function OtherFlag({ x, y, s }: { x: number; y: number; s: number }) {
   );
 }
 
-function Antenna({
+export function Antenna({
   x,
   y,
   s,
@@ -1976,7 +2004,7 @@ function Antenna({
   );
 }
 
-function Crack({ x, y, s }: { x: number; y: number; s: number }) {
+export function Crack({ x, y, s }: { x: number; y: number; s: number }) {
   const u = s / 10;
   const d = `M${x - 6 * u} ${y - 3 * u}L${x - 2 * u} ${y - 1 * u}L${x - 3 * u} ${y + 2 * u}L${x + 2 * u} ${y + 1 * u}L${x + 1 * u} ${y + 4 * u}L${x + 6 * u} ${y + 5 * u}`;
   return (
@@ -1987,7 +2015,7 @@ function Crack({ x, y, s }: { x: number; y: number; s: number }) {
   );
 }
 
-function Lander({ x, y, s }: { x: number; y: number; s: number }) {
+export function Lander({ x, y, s }: { x: number; y: number; s: number }) {
   const u = s / 14;
   return (
     <g transform={`translate(${x} ${y}) scale(${u})`}>
