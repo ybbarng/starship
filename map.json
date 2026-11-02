@@ -477,10 +477,10 @@
       "id": "ops-push",
       "title": "push 흐름",
       "parent": "ops",
-      "status": "blocked",
+      "status": "done",
       "size": 1,
-      "summary": "커밋이 쌓여 있다. 상시 push 허락을 이 세션에서 한 번 확인받아야 한다",
-      "since": "2026-11-01",
+      "summary": "main은 묻지 않고 push한다(push 전 fetch로 앞뒤 확인, force push는 따로 묻는다). 선실 깃발로 허락을 다시 받았다",
+      "since": "2026-11-02",
       "found": "2026-11-01",
       "signs": [
         {
@@ -489,7 +489,8 @@
           "title": "시간 될 때마다 push해도 될지",
           "owner": "me",
           "options": ["허락", "매번 묻기"],
-          "status": "open"
+          "status": "decided",
+          "decided": "허락"
         }
       ]
     }
