@@ -339,6 +339,7 @@ function MapRoom({
             region={visibleSelected}
             dropped={dropped.has(visibleSelected.id)}
             now={now}
+            crewId={crewId}
           />
         ) : (
           <Overview map={map} forks={forks} talks={talks} onSelect={select} />

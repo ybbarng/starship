@@ -314,6 +314,8 @@ export type DemoState = {
   startedAt: number;
   dismissed: Set<string>;
   snoozed: Map<string, number>;
+  /** 선실에서 답한 지도 갈림길: "<crewId>/<region>/<signId>" → 답 */
+  decidedSigns?: Map<string, string>;
 };
 
 export function createDemoState(now = Date.now()): DemoState {

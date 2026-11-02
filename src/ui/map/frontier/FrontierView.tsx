@@ -27,6 +27,7 @@ import type { Crew } from "@/protocol/v1";
 import { Animal, animalFor, poseFor } from "@/ui/crew";
 import { REGION_STATUS_LABEL } from "@/ui/map/labels";
 import type { MapViewProps } from "@/ui/map/MapView";
+import { ForkAnswer } from "../ForkAnswer";
 import { PARTY_MS, Party, WALK_MS, WaitBubble, Walker } from "./alive";
 import {
   type Box,
@@ -209,6 +210,13 @@ export function FrontierView({
   const shownMap = replaying ? (frames[replay.k]?.map ?? map) : map;
   const shownLayout = useMemo(() => layoutFrontier(shownMap), [shownMap]);
   const shownDropped = useMemo(() => droppedIds(shownMap), [shownMap]);
+  /* ── 깃발을 눌러 바로 정하기: 깃발 옆에 선택지 창. 지도를 움직이면 닫는다 ── */
+  const [forkPop, setForkPop] = useState<{
+    region: string;
+    id: string;
+    x: number;
+    y: number;
+  } | null>(null);
   // 숨긴 칸까지 넣어 맞춘다. "버린 구역 보기"를 껐다 켜도 크기가 그대로다
   const box = useMemo<Box>(
     () => boxOf(layout.leaves.flatMap((l) => l.cells.map((c) => toPixel(c)))),
@@ -251,6 +259,7 @@ export function FrontierView({
     (c: Camera) => {
       setRawCam(c);
       saveCamera(storeKey, c);
+      setForkPop(null);
     },
     [storeKey],
   );
@@ -461,7 +470,8 @@ export function FrontierView({
     else if (k === "f" || k === "F") nextFork();
     else if (k === "?") setLegend((v) => !v);
     else if (k === "Escape") {
-      if (legend) setLegend(false);
+      if (forkPop) setForkPop(null);
+      else if (legend) setLegend(false);
       else if (replayOpen) setReplayOpen(false);
       else if (selected) onSelect(selected);
     } else if (k.startsWith("Arrow")) {
@@ -540,6 +550,11 @@ export function FrontierView({
           walkMs={
             replaying ? Math.min(WALK_MS, stepMs(frames.length) * 0.9) : WALK_MS
           }
+          onFork={
+            crew && !replaying
+              ? (region, id, at) => setForkPop({ region, id, ...at })
+              : undefined
+          }
           selected={selected}
           hover={hover}
           setHover={setHover}
@@ -613,6 +628,15 @@ export function FrontierView({
         <FrontierLegend crew={crew} onClose={() => setLegend(false)} />
       )}
       <WeatherTag weather={weatherOf(crew)} />
+      {forkPop && crew && (
+        <ForkPop
+          map={map}
+          crewId={crew.id}
+          pop={forkPop}
+          w={size.w}
+          onClose={() => setForkPop(null)}
+        />
+      )}
       {replayOpen && (
         <ReplayBar
           frames={frames}
@@ -634,6 +658,55 @@ export function FrontierView({
         </div>
       )}
     </section>
+  );
+}
+
+/** 깃발 옆 선택지 창(ForkAnswer). 세션이 지도를 고치기 전까지는 깃발이 그대로다 */
+function ForkPop({
+  map,
+  crewId,
+  pop,
+  w,
+  onClose,
+}: {
+  map: MapViewProps["map"];
+  crewId: string;
+  pop: { region: string; id: string; x: number; y: number };
+  w: number;
+  onClose: () => void;
+}) {
+  const sign = map.regions
+    .find((r) => r.id === pop.region)
+    ?.signs?.find((x) => x.id === pop.id);
+  if (sign?.type !== "fork") return null;
+  const W = 280;
+  const left = Math.max(8, Math.min(w - W - 8, pop.x - W / 2));
+  return (
+    <div
+      data-fork-pop
+      data-camera="fork-pop"
+      role="dialog"
+      aria-label="갈림길 정하기"
+      className="absolute z-20 rounded-lg border border-[#ffd84a]/40 bg-[#0a0a10]/95 px-3 py-2.5 text-[12.5px] shadow-[0_8px_30px_rgba(0,0,0,0.6)]"
+      style={{ left, top: Math.max(8, pop.y + 14), width: W }}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <div className="flex items-start gap-2">
+        <span className="text-[#ffd84a]">⑂</span>
+        <div className="min-w-0 flex-1 font-semibold text-white">
+          {sign.title}
+        </div>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="닫기"
+          className="rounded px-1 text-white/50 hover:bg-white/10 hover:text-white"
+        >
+          ✕
+        </button>
+      </div>
+      <ForkAnswer crewId={crewId} region={pop.region} sign={sign} />
+    </div>
   );
 }
 
@@ -726,6 +799,7 @@ function Scene({
   now,
   replay = false,
   walkMs = WALK_MS,
+  onFork,
 }: {
   w: number;
   h: number;
@@ -754,6 +828,8 @@ function Scene({
   replay?: boolean;
   /** 승무원이 걷는 시간(되감기 중에는 장 사이보다 짧게) */
   walkMs?: number;
+  /** 내 갈림길 깃발을 눌렀다(없으면 깃발을 누를 수 없다) */
+  onFork?: (region: string, signId: string, at: P) => void;
 }) {
   const visible = (id: string) => showDropped || !dropped.has(id);
   const byId = new Map(map.regions.map((r) => [r.id, r]));
@@ -1691,14 +1767,34 @@ function Scene({
         {flagSpots.map((f) => {
           const r = byId.get(f.id);
           const sign = r ? activeSigns(r).find(isForkForMe) : undefined;
+          const flag = (
+            <MyFlag x={f.p.x} y={f.p.y} s={ks} title={sign?.title ?? ""} />
+          );
+          if (!onFork || !sign) return <g key={f.id}>{flag}</g>;
           return (
-            <MyFlag
+            // biome-ignore lint/a11y/useSemanticElements: SVG 안이라 button을 쓸 수 없다
+            <g
               key={f.id}
-              x={f.p.x}
-              y={f.p.y}
-              s={ks}
-              title={sign?.title ?? ""}
-            />
+              data-fork-flag={f.id}
+              data-camera="fork"
+              role="button"
+              tabIndex={0}
+              aria-label={`갈림길 정하기: ${sign.title}`}
+              pointerEvents="visiblePainted"
+              className="cursor-pointer outline-none"
+              onClick={(e) => {
+                e.stopPropagation();
+                onFork(f.id, sign.id, f.p);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onFork(f.id, sign.id, f.p);
+                }
+              }}
+            >
+              {flag}
+            </g>
           );
         })}
       </g>

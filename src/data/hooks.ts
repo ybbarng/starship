@@ -66,9 +66,12 @@ async function postAction(req: ActionRequest): Promise<ActionResult> {
 }
 
 async function fetchCrewMap(crewId: string): Promise<CrewMapResponse> {
-  const res = await fetch(`/api/v1/crew/${encodeURIComponent(crewId)}/map`, {
-    cache: "no-store",
-  });
+  const res = await fetch(
+    `/api/v1/crew/${encodeURIComponent(crewId)}/map${scenarioParam()}`,
+    {
+      cache: "no-store",
+    },
+  );
   if (!res.ok) throw new Error(`map ${res.status}`);
   return CrewMapResponseSchema.parse(await res.json());
 }
@@ -194,6 +197,7 @@ export function useAct() {
       if (result.note) toast(result.note, result.ok ? "ok" : "error");
       client.invalidateQueries({ queryKey: ["snapshot"] });
       client.invalidateQueries({ queryKey: ["crew-desk"] });
+      client.invalidateQueries({ queryKey: ["crew-map"] });
     },
     onError: () => toast("요청을 보내지 못했어요", "error"),
   });
@@ -212,6 +216,16 @@ export function useAct() {
       }),
     crew: (crew: Crew, action: Crew["actions"][number]) =>
       mutation.mutate({ target: "crew", id: crew.id, action }),
+    /** 지도 갈림길에 답하기(세션에 전하고, map.json은 세션이 고친다) */
+    sign: (crewId: string, region: string, id: string, answer: string) =>
+      mutation.mutate({
+        target: "sign",
+        crewId,
+        region,
+        id,
+        action: "answer",
+        answer,
+      }),
     pending: mutation.isPending,
   };
 }

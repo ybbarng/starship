@@ -308,7 +308,7 @@ export function FrontierLegend({
                   </Tile>
                 }
                 name="큰 노란 깃발"
-                say="내가 정해야 할 갈림길. ⑂ 다음 단추로 차례로 가요"
+                say="내가 정해야 할 갈림길. 누르면 그 자리에서 정해요(⑂ 다음 단추로 차례로)"
               />
               <Row
                 pic={

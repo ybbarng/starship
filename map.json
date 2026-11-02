@@ -244,6 +244,22 @@
       ]
     },
     {
+      "id": "cabin-fork-answer",
+      "title": "깃발 눌러 바로 정하기",
+      "parent": "cabin",
+      "status": "building",
+      "size": 1,
+      "summary": "노란 깃발·구역 판에서 갈림길에 답하면 세션에 전함. starship 쪽은 다 됨, 본부가 target sign을 세션에 넘기기 기다림",
+      "since": "2026-11-02",
+      "found": "2026-11-02",
+      "links": [
+        {
+          "label": "ForkAnswer.tsx",
+          "path": "src/ui/map/ForkAnswer.tsx"
+        }
+      ]
+    },
+    {
       "id": "cabin-desk",
       "title": "책상",
       "parent": "cabin",

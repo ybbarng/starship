@@ -17,7 +17,7 @@ import {
   type Scenario,
 } from "@/demo/scenario";
 import { parseDesk } from "@/protocol/desk";
-import { parseMap } from "@/protocol/map";
+import { type ProjectMap, parseMap } from "@/protocol/map";
 import {
   type ActionRequest,
   ActionResult,
@@ -77,13 +77,23 @@ export async function getSnapshot(
 export async function getCrewMap(
   crewId: string,
   now = Date.now(),
+  seat = "default",
 ): Promise<CrewMapResponse> {
   const info = sourceInfo();
   if (info.mode === "demo") {
+    const decided = demoState(seat).decidedSigns;
     if (crewId === DEMO_BIG_MAP_CREW)
-      return { map: buildBigDemoMap(now), stale: false, mapAt: now - HOUR };
+      return {
+        map: applyDecided(buildBigDemoMap(now), crewId, decided),
+        stale: false,
+        mapAt: now - HOUR,
+      };
     if (crewId !== DEMO_MAP_CREW) return { map: null };
-    return { map: buildDemoMap(now), stale: false, mapAt: now - 2 * HOUR };
+    return {
+      map: applyDecided(buildDemoMap(now), crewId, decided),
+      stale: false,
+      mapAt: now - 2 * HOUR,
+    };
   }
   const res = await fetch(
     `${info.base}/v1/crew/${encodeURIComponent(crewId)}/map`,
@@ -135,6 +145,27 @@ export async function getCrewMapHistory(
 const HistoryEnvelope = z.object({
   frames: z.array(z.object({ at: z.number(), map: z.unknown() })),
 });
+
+/** 데모: 선실에서 답한 갈림길을 정함으로(실제로는 세션이 map.json을 고친다) */
+function applyDecided(
+  map: ProjectMap,
+  crewId: string,
+  decided: Map<string, string> | undefined,
+): ProjectMap {
+  if (!decided?.size) return map;
+  return {
+    ...map,
+    regions: map.regions.map((r) => ({
+      ...r,
+      signs: r.signs?.map((s) => {
+        const answer = decided.get(`${crewId}/${r.id}/${s.id}`);
+        return s.type === "fork" && answer
+          ? { ...s, status: "decided" as const, decided: answer }
+          : s;
+      }),
+    })),
+  };
+}
 
 /** 지도 응답에서 map만 아직 검사하지 않은 껍데기. */
 const MapEnvelope = CrewMapResponse.extend({ map: z.unknown() });
@@ -194,6 +225,14 @@ export async function runAction(
 
 function demoAction(req: ActionRequest, seat: string): ActionResult {
   const state = demoState(seat);
+  if (req.target === "sign") {
+    state.decidedSigns ??= new Map();
+    state.decidedSigns.set(`${req.crewId}/${req.region}/${req.id}`, req.answer);
+    return {
+      ok: true,
+      note: `“${req.answer}”로 정해 ${req.crewId} 세션에 전했어요 (데모)`,
+    };
+  }
   if (req.target === "crew") {
     return req.action === "focus"
       ? { ok: true, note: `${req.id} 창으로 옮겼어요 (데모)` }

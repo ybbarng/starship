@@ -3,12 +3,13 @@ import { getCrewMap } from "@/server/source";
 export const dynamic = "force-dynamic";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const seat = new URL(request.url).searchParams.get("seat") ?? "default";
   try {
-    return Response.json(await getCrewMap(id));
+    return Response.json(await getCrewMap(id, Date.now(), seat));
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return Response.json({ error: message }, { status: 502 });

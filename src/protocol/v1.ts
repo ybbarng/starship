@@ -330,6 +330,22 @@ export const ActionRequest = z.discriminatedUnion("target", [
     id: z.string().min(1),
     action: CrewAction,
   }),
+  /**
+   * 지도 갈림길에 선실에서 바로 답하기(docs/map.md "갈림길에 답하기"). 서버가 그 세션에 넘기고,
+   * map.json은 세션이 고친다(화면이 파일을 직접 쓰지 않는다).
+   */
+  z.object({
+    target: z.literal("sign"),
+    /** 승무원(프로젝트) id */
+    crewId: z.string().min(1),
+    /** 표지가 놓인 구역 id */
+    region: z.string().min(1),
+    /** 갈림길 표지 id */
+    id: z.string().min(1),
+    action: z.literal("answer"),
+    /** 고른 선택지나 쓴 글 */
+    answer: z.string().min(1),
+  }),
 ]);
 export type ActionRequest = z.infer<typeof ActionRequest>;
 

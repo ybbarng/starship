@@ -9,6 +9,7 @@ import {
   type Region,
   type Sign,
 } from "@/protocol/map";
+import { ForkAnswer } from "./ForkAnswer";
 import {
   ownerLabel,
   REGION_STATUS_COLOR,
@@ -23,11 +24,14 @@ export function RegionPanel({
   region,
   dropped,
   now,
+  crewId,
 }: {
   map: ProjectMap;
   region: Region;
   dropped: boolean;
   now: number;
+  /** 있으면 내가 정할 갈림길에 그 자리에서 답한다 */
+  crewId?: string;
 }) {
   const byId = new Map(map.regions.map((r) => [r.id, r]));
   const path: string[] = [];
@@ -105,7 +109,12 @@ export function RegionPanel({
         <Field label="표지">
           <ul className="flex flex-col gap-2">
             {signs.map((s) => (
-              <SignItem key={s.id} sign={s} />
+              <SignItem
+                key={s.id}
+                sign={s}
+                region={region.id}
+                crewId={crewId}
+              />
             ))}
           </ul>
         </Field>
@@ -159,7 +168,15 @@ function Field({
   );
 }
 
-function SignItem({ sign }: { sign: Sign }) {
+function SignItem({
+  sign,
+  region,
+  crewId,
+}: {
+  sign: Sign;
+  region: string;
+  crewId?: string;
+}) {
   const mine = isForkForMe(sign);
   return (
     <li
@@ -183,7 +200,11 @@ function SignItem({ sign }: { sign: Sign }) {
               `${SIGN_LABEL.talk} · ${sign.with} — ${TALK_STATUS_LABEL[sign.status]}`}
             {sign.type === "risk" && SIGN_LABEL.risk}
           </div>
-          {sign.type === "fork" &&
+          {mine && crewId && sign.type === "fork" && (
+            <ForkAnswer crewId={crewId} region={region} sign={sign} />
+          )}
+          {!(mine && crewId) &&
+            sign.type === "fork" &&
             sign.status === "open" &&
             sign.options &&
             sign.options.length > 0 && (

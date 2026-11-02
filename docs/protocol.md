@@ -41,6 +41,8 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
 { "target": "task", "id": "t-1", "action": "snooze", "until": 1792903600000 }
 // 승무원에 대한 동작
 { "target": "crew", "id": "web-shop", "action": "focus" }
+// 지도 갈림길에 답하기(선실 깃발·구역 판)
+{ "target": "sign", "crewId": "web-shop", "region": "server-payment", "id": "receipt", "action": "answer", "answer": "대행사 영수증" }
 ```
 
 ```jsonc
@@ -49,6 +51,7 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
 
 - `note`는 화면에 잠깐 띄울 한 줄이다. 사람이 읽을 말로 쓴다.
 - `openUrl`이 있으면 Starship이 새 탭으로 연다(원래 서비스에서 답해야 할 때).
+- `target: "sign"`은 `owner: me`인 열린 갈림길에 답한다. 서버는 그 승무원 세션에 "지도 갈림길 「제목」(구역 region): 답으로 정했어요"처럼 전하고, `map.json`은 세션이 고친다(`status: decided`, `decided`). 화면도 서버도 지도 파일을 직접 쓰지 않는다. 세션에 전할 수 없으면 `ok: false`와 까닭을 `note`에 준다.
 
 ### `GET {base}/v1/crew/{id}/map` → `CrewMapResponse`
 
