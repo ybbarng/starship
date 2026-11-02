@@ -27,6 +27,15 @@ export function buildDemoMap(now = Date.now()): ProjectMap {
       summary: "상품·재고 조회 API. 검색은 이름 앞부분만 맞춘다",
       since: d(15),
       links: [{ label: "API 문서", path: "docs/api/catalog.md" }],
+      // 완공했지만 알고 두기로 한 문제: 집 밑에 깔린 금으로 보인다
+      signs: [
+        {
+          id: "catalog-search",
+          type: "risk",
+          title:
+            "검색이 이름 가운데 글자는 못 찾는다. 상품이 적은 동안은 그대로",
+        },
+      ],
     },
     {
       id: "server-payment",

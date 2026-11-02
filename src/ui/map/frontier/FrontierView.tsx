@@ -862,6 +862,11 @@ function Scene({
       }
     }
   }
+  /** 완공 땅의 위험(알고 두기로 한 문제)은 집 밑에 깔린 금으로: 땅 층에서 돔보다 먼저 그린다(2026-11-02 사용자) */
+  const isUnderCrack = (x: { region: Region; sign: Sign }) =>
+    x.sign.type === "risk" && statusOf(x.region) === "done";
+  const underCracks =
+    stage === "far" ? [] : signSpots.filter((x) => isUnderCrack(x));
 
   /* ── 이름표: 지역 이름은 늘, 구역 이름은 확대 단계와 자리에 따라 ── */
   const near = stage === "near";
@@ -1400,6 +1405,20 @@ function Scene({
                     fill={tint}
                     opacity={st === "fog" ? 0.16 : 0.1}
                   />
+                  {underCracks
+                    .filter(
+                      (u) =>
+                        u.region.id === r.id &&
+                        Math.abs(u.p.x - p.x) + Math.abs(u.p.y - p.y) < 1,
+                    )
+                    .map((u) => (
+                      <Crack
+                        key={u.sign.id}
+                        x={p.x}
+                        y={p.y + ds * 0.2}
+                        s={ds}
+                      />
+                    ))}
                   <CellDecor st={st} p={p} s={s} ds={ds} uid={uid} />
                   {fresh && (
                     <polygon
@@ -1518,6 +1537,7 @@ function Scene({
                   waiting={sign.status === "waiting" || sign.status === "sent"}
                 />
               );
+            if (isUnderCrack({ region: r, sign })) return null;
             return <Crack key={key} x={p.x} y={p.y} s={ds} />;
           })}
         {flagSpots.map((f) => {
