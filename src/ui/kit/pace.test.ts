@@ -115,6 +115,19 @@ describe("stepAnimations: CSS 애니메이션을 박자에 맞추기", () => {
     expect(done.currentTime).toBe(300);
   });
 
+  it("박자에서 뺀 것(창밖 이벤트 등)은 멈추지도 옮기지도 않는다", () => {
+    const squid = fakeAnim("running", 120);
+    const lamp = fakeAnim("running", 120);
+    const isFree = (a: SteppedAnimation) => a === squid;
+    stepAnimations([squid, lamp], 5000, isFree);
+    stepAnimations([squid, lamp], 5100, isFree);
+    expect(squid.paused).toBe(0);
+    expect(squid.playState).toBe("running");
+    expect(squid.currentTime).toBe(120);
+    expect(lamp.paused).toBe(1);
+    expect(lamp.currentTime).toBe(220);
+  });
+
   it("끝이 있는 애니메이션은 끝에 닿으면 끝내고 그 뒤로는 건드리지 않는다", () => {
     const enter = fakeAnim("running", 0, 400);
     stepAnimations([enter], 1000);

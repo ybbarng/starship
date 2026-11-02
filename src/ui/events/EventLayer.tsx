@@ -150,6 +150,8 @@ export function EventLayer({
       ref={rootRef}
       className="pointer-events-none absolute inset-0 overflow-hidden"
       data-event={kind}
+      // 몇 분에 한 번 몇 초만 지나가서 제 속도로 움직여도 가볍다. 박자기(src/ui/kit/pace.ts)에서 뺀다.
+      data-pace-free
     >
       <style>{EVENT_CSS}</style>
       <div className="ev-band">

@@ -47,6 +47,13 @@ function stepSmil(nowMs: number) {
   }
 }
 
+/** [data-pace-free] 안의 애니메이션은 박자에서 뺀다(창밖 이벤트처럼 가끔 잠깐 돌아 제 속도로 둬도 가벼운 것). */
+function isPaceFree(a: SteppedAnimation): boolean {
+  const t = (a as unknown as CSSAnimation).effect;
+  const el = t instanceof KeyframeEffect ? t.target : null;
+  return !!el?.closest("[data-pace-free]");
+}
+
 export function PaceRoot() {
   useEffect(() => {
     let raf = 0;
@@ -65,7 +72,7 @@ export function PaceRoot() {
       });
       if (wait === "stop") return;
       const now = Number(document.timeline.currentTime);
-      stepAnimations(cssAnimations(), now);
+      stepAnimations(cssAnimations(), now, isPaceFree);
       stepSmil(now);
       runPaceListeners();
       if (wait === "frame") raf = requestAnimationFrame(tick);
@@ -86,7 +93,11 @@ export function PaceRoot() {
               .filter((a): a is CSSAnimation => a instanceof CSSAnimation),
           );
           started.clear();
-          stepAnimations(anims, Number(document.timeline.currentTime));
+          stepAnimations(
+            anims,
+            Number(document.timeline.currentTime),
+            isPaceFree,
+          );
         });
       started.add(e.target);
     };

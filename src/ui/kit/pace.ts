@@ -73,25 +73,27 @@ export type SteppedAnimation = {
 
 /** 박자에 맞춰 옮기는 애니메이션마다: 타임라인 시각 − 애니메이션 시각(처음 본 순간 기준), 끝 시각. */
 const tracked = new WeakMap<object, { origin: number; end: number }>();
-/** 건드리지 않기로 한 것(앱이 멈춰 둔 것·끝난 것). 다시 읽지 않는다. */
+/** 건드리지 않기로 한 것(앱이 멈춰 둔 것·끝난 것·박자에서 뺀 것). 다시 읽지 않는다. */
 const skipped = new WeakSet<object>();
 
 /**
  * CSS 애니메이션을 박자에 맞춰 바꾼다. 처음 본 돌던 애니메이션은 멈추고, 박자마다 시각만 옮긴다.
  * 그래서 Chrome이 매 프레임 스타일·그리기를 다시 하지 않고, 박자에만 한다.
- * 앱이 스스로 멈춰 둔 것·끝난 것은 건드리지 않는다. 끝이 있는 것은 끝에 닿으면 끝낸다.
+ * 앱이 스스로 멈춰 둔 것·끝난 것, isFree가 참인 것(가끔 잠깐 도는 창밖 이벤트 등)은 건드리지 않는다.
+ * 끝이 있는 것은 끝에 닿으면 끝낸다.
  * 읽기(상태·시각·끝 시각)는 처음 볼 때 한 번만, 쓰기보다 먼저 한다. 쓰고 나서 읽으면 그때마다 스타일 계산이 강제된다.
  * now는 document.timeline.currentTime(ms).
  */
 export function stepAnimations(
   anims: Iterable<SteppedAnimation>,
   now: number,
+  isFree: (a: SteppedAnimation) => boolean = () => false,
 ): void {
   const list = [...anims];
   const fresh: SteppedAnimation[] = [];
   for (const a of list) {
     if (tracked.has(a) || skipped.has(a)) continue;
-    if (a.playState !== "running") {
+    if (a.playState !== "running" || isFree(a)) {
       skipped.add(a);
       continue;
     }
