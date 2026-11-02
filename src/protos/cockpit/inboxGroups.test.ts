@@ -140,6 +140,39 @@ describe("마지막 답변(reply)은 결재가 아닌 소식", () => {
   });
 });
 
+describe("답해 둔 것: 결재는 아니지만 목차에 둔다", () => {
+  const withAnswers = (id: string, answers: number): Crew => ({
+    ...crew(id),
+    desk: { waiting: 0, doing: 1, answers },
+  });
+
+  it("결재가 있는 승무원은 그 묶음에 답 수를 단다", () => {
+    const byId = new Map([["billing", withAnswers("billing", 2)]]);
+    const [g] = inboxGroups([task("a", "billing", 1)], byId, NOW);
+    expect(g?.answers).toBe(2);
+    expect(g?.tasks).toHaveLength(1);
+  });
+
+  it("답만 있는 승무원도 묶음이 생기고, 결재 묶음 뒤·새 일 앞에 온다", () => {
+    const byId = new Map([
+      ["web-shop", crew("web-shop")],
+      ["lunar-blog", withAnswers("lunar-blog", 1)],
+    ]);
+    const groups = inboxGroups(
+      [task("ci-red", undefined, 9), task("a", "web-shop", 1)],
+      byId,
+      NOW,
+    );
+    expect(groups.map((g) => g.key)).toEqual([
+      "web-shop",
+      "lunar-blog",
+      LOOSE_KEY,
+    ]);
+    expect(groups[1]?.tasks).toEqual([]);
+    expect(groups[1]?.answers).toBe(1);
+  });
+});
+
 describe("pickGroup: 고른 묶음", () => {
   const groups = inboxGroups(
     [task("a", "web-shop", 1), task("b", "billing", 3)],

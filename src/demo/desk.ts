@@ -2,6 +2,7 @@
 // web-shop은 네 종류(decide·check·approve·answer)가 다 있고 지도도 있다. orbit-notes는 지도 없이 책상만 있다.
 // 기다림 하나하나는 스냅샷의 Task로도 나간다(id desk:<crewId>:<waitId>). 답하면 책상에서도 빠진다.
 import {
+  answerKey,
   type Desk,
   deskChoices,
   deskTaskId,
@@ -109,6 +110,20 @@ export function buildDemoDesks(now = Date.now()): Record<string, Desk> {
           after: "그 금액으로 설정 화면 기본값을 바꿔요",
         },
       ],
+      answers: [
+        {
+          id: "coupon-limit-why",
+          q: "중복 쿠폰은 왜 두 장까지만 돼요?",
+          a: "결제 대행사가 한 주문에 할인 줄을 두 개까지만 받아요. 세 장 이상은 앞의 두 장을 먼저 합쳐서 한 줄로 보내면 돼요.\n그렇게 바꿀지는 쿠폰 한도 갈림길에서 정하시면 돼요.",
+          at: iso(now, 11),
+        },
+        {
+          id: "screenshot-where",
+          q: "장바구니 스크린샷 어디 있어요?",
+          a: `${demoFile("coupon-sheet.png")} 에 있어요.`,
+          at: iso(now, 26),
+        },
+      ],
       doing: [
         { id: "cart-scene", title: "장바구니 장면 확인", since: iso(now, 6) },
         {
@@ -166,14 +181,15 @@ export function deskTasks(
   }));
 }
 
-/** 답하거나 치우거나 미룬 기다림을 뺀 책상. hidden은 Task id로 묻는다. */
+/** 답하거나 치우거나 미룬 기다림, 읽은 답을 뺀 책상. hidden은 Task id나 answerKey로 묻는다. */
 export function visibleDesk(
   crewId: string,
   desk: Desk,
-  hidden: (taskId: string) => boolean,
+  hidden: (key: string) => boolean,
 ): Desk {
   return {
     ...desk,
     waiting: desk.waiting.filter((w) => !hidden(deskTaskId(crewId, w.id))),
+    answers: desk.answers?.filter((a) => !hidden(answerKey(crewId, a.id))),
   };
 }

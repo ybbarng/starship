@@ -16,7 +16,7 @@ import {
   demoDesks,
   type Scenario,
 } from "@/demo/scenario";
-import { parseDesk } from "@/protocol/desk";
+import { answerKey, parseDesk } from "@/protocol/desk";
 import { type ProjectMap, parseMap } from "@/protocol/map";
 import {
   type ActionRequest,
@@ -225,6 +225,10 @@ export async function runAction(
 
 function demoAction(req: ActionRequest, seat: string): ActionResult {
   const state = demoState(seat);
+  if (req.target === "answer") {
+    state.dismissed.add(answerKey(req.crewId, req.id));
+    return { ok: true, note: "읽음으로 했어요" };
+  }
   if (req.target === "sign") {
     state.decidedSigns ??= new Map();
     state.decidedSigns.set(`${req.crewId}/${req.region}/${req.id}`, req.answer);

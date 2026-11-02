@@ -5,7 +5,9 @@
 //   가운데 = 고른 승무원의 결재 서류: 제목 전체·세부·선택지를 모두 펼치고 그 자리에서 처리
 import Link from "next/link";
 import { useState } from "react";
+import { useCrewDesk } from "@/data/hooks";
 import type { Context, Crew, Task } from "@/protocol/v1";
+import { AnswerList } from "@/ui/desk/Answers";
 import {
   ago,
   CONTEXT_COLOR,
@@ -61,6 +63,7 @@ export function InboxIndex({
   const busy = new Set(groups.map((g) => g.key));
   const others = sortCrew(crew.filter((c) => !busy.has(c.id)));
   const total = groups.reduce((n, g) => n + g.tasks.length, 0);
+  const answerTotal = groups.reduce((n, g) => n + g.answers, 0);
   return (
     <section
       aria-label="승무원 결재 목차"
@@ -72,6 +75,7 @@ export function InboxIndex({
         <span className="h-px flex-1 bg-white/[0.07]" />
         <span className="tracking-normal text-white/45">
           결재 {total} · {groups.length}곳
+          {answerTotal > 0 && ` · 답 ${answerTotal}`}
         </span>
       </div>
       <div
@@ -109,9 +113,22 @@ export function InboxIndex({
                     >
                       {groupName(g)}
                     </span>
-                    <span className="ml-auto shrink-0 rounded-full bg-[#ffd84a] px-1.5 text-[10.5px] leading-[15px] font-bold text-hull-950 tabular-nums">
-                      {g.tasks.length}
-                    </span>
+                    {g.answers > 0 && (
+                      <span
+                        data-group-answers
+                        title={`답해 둔 것 ${g.answers}`}
+                        className={`${g.tasks.length ? "" : "ml-auto"} shrink-0 rounded-full bg-[#7ce0ff]/20 px-1.5 text-[10.5px] leading-[15px] font-bold text-[#bfefff] tabular-nums`}
+                      >
+                        답 {g.answers}
+                      </span>
+                    )}
+                    {g.tasks.length > 0 && (
+                      <span
+                        className={`${g.answers ? "" : "ml-auto"} shrink-0 rounded-full bg-[#ffd84a] px-1.5 text-[10.5px] leading-[15px] font-bold text-hull-950 tabular-nums`}
+                      >
+                        {g.tasks.length}
+                      </span>
+                    )}
                   </span>
                   <span className="mt-0.5 flex min-w-0 items-center gap-1.5 pl-[19px] text-[10.5px]">
                     <span className="min-w-0 flex-1 truncate text-white/40">
@@ -124,11 +141,13 @@ export function InboxIndex({
                         묵음 {g.stale}
                       </span>
                     )}
-                    <span
-                      className={`shrink-0 font-mono tabular-nums ${ageTone(g.oldest, now)}`}
-                    >
-                      {ago(g.oldest, now)}
-                    </span>
+                    {g.tasks.length > 0 && (
+                      <span
+                        className={`shrink-0 font-mono tabular-nums ${ageTone(g.oldest, now)}`}
+                      >
+                        {ago(g.oldest, now)}
+                      </span>
+                    )}
                   </span>
                 </button>
               </li>
@@ -199,6 +218,11 @@ export function InboxSheet({
               data-scroll-inside
               className={`min-h-0 flex-1 space-y-2 overflow-y-auto px-4 pt-2 pb-3 [scrollbar-color:rgba(255,255,255,.15)_transparent] [scrollbar-width:thin] ${styles.swap}`}
             >
+              {group.crew && group.answers > 0 && (
+                <li className="list-none">
+                  <SheetAnswers crewId={group.crew.id} now={now} />
+                </li>
+              )}
               {group.tasks.map((t) => (
                 <Paper
                   key={t.id}
@@ -252,7 +276,9 @@ function SheetHeader({
         <span>결재함</span>
         <span className="h-px flex-1 bg-[#7fb8ff]/15" />
         <span className="font-mono tracking-normal text-white/45 tabular-nums">
-          {group.tasks.length}건 · 가장 오래 {elapsed(group.oldest, now)}
+          {group.tasks.length
+            ? `${group.tasks.length}건 · 가장 오래 ${elapsed(group.oldest, now)}`
+            : `답해 둔 것 ${group.answers}`}
         </span>
       </div>
       <div className="flex min-w-0 items-center gap-2">
@@ -284,6 +310,14 @@ function SheetHeader({
       </p>
     </header>
   );
+}
+
+/** 그 승무원 책상의 답해 둔 것(책상을 따로 읽는다: 스냅숏에는 수만 온다) */
+function SheetAnswers({ crewId, now }: { crewId: string; now: number }) {
+  const desk = useCrewDesk(crewId).data?.desk;
+  const answers = desk?.answers ?? [];
+  if (!answers.length) return null;
+  return <AnswerList crewId={crewId} answers={answers} now={now} />;
 }
 
 /** 마지막 답변: 터미널에서 이미 읽었을 수 있어 한 줄로 접어 두고, 펼치면 서류처럼 답할 수 있다. */

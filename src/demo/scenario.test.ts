@@ -67,6 +67,7 @@ describe("데모 책상", () => {
     expect(snap.crew.find((c) => c.id === "web-shop")?.desk).toEqual({
       waiting: 4,
       doing: 2,
+      answers: 2,
     });
   });
 

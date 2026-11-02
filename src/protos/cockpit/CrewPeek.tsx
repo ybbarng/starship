@@ -22,6 +22,7 @@ export function CrewPeek({
 }) {
   const act = useAct();
   const waiting = tasks.filter((t) => !isNews(t)).length;
+  const answers = crew.desk?.answers ?? 0;
   const doing = crew.desk?.doing;
   const brief = crew.brief;
   return (
@@ -51,11 +52,13 @@ export function CrewPeek({
         <button
           type="button"
           data-peek-inbox
-          disabled={waiting === 0}
+          disabled={waiting === 0 && answers === 0}
           onClick={onInbox}
-          className={`${styles.key} ${waiting ? styles.keyPrimary : ""} rounded-md px-3 py-1.5 text-[13px] font-semibold disabled:opacity-40`}
+          className={`${styles.key} ${waiting || answers ? styles.keyPrimary : ""} rounded-md px-3 py-1.5 text-[13px] font-semibold disabled:opacity-40`}
         >
-          {waiting ? `결재함에서 보기 ${waiting}건` : "기다리는 결재 없음"}
+          {waiting || answers
+            ? `결재함에서 보기${waiting ? ` ${waiting}건` : ""}${answers ? ` · 답 ${answers}` : ""}`
+            : "기다리는 결재 없음"}
         </button>
         {crew.actions.includes("focus") && (
           <button

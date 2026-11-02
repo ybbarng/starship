@@ -94,18 +94,35 @@ export const Doing = z.object({
 });
 export type Doing = z.infer<typeof Doing>;
 
+/**
+ * 답해 둔 것: 사용자가 물어본 것에 세션이 답했는데 이어서 다른 일을 해서 답이 대화에서 지나갈 때,
+ * 질문과 답을 남겨 둔다(2026-11-02 사용자 요청). 사용자가 "읽음"을 누르면 서버가 책상에서 뺀다.
+ */
+export const Answered = z.object({
+  id: z.string().min(1),
+  /** 물어본 것 한 줄 */
+  q: z.string().min(1),
+  /** 답의 요점. 길면 줄을 바꾼다. 파일 경로(/… ~/…)는 화면이 보기·열기 단추로 바꾼다 */
+  a: z.string().min(1),
+  /** 답한 때 */
+  at: When,
+});
+export type Answered = z.infer<typeof Answered>;
+
 /** 책상 한 장. 모르는 필드는 버린다(같은 버전 안에서 필드를 더할 수 있게). */
 export const Desk = z.object({
   desk: z.literal(DESK_FORMAT),
   updatedAt: When,
   waiting: z.array(Waiting),
   doing: z.array(Doing),
+  /** 답해 둔 것(선택). 읽으면 빠진다 */
+  answers: z.array(Answered).optional(),
 });
 export type Desk = z.infer<typeof Desk>;
 
 /* ───────────── 검사 ───────────── */
 
-/** 스키마로 잡지 못하는 짜임 검사: waiting id 중복, 한 기다림 안 선택지 id 중복. */
+/** 스키마로 잡지 못하는 짜임 검사: waiting id 중복, 한 기다림 안 선택지 id 중복, 답해 둔 것 id 중복. */
 export function checkDesk(desk: Desk): string[] {
   const problems: string[] = [];
   const ids = new Set<string>();
@@ -118,6 +135,11 @@ export function checkDesk(desk: Desk): string[] {
         problems.push(`기다림 "${w.id}"에 선택지 id "${o.id}"가 겹쳐요`);
       opts.add(o.id);
     }
+  }
+  const answerIds = new Set<string>();
+  for (const a of desk.answers ?? []) {
+    if (answerIds.has(a.id)) problems.push(`답해 둔 것 id "${a.id}"가 겹쳐요`);
+    answerIds.add(a.id);
   }
   return problems;
 }
@@ -166,10 +188,20 @@ export function deskChoices(w: Waiting): string[] | undefined {
 }
 
 /** 갑판에 작게 보일 책상 요약. Crew.desk와 같다. */
-export type DeskSummary = { waiting: number; doing: number };
+export type DeskSummary = { waiting: number; doing: number; answers?: number };
 
 export function summarizeDesk(desk: Desk): DeskSummary {
-  return { waiting: desk.waiting.length, doing: desk.doing.length };
+  const answers = desk.answers?.length ?? 0;
+  return {
+    waiting: desk.waiting.length,
+    doing: desk.doing.length,
+    ...(answers ? { answers } : {}),
+  };
+}
+
+/** 답해 둔 것을 읽음으로 할 때 쓰는 열쇠(데모 상태·비서가 같은 규칙). */
+export function answerKey(crewId: string, answerId: string): string {
+  return `answer:${crewId}:${answerId}`;
 }
 
 /**

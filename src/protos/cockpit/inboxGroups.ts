@@ -18,6 +18,8 @@ export type InboxGroup = {
   oldest: number;
   /** STALE_MS 넘게 기다린 일 수 */
   stale: number;
+  /** 책상에 답해 둔 것(안 읽은 답) 수. 결재는 아니지만 놓치지 않게 목차에 둔다 */
+  answers: number;
 };
 
 /**
@@ -41,7 +43,8 @@ export function lastReplies(tasks: readonly Task[]): Map<string, Task> {
 }
 
 /**
- * 할 일을 승무원별로 묶는다. 소식(isNews)은 빼고 결재만. 묶음 순서: 가장 오래 기다린 일이 있는 승무원부터, 승무원 없는 일은 맨 뒤.
+ * 할 일을 승무원별로 묶는다. 소식(isNews)은 빼고 결재만. 묶음 순서: 가장 오래 기다린 일이 있는 승무원부터,
+ * 그다음 답해 둔 것만 있는 승무원(crew.desk.answers), 승무원 없는 일은 맨 뒤.
  * 승무원 목록에 없는 crewId도 그 id로 묶는다(이름은 id로 보인다).
  */
 export function inboxGroups(
@@ -61,6 +64,7 @@ export function inboxGroups(
         tasks: [],
         oldest: t.since,
         stale: 0,
+        answers: 0,
       };
       by.set(key, g);
     }
@@ -68,10 +72,26 @@ export function inboxGroups(
     g.oldest = Math.min(g.oldest, t.since);
     if (now - t.since > STALE_MS) g.stale++;
   }
+  // 결재는 없고 답해 둔 것만 있는 승무원도 묶음으로(결재 묶음 뒤, 새 일 앞)
+  for (const c of crewById.values()) {
+    const n = c.desk?.answers ?? 0;
+    if (!n) continue;
+    const g = by.get(c.id);
+    if (g) g.answers = n;
+    else
+      by.set(c.id, {
+        key: c.id,
+        crew: c,
+        tasks: [],
+        oldest: now,
+        stale: 0,
+        answers: n,
+      });
+  }
+  const rank = (g: InboxGroup) =>
+    g.key === LOOSE_KEY ? 2 : g.tasks.length ? 0 : 1;
   return [...by.values()].sort(
-    (a, b) =>
-      Number(a.key === LOOSE_KEY) - Number(b.key === LOOSE_KEY) ||
-      a.oldest - b.oldest,
+    (a, b) => rank(a) - rank(b) || a.oldest - b.oldest,
   );
 }
 

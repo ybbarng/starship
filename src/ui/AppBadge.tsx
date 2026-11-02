@@ -2,14 +2,17 @@
 
 // 앱으로 설치한 선실의 Dock 아이콘에 "나를 기다리는 것" 수를 띄운다(Badging API).
 // Chrome은 설치한 앱(PWA)에서만 보여 주고, 탭에서는 아무 일도 하지 않는다.
-// 숫자는 모든 화면이 함께 쓰는 5초 스냅숏의 승무원별 desk.waiting 합계다. 설계: docs/files.md.
+// 숫자는 모든 화면이 함께 쓰는 5초 스냅숏의 승무원별 desk.waiting + desk.answers(안 읽은 답) 합계다. 설계: docs/files.md.
 import { useEffect } from "react";
 import { useSnapshot } from "@/data/hooks";
 import type { Crew } from "@/protocol/v1";
 
 /** 모든 승무원 책상의 기다림 수 합계. */
 export function waitingTotal(crew: readonly Pick<Crew, "desk">[]): number {
-  return crew.reduce((sum, c) => sum + (c.desk?.waiting ?? 0), 0);
+  return crew.reduce(
+    (sum, c) => sum + (c.desk?.waiting ?? 0) + (c.desk?.answers ?? 0),
+    0,
+  );
 }
 
 type BadgeNavigator = Navigator & {

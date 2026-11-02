@@ -216,6 +216,9 @@ export function useAct() {
       }),
     crew: (crew: Crew, action: Crew["actions"][number]) =>
       mutation.mutate({ target: "crew", id: crew.id, action }),
+    /** 책상의 답해 둔 것을 읽음으로(서버가 책상에서 뺀다) */
+    answerRead: (crewId: string, id: string) =>
+      mutation.mutate({ target: "answer", crewId, id, action: "read" }),
     /** 지도 갈림길에 답하기(세션에 전하고, map.json은 세션이 고친다) */
     sign: (crewId: string, region: string, id: string, answer: string) =>
       mutation.mutate({

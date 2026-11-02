@@ -184,6 +184,8 @@ export const Crew = z.object({
       waiting: z.number().int().nonnegative(),
       /** 지금 하는 일 수 */
       doing: z.number().int().nonnegative(),
+      /** 답해 둔 것(아직 안 읽은 답) 수. 없으면 0 */
+      answers: z.number().int().nonnegative().optional(),
     })
     .optional(),
 });
@@ -334,6 +336,13 @@ export const ActionRequest = z.discriminatedUnion("target", [
    * 지도 갈림길에 선실에서 바로 답하기(docs/map.md "갈림길에 답하기"). 서버가 그 세션에 넘기고,
    * map.json은 세션이 고친다(화면이 파일을 직접 쓰지 않는다).
    */
+  /** 책상의 답해 둔 것을 읽음으로: 서버가 그 책상에서 뺀다(docs/desk.md "답해 둔 것"). */
+  z.object({
+    target: z.literal("answer"),
+    crewId: z.string().min(1),
+    id: z.string().min(1),
+    action: z.literal("read"),
+  }),
   z.object({
     target: z.literal("sign"),
     /** 승무원(프로젝트) id */

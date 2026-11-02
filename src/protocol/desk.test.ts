@@ -221,3 +221,42 @@ describe("deskAnswer", () => {
     expect(deskAnswer(undefined, "  \n ")).toBeUndefined();
   });
 });
+
+describe("답해 둔 것(answers)", () => {
+  const answer = (id: string) => ({
+    id,
+    q: "중복 쿠폰은 왜 두 장까지만 돼요?",
+    a: "결제 대행사가 할인 줄을 두 개까지만 받아요.",
+    at: "2026-11-02T17:20:00+09:00",
+  });
+  const withAnswers = (answers: unknown[]) => ({
+    ...(desk([]) as object),
+    answers,
+  });
+
+  it("없어도 되고, 있으면 그대로 읽는다", () => {
+    expect(parseDesk(desk([])).ok).toBe(true);
+    const r = parseDesk(withAnswers([answer("a1")]));
+    expect(r.ok && r.desk.answers?.[0]?.q).toBe(answer("a1").q);
+  });
+
+  it("id가 겹치면 거절한다", () => {
+    const r = parseDesk(withAnswers([answer("a1"), answer("a1")]));
+    expect(r.ok).toBe(false);
+    expect(r.problems.join()).toContain("a1");
+  });
+
+  it("요약에 답 수가 붙는다(없으면 빠진다)", () => {
+    const r = parseDesk(withAnswers([answer("a1"), answer("a2")]));
+    expect(r.ok && summarizeDesk(r.desk)).toEqual({
+      waiting: 0,
+      doing: 0,
+      answers: 2,
+    });
+    const empty = parseDesk(desk([]));
+    expect(empty.ok && summarizeDesk(empty.desk)).toEqual({
+      waiting: 0,
+      doing: 0,
+    });
+  });
+});

@@ -41,6 +41,8 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
 { "target": "task", "id": "t-1", "action": "snooze", "until": 1792903600000 }
 // 승무원에 대한 동작
 { "target": "crew", "id": "web-shop", "action": "focus" }
+// 책상의 답해 둔 것을 읽음으로(서버가 책상에서 뺀다)
+{ "target": "answer", "crewId": "web-shop", "id": "coupon-limit-why", "action": "read" }
 // 지도 갈림길에 답하기(선실 깃발·구역 판)
 { "target": "sign", "crewId": "web-shop", "region": "server-payment", "id": "receipt", "action": "answer", "answer": "대행사 영수증" }
 ```
