@@ -5,6 +5,7 @@
 // - 창은 보이지만 다른 앱에서 일할 때(창에 초점이 없음): 1초에 BLUR_FPS번. 하루 종일 켜 둘 때 대부분 이 상태다
 // - 창이 안 보일 때(document.hidden: 가려짐·최소화·다른 데스크톱): 멈춘다
 // 움직임은 모두 시간으로 정해지므로, 덜 자주 바꿔도 자리·속도는 맞고 부드러움만 준다.
+// 3D 하늘만은 따로: 보이는 동안 늘 1초에 SKY_FPS번(움직이는 중엔 매 프레임). 창밖이 움직일 거면 매끄럽게(2026-11-02 사용자).
 // 박자를 돌리는 곳은 PaceRoot.tsx(앱 전체에 하나). 설계: docs/pace.md.
 
 /** 가만히 있을 때 1초에 바꾸는 횟수 */
@@ -12,6 +13,9 @@ export const IDLE_FPS = 15;
 
 /** 창에 초점이 없을 때 1초에 바꾸는 횟수 */
 export const BLUR_FPS = 6;
+
+/** 3D 하늘을 1초에 그리는 횟수(가만히 있을 때, 초점과 상관없이). 하늘은 1초에 화면 12px쯤 흘러 30번이면 한 번에 0.4px */
+export const SKY_FPS = 30;
 
 /** 입력(누르기·휠·키) 뒤 이만큼은 매 프레임 바꾼다(ms) */
 export const INPUT_BUSY_MS = 1500;
@@ -57,6 +61,18 @@ export function nextWait(s: {
   if (s.hidden) return "stop";
   if (s.now < s.busyUntil) return "frame";
   return 1000 / (s.focused ? IDLE_FPS : BLUR_FPS);
+}
+
+/** 3D 하늘을 이번 화면 새로 고침에 그릴까. 안 보이면 안 그리고, 바쁘면 늘, 아니면 SKY_FPS에 맞춰. 2ms는 화면 새로 고침 간격의 흔들림 몫 */
+export function skyShouldDraw(s: {
+  hidden: boolean;
+  now: number;
+  last: number;
+  busyUntil: number;
+}): boolean {
+  if (s.hidden) return false;
+  if (s.now < s.busyUntil) return true;
+  return s.now - s.last >= 1000 / SKY_FPS - 2;
 }
 
 /** stepAnimations가 다루는 애니메이션 모양(브라우저의 CSSAnimation이 이 모양이다). */

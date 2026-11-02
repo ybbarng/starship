@@ -7,7 +7,9 @@ import {
   onPaceTick,
   pace,
   runPaceListeners,
+  SKY_FPS,
   type SteppedAnimation,
+  skyShouldDraw,
   stepAnimations,
 } from "./pace";
 
@@ -25,6 +27,27 @@ describe("nextWait: 다음 박자까지 기다리는 법", () => {
   it("가만히 있으면 초점이 있을 때 IDLE_FPS, 없을 때 BLUR_FPS에 맞춰 기다린다", () => {
     expect(nextWait(base)).toBe(1000 / IDLE_FPS);
     expect(nextWait({ ...base, focused: false })).toBe(1000 / BLUR_FPS);
+  });
+});
+
+describe("skyShouldDraw: 하늘은 따로 매끄럽게", () => {
+  const base = {
+    hidden: false,
+    now: 1000,
+    last: 1000 - 1000 / SKY_FPS,
+    busyUntil: 0,
+  };
+  it("보이는 동안은 SKY_FPS 간격마다 그린다(초점과 상관없이)", () => {
+    expect(skyShouldDraw(base)).toBe(true);
+    expect(skyShouldDraw({ ...base, last: 990 })).toBe(false);
+  });
+  it("움직이는 동안은 매 프레임", () => {
+    expect(skyShouldDraw({ ...base, last: 995, busyUntil: 2000 })).toBe(true);
+  });
+  it("창이 안 보이면 그리지 않는다", () => {
+    expect(skyShouldDraw({ ...base, hidden: true, busyUntil: 2000 })).toBe(
+      false,
+    );
   });
 });
 

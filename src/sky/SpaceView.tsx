@@ -6,7 +6,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import * as THREE from "three";
-import { markBusy, onPaceTick } from "@/ui/kit/pace";
+import { markBusy, pace, skyShouldDraw } from "@/ui/kit/pace";
 import {
   bvToRgb,
   compress,
@@ -150,7 +150,7 @@ export function SpaceView({
       <Canvas
         linear
         flat
-        // 그리는 빈도는 FramePacer가 앱 전체 박자에 맞춘다(가만히 있으면 덜, 안 보이면 멈춤). src/ui/kit/pace.ts.
+        // 그리는 빈도는 FramePacer가 하늘 박자에 맞춘다(보이면 30번, 움직이면 매 프레임, 안 보이면 멈춤). src/ui/kit/pace.ts.
         frameloop="demand"
         dpr={[1, 2]}
         camera={{ fov: 55, near: 0.005, far: 30000, position: [0, 2, 20] }}
@@ -2472,14 +2472,31 @@ function LabelLayer({
 // ── 그리는 빈도 ───────────────────────────────
 
 /**
- * frameloop="demand"인 Canvas를 앱 전체 박자(src/ui/kit/pace.ts)에 맞춰 그린다: 움직이는 동안은 매 프레임,
- * 가만히 있으면 1초에 IDLE_FPS번, 창이 안 보이면 멈춘다. 카메라가 움직이는 동안은 CameraRig가 markBusy를 부른다.
+ * frameloop="demand"인 Canvas를 하늘 박자(src/ui/kit/pace.ts의 skyShouldDraw)에 맞춰 그린다:
+ * 보이는 동안 1초에 SKY_FPS번, 움직이는 동안은 매 프레임, 창이 안 보이면 멈춘다(rAF가 멈춘다).
+ * CSS 애니메이션 박자(15·6번)와 따로 둔다. 창밖은 매끄럽게, 나머지는 가볍게. 카메라가 움직이면 CameraRig가 markBusy를 부른다.
  */
 function FramePacer() {
   const invalidate = useThree((s) => s.invalidate);
   useEffect(() => {
-    invalidate();
-    return onPaceTick(() => invalidate());
+    let raf = 0;
+    let last = Number.NEGATIVE_INFINITY;
+    const loop = (now: number) => {
+      raf = requestAnimationFrame(loop);
+      if (
+        skyShouldDraw({
+          hidden: document.hidden,
+          now,
+          last,
+          busyUntil: pace.busyUntil,
+        })
+      ) {
+        last = now;
+        invalidate();
+      }
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
   }, [invalidate]);
   return null;
 }
