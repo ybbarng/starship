@@ -56,6 +56,7 @@ import {
 } from "./camera";
 import styles from "./frontier.module.css";
 import { FrontierLegend } from "./Legend";
+import { planetFor } from "./planet";
 import { diffSeen, loadSeen, type Seen, saveSeen, seenOf } from "./seen";
 
 const LEGEND_SEEN = "starship.frontier.legend-seen";
@@ -582,7 +583,9 @@ export function FrontierView({
           className="pointer-events-none absolute bottom-2 left-3 max-w-[46%] rounded bg-black/60 px-2 py-0.5 text-[11.5px] leading-snug backdrop-blur-[2px]"
           title={map.goal}
         >
-          <span className="text-white/45">착륙선 목표 · </span>
+          <span className="text-white/45">
+            {planetFor(crew?.id ?? map.title).name} · 착륙선 목표 ·{" "}
+          </span>
           <span className="text-white/75">{clip(map.goal, 40)}</span>
         </div>
       )}
@@ -806,6 +809,8 @@ function Scene({
         : undefined
     : undefined;
   const animalSize = Math.max(26, Math.min(58, s * 1.55));
+  /** 프로젝트마다 다른 행성(planet.ts) */
+  const planet = planetFor(crew?.id ?? map.title);
 
   /* ── 살아 있는 지도: 지난번 본 것과 달라졌으면 걷고, 완공을 축하한다(seen.ts, alive.tsx) ── */
   const who = crew?.id ?? map.title;
@@ -1290,13 +1295,13 @@ function Scene({
     >
       <defs>
         <radialGradient id={`ground${uid}`} cx="50%" cy="0%" r="60%">
-          <stop offset="0%" stopColor="#3a2a26" />
-          <stop offset="55%" stopColor="#24191b" />
-          <stop offset="100%" stopColor="#161015" />
+          <stop offset="0%" stopColor={planet.ground[0]} />
+          <stop offset="55%" stopColor={planet.ground[1]} />
+          <stop offset="100%" stopColor={planet.ground[2]} />
         </radialGradient>
         <linearGradient id={`air${uid}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#e9a37a" stopOpacity="0.32" />
-          <stop offset="100%" stopColor="#e9a37a" stopOpacity="0" />
+          <stop offset="0%" stopColor={planet.air} stopOpacity="0.32" />
+          <stop offset="100%" stopColor={planet.air} stopOpacity="0" />
         </linearGradient>
         <pattern
           id={`soil${uid}`}
@@ -1346,7 +1351,7 @@ function Scene({
         cx={w - 220}
         cy={skyY * 0.55}
         r={Math.max(5, skyY * 0.32)}
-        fill="#c9cfdc"
+        fill={planet.moon}
         opacity="0.7"
       />
       <circle
@@ -1373,7 +1378,7 @@ function Scene({
 
       {/* 개척할 땅(옅은 칸) */}
       <g
-        stroke="rgba(255,230,210,0.07)"
+        stroke={planet.grid}
         fill="none"
         strokeWidth="1"
         clipPath={`url(#planet${uid})`}
