@@ -14,6 +14,7 @@ import {
   boundToLoopback,
   checkInput,
   checkResolved,
+  expandHome,
   fileRoots,
   hasHiddenPart,
   isInside,
@@ -63,6 +64,24 @@ beforeAll(() => {
 
 afterAll(() => {
   rmSync(base, { recursive: true, force: true });
+});
+
+describe("expandHome: ~ 경로 펼치기", () => {
+  it("~/로 시작하면 홈 아래로 펼친다", () => {
+    expect(expandHome("~/Desktop/a.png", "/Users/me")).toBe(
+      "/Users/me/Desktop/a.png",
+    );
+  });
+  it("..을 미리 풀지 않아 checkInput이 그대로 거절한다", () => {
+    const p = expandHome("~/../other/x.png", "/Users/me");
+    expect(p).toBe("/Users/me/../other/x.png");
+    expect(checkInput(p)).toBe("..은 쓸 수 없어요");
+  });
+  it("~ 아닌 것과 글이 아닌 것은 그대로", () => {
+    expect(expandHome("/a/b.md", "/Users/me")).toBe("/a/b.md");
+    expect(expandHome("~me/x.md", "/Users/me")).toBe("~me/x.md");
+    expect(expandHome(3, "/Users/me")).toBe(3);
+  });
 });
 
 describe("parseRoots", () => {

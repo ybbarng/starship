@@ -15,6 +15,8 @@ import {
   sourceLabel,
   TaskActions,
 } from "@/ui/kit";
+import { FileButtons } from "@/ui/kit/FileButtons";
+import { findPaths } from "@/ui/kit/filePaths";
 import styles from "./cockpit.module.css";
 import { type InboxGroup, LOOSE_KEY, STALE_MS } from "./inboxGroups";
 import { CrewLamp, MapBadge, sortCrew } from "./Panel";
@@ -298,6 +300,8 @@ function Paper({
     (task.detail?.length ?? 0) > 220 ||
     (task.detail?.split("\n").length ?? 0) > 4;
   const stale = now - task.since > STALE_MS;
+  // 제목·세부에 적힌 이 맥의 파일 경로는 그 자리에서 보기·열기(2026-11-02 사용자 요청)
+  const files = findPaths(`${task.title}\n${task.detail ?? ""}`);
   return (
     <li
       data-inbox-item={task.id}
@@ -343,6 +347,13 @@ function Paper({
             </button>
           )}
         </>
+      )}
+      {files.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1" data-paper-files>
+          {files.map((p) => (
+            <FileButtons key={p} path={p} />
+          ))}
+        </div>
       )}
       <TaskActions
         task={task}

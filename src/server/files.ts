@@ -124,6 +124,16 @@ export function hasHiddenPart(child: string, root: string): boolean {
   return false;
 }
 
+/**
+ * "~/a/b.md"를 홈 아래 경로로 펼친다. 세션들이 경로를 ~로 적어서 받는다(2026-11-02).
+ * path.join을 쓰지 않고 이어 붙인다. join은 ".."을 미리 풀어 버려 checkInput의 ".." 검사를 빠져나가게 한다("~/../x").
+ */
+export function expandHome(input: unknown, home = homedir()): unknown {
+  return typeof input === "string" && input.startsWith("~/")
+    ? `${home.replace(/\/+$/, "")}/${input.slice(2)}`
+    : input;
+}
+
 /** 받은 경로 글 자체를 본다: 절대 경로인가, ".." 조각이나 NUL이 없나. */
 export function checkInput(input: unknown): string | null {
   if (typeof input !== "string" || input.length === 0 || input.length > 4096)
@@ -181,6 +191,7 @@ export async function resolveFile(
   roots: string[],
   purpose: FilePurpose,
 ): Promise<FileCheck & { size?: number }> {
+  input = expandHome(input);
   const bad = checkInput(input);
   if (bad) return { ok: false, status: 400, reason: bad };
   if (roots.length === 0)
