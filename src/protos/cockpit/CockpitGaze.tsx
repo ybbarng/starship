@@ -1,7 +1,7 @@
 "use client";
 
 // 3차 시안 "조종석과 감상창". 방향: docs/prototypes/direction-round3.md, 지시서: brief-round3.md
-// 평소 = 일하는 조종석: 위쪽 넓게 트인 곡면 유리 너머로 우주가 천천히 흐르고, 아래 계기판 한가운데 지금 할 일 하나.
+// 평소 = 일하는 조종석: 위쪽 넓게 트인 곡면 유리 너머로 우주가 천천히 흐르고, 아래 계기판에 승무원별 결재함.
 // "우주 감상하기"를 누르면 창으로 몸을 기울이듯 계기판이 먼저 내려가고, 유리 테두리가 화면 바깥으로 밀려나며
 // 2차의 트인 함교(끌어서 둘러보기·속도계·행성 단추)가 된다. Esc나 "조종석으로"로 반대 순서로 돌아온다.
 // 아래로 밀면 창밖이 위쪽 띠로 줄고 2차의 네 갑판 단면이 나온다.
@@ -11,7 +11,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { useBridge } from "@/data/hooks";
-import type { Context, Crew, Task } from "@/protocol/v1";
+import type { Crew, Task } from "@/protocol/v1";
 import { CrewDetail, CrewHeader } from "@/protos/classic/CrewDetail";
 import { HailScreen } from "@/protos/open-bridge/cockpit/Hails";
 import { lightTime } from "@/protos/open-bridge/cockpit/ui";
@@ -23,7 +23,6 @@ import { useKoreaTime, useTelemetry } from "@/sky/useTelemetry";
 import { useDestination } from "@/sky/voyage";
 import { EventLayer } from "@/ui/events";
 import {
-  CONTEXT_LABEL,
   DestinationPicker,
   Modal,
   ProtoBadge,
@@ -35,8 +34,7 @@ import styles from "./cockpit.module.css";
 import { GazeLayer } from "./Gaze";
 import { GlassFrame, type GlassShape } from "./Glass";
 import { GaugeList, TaskList } from "./Lists";
-import { TaskDetail } from "./MainDisplay";
-import { CrewLamp, Dashboard, type ListKind, sortCrew } from "./Panel";
+import { Dashboard, type ListKind } from "./Panel";
 import {
   clamp01,
   lerp,
@@ -48,18 +46,16 @@ import {
   useWarnings,
 } from "./util";
 
-/** 조종석에서 유리창 아랫변(화면 비율) */
-const WINDOW_SHARE = 0.58;
+/** 조종석에서 유리창 아랫변(화면 비율). 결재함 자리를 넓히려고 0.58에서 낮춤(2026-11-02) */
+const WINDOW_SHARE = 0.5;
 /** 내부 장면에서 창밖 띠 높이(2차와 같게) */
 const BAND_SHARE = 0.3;
 /** 감상 모드로 들어가고 나오는 시간 */
 const GAZE_MS = 1500;
 
 type ModalState =
-  | { type: "more"; id: string }
   | { type: "list"; kind: ListKind }
   | { type: "crew"; id: string }
-  | { type: "bank"; context: Context }
   | { type: "nav" }
   | null;
 
@@ -101,7 +97,6 @@ export function CockpitGaze() {
   const [grid, setGrid] = useState(false);
   // 별자리 선(이름 포함). 유리창과 감상 모드가 함께 쓴다.
   const [lines, setLines] = useState(true);
-  const [drawer, setDrawer] = useState(false);
   const [modal, setModal] = useState<ModalState>(null);
 
   const hails = useMemo(
@@ -126,7 +121,6 @@ export function CockpitGaze() {
   }, []);
 
   const enterGaze = () => {
-    setDrawer(false);
     setGaze(true);
   };
   const exitGaze = () => {
@@ -137,7 +131,6 @@ export function CockpitGaze() {
   const openHail = (id?: string) => {
     const target = id ?? hails[0]?.id;
     if (!target) return;
-    setDrawer(false);
     hail.open(target);
   };
 
@@ -151,7 +144,6 @@ export function CockpitGaze() {
       if (document.querySelector('[role="dialog"]')) return;
       if (e.key === "Escape") {
         if (hail.openId) hail.close();
-        else if (drawer) setDrawer(false);
         else if (gaze) exitGaze();
       } else if ((e.key === "g" || e.key === "G" || e.key === "ㅎ") && !gaze) {
         e.preventDefault();
@@ -162,19 +154,10 @@ export function CockpitGaze() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  // 선내로 가면 서랍·화상 창을 닫는다
+  // 선내로 가면 화상 창을 닫는다
   useEffect(() => {
-    if (stage === 1) {
-      setDrawer(false);
-      hail.close();
-    }
+    if (stage === 1) hail.close();
   }, [stage, hail.close]);
-
-  // 할 일이 없어지면(치웠으면) "더 보기" 창을 닫는다
-  const moreTask = modal?.type === "more" ? taskById.get(modal.id) : undefined;
-  useEffect(() => {
-    if (modal?.type === "more" && !moreTask) setModal(null);
-  }, [modal, moreTask]);
 
   // ── 유리 모양: 조종석 → (감상) 화면 바깥 / (선내) 위쪽 띠
   const cockpitShape: GlassShape = {
@@ -337,17 +320,10 @@ export function CockpitGaze() {
           lastAt={bridge.updatedAt}
           link={bridge.link}
           now={now}
-          drawerOpen={drawer}
           push={push}
-          onDrawer={() => {
-            if (!drawer) hail.close();
-            setDrawer((d) => !d);
-          }}
-          onMore={(t) => setModal({ type: "more", id: t.id })}
           onList={(kind) => setModal({ type: "list", kind })}
           onHail={openHail}
           onCrew={(id) => setModal({ type: "crew", id })}
-          onCrewMore={(context) => setModal({ type: "bank", context })}
           onPicker={() => setModal({ type: "nav" })}
           onInterior={() => goTo(1)}
         />
@@ -422,11 +398,6 @@ export function CockpitGaze() {
       <ProtoBadge home />
 
       {/* 모달 */}
-      <Modal open={!!moreTask} onClose={close} title="지금 할 일" width={620}>
-        {moreTask && (
-          <TaskDetail task={moreTask} crewById={bridge.crewById} now={now} />
-        )}
-      </Modal>
       <Modal
         open={modal?.type === "list" && modal.kind !== "jobs"}
         onClose={close}
@@ -466,38 +437,6 @@ export function CockpitGaze() {
           />
         )}
         {modalCrew && <CabinLink crew={modalCrew} />}
-      </Modal>
-      <Modal
-        open={modal?.type === "bank"}
-        onClose={close}
-        title={
-          modal?.type === "bank"
-            ? `${CONTEXT_LABEL[modal.context]} 승무원 모두`
-            : ""
-        }
-        width={720}
-      >
-        {modal?.type === "bank" && (
-          <ul className="grid grid-cols-3 gap-1">
-            {sortCrew(
-              bridge.crew.filter((c) => c.context === modal.context),
-            ).map((c) => (
-              <li key={c.id}>
-                <button
-                  type="button"
-                  onClick={() => setModal({ type: "crew", id: c.id })}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] hover:bg-white/[0.06]"
-                >
-                  <CrewLamp status={c.status} />
-                  <span className="truncate text-white/85">{c.name}</span>
-                  <span className="ml-auto truncate text-[11px] text-white/40">
-                    {c.activity}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
       </Modal>
       <Modal
         open={modal?.type === "nav"}

@@ -317,6 +317,25 @@
       ]
     },
     {
+      "id": "cockpit-inbox",
+      "title": "조종석 결재함",
+      "status": "done",
+      "size": 2,
+      "summary": "지금 할 일 한 장 대신 승무원별로 묶어 전부 펼치고 그 자리에서 처리. 묵은 것 표시",
+      "since": "2026-11-02",
+      "found": "2026-11-02",
+      "links": [
+        {
+          "label": "cockpit-inbox.md",
+          "path": "docs/cockpit-inbox.md"
+        },
+        {
+          "label": "Inbox.tsx",
+          "path": "src/protos/cockpit/Inbox.tsx"
+        }
+      ]
+    },
+    {
       "id": "fuel",
       "title": "연료 기록",
       "status": "done",

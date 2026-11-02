@@ -1,26 +1,22 @@
 "use client";
 
-import type {
-  Context,
-  Crew,
-  CrewStatus,
-  Hail,
-  Link,
-  Task,
-} from "@/protocol/v1";
+import { useMemo, useState } from "react";
+import type { Crew, CrewStatus, Hail, Link, Task } from "@/protocol/v1";
 import { formatSpeed } from "@/sky/telemetry";
 import { useTelemetry } from "@/sky/useTelemetry";
 import { useDestination, useVoyage } from "@/sky/voyage";
-import { ago, CONTEXT_COLOR, CONTEXT_LABEL, sourceLabel, Tip } from "@/ui/kit";
+import { ago, sourceLabel, Tip } from "@/ui/kit";
 import { VERDICT_LABEL, verdictDetail } from "@/ui/link/model";
 // 계기판: 유리창 아래 짜임새 있는 판. 장식 램프 없이, 등과 단추마다 뜻이 있다.
 //   맨 위 차양(글레어실드) = 경고등 줄(등마다 글, 누르면 해당 목록)
-//   왼쪽 = 승무원 상태판(업무/개인 두 줄, 프로젝트마다 작은 등)
-//   가운데 = 주 표시창(지금 할 일 하나)
+//   왼쪽 = 승무원 목차(결재할 것이 있는 승무원부터, 나머지 승무원은 그 아래)
+//   가운데 = 결재함(고른 승무원의 기다림을 모두 펼쳐 그 자리에서 처리). Inbox.tsx
+//   (2026-11-02 "지금 할 일" 한 장과 승무원 상태판을 이 둘로 바꿈. 맥락이 같은 것끼리 처리하려고)
 //   오른쪽 = 교신 수신등·칩, 항법 소형 표시(행성 단추·더 먼 곳·이동 중 속도)
 import { FuelGauge } from "@/ui/usage/FuelGauge";
 import styles from "./cockpit.module.css";
-import { MainDisplay } from "./MainDisplay";
+import { InboxIndex, InboxSheet } from "./Inbox";
+import { inboxGroups, pickGroup } from "./inboxGroups";
 import { type Lamp, PILE_WARN, selecting, type useWarnings } from "./util";
 
 export type Warnings = ReturnType<typeof useWarnings>;
@@ -256,130 +252,6 @@ export function MapBadge({
       {m && m.forksForMe > 0 && (
         <span className="font-semibold text-[#ffd84a]">⑂{m.forksForMe}</span>
       )}
-    </span>
-  );
-}
-
-/** 한 줄(업무·개인)에 보이는 등 수: 3칸 × 3줄. 넘치면 "+n 모두" */
-const ROW_SLOTS = 9;
-
-function CrewRow({
-  context,
-  crew,
-  onCrew,
-  onMore,
-}: {
-  context: Context;
-  crew: Crew[];
-  onCrew: (id: string) => void;
-  onMore: () => void;
-}) {
-  const sorted = sortCrew(crew);
-  const overflow = sorted.length > ROW_SLOTS;
-  const shown = overflow ? sorted.slice(0, ROW_SLOTS - 1) : sorted;
-  const waiting = crew.filter((c) => c.status === "needs-you").length;
-  return (
-    <div className="min-h-0">
-      <div className="flex items-center gap-1.5 pb-1 text-[10.5px]">
-        <span
-          className="h-2.5 w-[3px] rounded-sm"
-          style={{ background: CONTEXT_COLOR[context] }}
-        />
-        <span className="font-semibold tracking-wide text-white/75">
-          {CONTEXT_LABEL[context]}
-        </span>
-        <span className="text-white/35">{crew.length}</span>
-        {waiting > 0 && (
-          <span className="ml-auto font-semibold text-[#ffd84a]">
-            나를 기다림 {waiting}
-          </span>
-        )}
-      </div>
-      {crew.length === 0 ? (
-        <p className="py-1.5 text-[11px] text-white/30">탑승한 승무원 없음</p>
-      ) : (
-        <div className="grid grid-cols-3 gap-x-1 gap-y-[3px]">
-          {shown.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              data-crew-lamp={c.id}
-              data-status={c.status}
-              title={`${c.name} · ${c.activity ?? ""}`}
-              onClick={() => onCrew(c.id)}
-              className={`relative flex min-w-0 items-center gap-1.5 rounded px-1.5 py-[3px] text-left text-[11px] transition hover:bg-white/[0.07] ${
-                c.status === "needs-you"
-                  ? "bg-[#ffcf5c]/[0.07] text-white"
-                  : c.status === "off"
-                    ? "text-white/35"
-                    : "text-white/70"
-              }`}
-            >
-              <CrewLamp status={c.status} />
-              <span className="truncate">{c.name}</span>
-              <MapBadge crew={c} compact />
-            </button>
-          ))}
-          {overflow && (
-            <button
-              type="button"
-              onClick={onMore}
-              className="rounded border border-dashed border-white/15 px-1.5 py-[3px] text-[11px] text-white/55 hover:bg-white/[0.06]"
-            >
-              +{sorted.length - shown.length} 모두
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-export function CrewBoard({
-  crew,
-  onCrew,
-  onMore,
-}: {
-  crew: Crew[];
-  onCrew: (id: string) => void;
-  onMore: (ctx: Context) => void;
-}) {
-  return (
-    <section
-      aria-label="승무원 상태판"
-      className={`${styles.bay} flex h-full min-h-0 flex-col gap-2 overflow-hidden rounded-lg px-2.5 pt-2 pb-2`}
-    >
-      <Heading title="승무원" />
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
-        <CrewRow
-          context="work"
-          crew={crew.filter((c) => c.context === "work")}
-          onCrew={onCrew}
-          onMore={() => onMore("work")}
-        />
-        <div className="h-px bg-white/[0.06]" />
-        <CrewRow
-          context="personal"
-          crew={crew.filter((c) => c.context === "personal")}
-          onCrew={onCrew}
-          onMore={() => onMore("personal")}
-        />
-      </div>
-      <div className="flex items-center gap-2.5 border-t border-white/[0.06] pt-1.5 text-[10px] text-white/35">
-        <Legend status="working" label="일함" />
-        <Legend status="needs-you" label="나를 기다림" />
-        <Legend status="idle" label="쉼" />
-        <Legend status="off" label="비움" />
-      </div>
-    </section>
-  );
-}
-
-function Legend({ status, label }: { status: CrewStatus; label: string }) {
-  return (
-    <span className="flex items-center gap-1">
-      <CrewLamp status={status} />
-      {label}
     </span>
   );
 }
@@ -627,14 +499,10 @@ export function Dashboard({
   lastAt,
   link,
   now,
-  drawerOpen,
   push,
-  onDrawer,
-  onMore,
   onList,
   onHail,
   onCrew,
-  onCrewMore,
   onPicker,
   onInterior,
 }: {
@@ -649,18 +517,19 @@ export function Dashboard({
   lastAt: number;
   link?: Link;
   now: number;
-  drawerOpen: boolean;
   push: number;
-  onDrawer: () => void;
-  onMore: (t: Task) => void;
   onList: (k: ListKind) => void;
   onHail: (id?: string) => void;
   onCrew: (id: string) => void;
-  onCrewMore: (ctx: Context) => void;
   onPicker: () => void;
   onInterior: () => void;
 }) {
-  const [task, ...rest] = tasks;
+  const groups = useMemo(
+    () => inboxGroups(tasks, crewById, now),
+    [tasks, crewById, now],
+  );
+  const [picked, setPicked] = useState<string | null>(null);
+  const group = pickGroup(groups, picked);
   return (
     <div className={`relative flex h-full flex-col ${styles.panel}`}>
       {/* 차양(글레어실드): 유리 바로 아래 둥근 턱 + 경고등 줄 */}
@@ -677,19 +546,16 @@ export function Dashboard({
           onHail={() => onHail()}
         />
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(250px,300px)_minmax(0,1fr)_minmax(270px,320px)] gap-3 px-4 pt-[26px] pb-[22px]">
-        <CrewBoard crew={crew} onCrew={onCrew} onMore={onCrewMore} />
-        <MainDisplay
-          task={task}
-          rest={rest}
-          total={tasks.length}
-          crewById={crewById}
-          crewCount={crew.length}
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(290px,350px)_minmax(0,1fr)_minmax(250px,300px)] grid-rows-[minmax(0,1fr)] gap-3 px-4 pt-[26px] pb-[22px]">
+        <InboxIndex
+          groups={groups}
+          selected={group?.key}
+          crew={crew}
           now={now}
-          drawerOpen={drawerOpen}
-          onDrawer={onDrawer}
-          onMore={onMore}
+          onSelect={setPicked}
+          onCrew={onCrew}
         />
+        <InboxSheet group={group} now={now} onCrew={onCrew} />
         <div className="flex min-h-0 flex-col gap-2">
           <HailReceiver
             hails={hails}

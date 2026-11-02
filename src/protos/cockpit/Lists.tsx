@@ -4,7 +4,7 @@
 import type { Crew, Gauge, GaugeStatus, Task } from "@/protocol/v1";
 import { ago, elapsed, KIND_LABEL, sourceLabel, TaskActions } from "@/ui/kit";
 import styles from "./cockpit.module.css";
-import { ContextTag, crewName, KEY_SMALL } from "./MainDisplay";
+import { ContextTag, crewName, KEY_SMALL } from "./parts";
 
 export function TaskList({
   tasks,
