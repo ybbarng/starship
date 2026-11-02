@@ -66,6 +66,23 @@ const DATE = new Intl.DateTimeFormat("ko-KR", {
   month: "long",
   day: "numeric",
 });
+/** 기록이 짧으면(일주일 안) 시각까지: 하루에 여러 장이어도 넘어가는 게 보이게 */
+const DATE_TIME = new Intl.DateTimeFormat("ko-KR", {
+  timeZone: "Asia/Seoul",
+  month: "numeric",
+  day: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+const WEEK = 7 * 86_400_000;
+/** "11월 1일 19:02" */
+function dateTime(at: number): string {
+  const p = Object.fromEntries(
+    DATE_TIME.formatToParts(at).map((x) => [x.type, x.value]),
+  );
+  return `${p.month}월 ${p.day}일 ${p.hour}:${p.minute}`;
+}
 
 export function ReplayBar({
   frames,
@@ -80,6 +97,8 @@ export function ReplayBar({
 }) {
   const n = frames.length;
   const f = frames[replay.k];
+  const short =
+    n >= 2 && (frames[n - 1]?.at ?? 0) - (frames[0]?.at ?? 0) < WEEK;
   return (
     <div
       data-replay-bar
@@ -112,9 +131,9 @@ export function ReplayBar({
           />
           <span
             data-replay-date
-            className="w-[86px] font-semibold text-white tabular-nums"
+            className="min-w-[86px] font-semibold whitespace-nowrap text-white tabular-nums"
           >
-            {f ? DATE.format(f.at) : ""}
+            {f ? (short ? dateTime(f.at) : DATE.format(f.at)) : ""}
             {replay.k === n - 1 ? " · 지금" : ""}
           </span>
         </>

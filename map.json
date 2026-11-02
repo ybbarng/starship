@@ -231,9 +231,9 @@
       "id": "cabin-replay",
       "title": "개척 되감기",
       "parent": "cabin",
-      "status": "building",
+      "status": "done",
       "size": 1,
-      "summary": "지도가 지나온 모습을 한 장씩. starship 쪽은 다 됨, 본부의 map/history 끝점 기다림",
+      "summary": "지도가 지나온 모습을 한 장씩. 본부 map/history로 실제 기록(7790 확인), 짧은 기록은 시각까지",
       "since": "2026-11-02",
       "found": "2026-11-02",
       "links": [
@@ -249,7 +249,7 @@
       "parent": "cabin",
       "status": "building",
       "size": 1,
-      "summary": "노란 깃발·구역 판에서 갈림길에 답하면 세션에 전함. starship 쪽은 다 됨, 본부가 target sign을 세션에 넘기기 기다림",
+      "summary": "노란 깃발·구역 판에서 갈림길에 답하면 본부가 그 세션에 전함. 실제 답 보내기는 사용자 확인 기다림",
       "since": "2026-11-02",
       "found": "2026-11-02",
       "links": [
