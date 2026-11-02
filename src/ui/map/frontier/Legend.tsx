@@ -21,6 +21,8 @@ import { corners } from "./hex";
 
 const T = 44;
 const S = 16;
+/** 화면에 보이는 그림 크기(좌표는 T로 그리고 줄여 보인다) */
+const D = 34;
 const C = { x: T / 2, y: T / 2 + 2 };
 const UID = "legend";
 const poly = (s = S) =>
@@ -63,8 +65,8 @@ function Tile({
 }) {
   return (
     <svg
-      width={T}
-      height={T}
+      width={D}
+      height={D}
       viewBox={`0 0 ${T} ${T}`}
       aria-hidden
       className="shrink-0 overflow-visible"
@@ -130,7 +132,7 @@ export function FrontierLegend({
       data-camera="legend"
       role="dialog"
       aria-label="지도 도움말"
-      className="absolute top-2 left-2 z-20 flex max-h-[calc(100%-1rem)] w-[300px] flex-col rounded-lg border border-white/15 bg-[#0a0a10]/95 text-[12.5px] shadow-[0_8px_30px_rgba(0,0,0,0.6)] backdrop-blur-sm"
+      className="absolute top-2 left-2 z-20 flex max-h-[calc(100%-1rem)] w-[540px] max-w-[calc(100%-1rem)] flex-col rounded-lg border border-white/15 bg-[#0a0a10]/95 text-[12.5px] shadow-[0_8px_30px_rgba(0,0,0,0.6)] backdrop-blur-sm"
       onPointerDown={(e) => e.stopPropagation()}
       onWheel={(e) => e.stopPropagation()}
     >
@@ -152,167 +154,175 @@ export function FrontierLegend({
           내용이 떠요.
         </p>
 
-        <H>모양</H>
-        <ul className="space-y-2">
-          <Row
-            pic={
-              <svg
-                width={T}
-                height={T}
-                viewBox={`0 0 ${T} ${T}`}
-                aria-hidden
-                className="shrink-0"
-              >
-                <Lander x={C.x} y={C.y - 2} s={14} />
-              </svg>
-            }
-            name="착륙선"
-            say="프로젝트의 목표. 왼쪽 아래 구석에 목표 글이 있어요"
-          />
-          <Row
-            pic={
-              <svg
-                width={T}
-                height={T}
-                viewBox={`0 0 ${T} ${T}`}
-                aria-hidden
-                className="shrink-0"
-              >
-                <polygon
-                  points={poly()}
-                  fill="#3a2c2a"
-                  stroke={TERRITORY_COLORS[0]}
-                  strokeWidth="2.6"
-                />
-              </svg>
-            }
-            name="지역(색 굵은 테두리)"
-            say="큰 갈래. 이름표의 '완공 2/9'는 끝난 칸 / 전체 칸"
-          />
-          <Row
-            pic={<Tile st="building" />}
-            name="땅 덩어리 · 칸"
-            say="일 하나가 땅 한 덩어리. 칸이 많을수록 큰 일"
-          />
-          <Row
-            pic={
-              <Tile st="fog">
-                <polygon
-                  points={poly(S * 0.7)}
-                  fill="none"
-                  stroke="#7ce0ff"
-                  strokeWidth="1.3"
-                  strokeDasharray="3 2.5"
-                />
-              </Tile>
-            }
-            name="하늘색 점선"
-            say="일하다 새로 찾은 땅(7일 안). 처음 계획 바깥에 붙어요"
-          />
-        </ul>
+        {/* 두 단: 왼쪽 모양·땅 상태, 오른쪽 표지·다니기 */}
+        <div className="mt-2.5 grid grid-cols-2 gap-x-5">
+          <div>
+            <H>모양</H>
+            <ul className="space-y-1.5">
+              <Row
+                pic={
+                  <svg
+                    width={D}
+                    height={D}
+                    viewBox={`0 0 ${T} ${T}`}
+                    aria-hidden
+                    className="shrink-0"
+                  >
+                    <Lander x={C.x} y={C.y - 2} s={14} />
+                  </svg>
+                }
+                name="착륙선"
+                say="프로젝트의 목표. 왼쪽 아래 구석에 목표 글이 있어요"
+              />
+              <Row
+                pic={
+                  <svg
+                    width={D}
+                    height={D}
+                    viewBox={`0 0 ${T} ${T}`}
+                    aria-hidden
+                    className="shrink-0"
+                  >
+                    <polygon
+                      points={poly()}
+                      fill="#3a2c2a"
+                      stroke={TERRITORY_COLORS[0]}
+                      strokeWidth="2.6"
+                    />
+                  </svg>
+                }
+                name="지역(색 굵은 테두리)"
+                say="큰 갈래. 이름표의 '완공 2/9'는 끝난 칸 / 전체 칸"
+              />
+              <Row
+                pic={<Tile st="building" />}
+                name="땅 덩어리 · 칸"
+                say="일 하나가 땅 한 덩어리. 칸이 많을수록 큰 일"
+              />
+              <Row
+                pic={
+                  <Tile st="fog">
+                    <polygon
+                      points={poly(S * 0.7)}
+                      fill="none"
+                      stroke="#7ce0ff"
+                      strokeWidth="1.3"
+                      strokeDasharray="3 2.5"
+                    />
+                  </Tile>
+                }
+                name="하늘색 점선"
+                say="일하다 새로 찾은 땅(7일 안). 처음 계획 바깥에 붙어요"
+              />
+            </ul>
 
-        <H>땅 모습 = 일의 상태</H>
-        <ul className="space-y-2">
-          {LANDS.map((l) => (
-            <Row
-              key={l.st}
-              pic={
-                <Tile st={l.st}>
-                  {l.st === "building" && <Rig x={C.x} y={C.y} s={S} />}
-                  {l.st === "blocked" && (
-                    <>
-                      <polygon
-                        points={poly(S * 0.8)}
-                        fill="none"
-                        stroke="#ff6b6b"
-                        strokeWidth="2"
-                        strokeDasharray="3.5 2"
+            <H>땅 모습 = 일의 상태</H>
+            <ul className="space-y-1.5">
+              {LANDS.map((l) => (
+                <Row
+                  key={l.st}
+                  pic={
+                    <Tile st={l.st}>
+                      {l.st === "building" && <Rig x={C.x} y={C.y} s={S} />}
+                      {l.st === "blocked" && (
+                        <>
+                          <polygon
+                            points={poly(S * 0.8)}
+                            fill="none"
+                            stroke="#ff6b6b"
+                            strokeWidth="2"
+                            strokeDasharray="3.5 2"
+                          />
+                          <NoEntry x={C.x} y={C.y} s={S} />
+                        </>
+                      )}
+                    </Tile>
+                  }
+                  name={l.name}
+                  say={l.say}
+                />
+              ))}
+            </ul>
+          </div>
+          <div>
+            <H>표지</H>
+            <ul className="space-y-1.5">
+              <Row
+                pic={
+                  <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center">
+                    {crew ? (
+                      <Animal
+                        kind={animalFor(crew.id)}
+                        pose={
+                          crew.status === "off" ? "stand" : poseFor(crew.status)
+                        }
+                        context={crew.context}
+                        size={28}
+                        furniture={false}
                       />
-                      <NoEntry x={C.x} y={C.y} s={S} />
-                    </>
-                  )}
-                </Tile>
-              }
-              name={l.name}
-              say={l.say}
-            />
-          ))}
-        </ul>
+                    ) : (
+                      <span className="text-[22px]">📍</span>
+                    )}
+                  </div>
+                }
+                name="승무원"
+                say="지금 일하는 땅(🐾 지금 여기)"
+              />
+              <Row
+                pic={
+                  <Tile st="plain">
+                    <MyFlag x={C.x - 4} y={C.y + 8} s={14} title="예시" />
+                  </Tile>
+                }
+                name="큰 노란 깃발"
+                say="내가 정해야 할 갈림길. ⑂ 다음 단추로 차례로 가요"
+              />
+              <Row
+                pic={
+                  <Tile st="plain">
+                    <OtherFlag x={C.x - 3} y={C.y + 6} s={16} />
+                  </Tile>
+                }
+                name="작은 회색 깃발"
+                say="다른 사람이 정할 갈림길"
+              />
+              <Row
+                pic={
+                  <Tile st="plain">
+                    <Antenna x={C.x} y={C.y + 6} s={16} waiting />
+                  </Tile>
+                }
+                name="안테나"
+                say="누군가와 주고받는 중인 교신. 전파가 움직이면 답을 기다리는 중"
+              />
+              <Row
+                pic={
+                  <Tile st="plain">
+                    <Crack x={C.x} y={C.y} s={16} />
+                  </Tile>
+                }
+                name="균열"
+                say="알려진 위험. 완공 땅에도 남아요(알고 그냥 두기로 한 문제). 땅을 누르면 내용이 보여요"
+              />
+            </ul>
 
-        <H>표지</H>
-        <ul className="space-y-2">
-          <Row
-            pic={
-              <div className="flex h-[44px] w-[44px] shrink-0 items-center justify-center">
-                {crew ? (
-                  <Animal
-                    kind={animalFor(crew.id)}
-                    pose={
-                      crew.status === "off" ? "stand" : poseFor(crew.status)
-                    }
-                    context={crew.context}
-                    size={34}
-                    furniture={false}
-                  />
-                ) : (
-                  <span className="text-[22px]">📍</span>
-                )}
-              </div>
-            }
-            name="승무원"
-            say="지금 일하는 땅(🐾 지금 여기)"
-          />
-          <Row
-            pic={
-              <Tile st="plain">
-                <MyFlag x={C.x - 4} y={C.y + 8} s={14} title="예시" />
-              </Tile>
-            }
-            name="큰 노란 깃발"
-            say="내가 정해야 할 갈림길. ⑂ 다음 단추로 차례로 가요"
-          />
-          <Row
-            pic={
-              <Tile st="plain">
-                <OtherFlag x={C.x - 3} y={C.y + 6} s={16} />
-              </Tile>
-            }
-            name="작은 회색 깃발"
-            say="다른 사람이 정할 갈림길"
-          />
-          <Row
-            pic={
-              <Tile st="plain">
-                <Antenna x={C.x} y={C.y + 6} s={16} waiting />
-              </Tile>
-            }
-            name="안테나"
-            say="누군가와 주고받는 중인 교신. 전파가 움직이면 답을 기다리는 중"
-          />
-          <Row
-            pic={
-              <Tile st="plain">
-                <Crack x={C.x} y={C.y} s={16} />
-              </Tile>
-            }
-            name="균열"
-            say="알려진 위험"
-          />
-        </ul>
-
-        <H>다니기</H>
-        <ul className="space-y-1 text-[11.5px] text-white/60">
-          <li>
-            끌어서 옮기고, 휠·두 손가락으로 확대해요. 빈 곳 두 번 누르면 그
-            자리로 확대
-          </li>
-          <li>확대할수록 이름이 더 보여요. 숨은 이름은 마우스를 올리면 떠요</li>
-          <li>
-            키: <kbd>0</kbd> 전체 · <kbd>h</kbd> 지금 여기 · <kbd>f</kbd> 다음
-            갈림길 · <kbd>Esc</kbd> 고르기 풀기
-          </li>
-          <li>아래 줄: 내가 정할 것 · 교신 · 막힘 수</li>
-        </ul>
+            <H>다니기</H>
+            <ul className="space-y-1 text-[11.5px] text-white/60">
+              <li>
+                끌어서 옮기고, 휠·두 손가락으로 확대해요. 빈 곳 두 번 누르면 그
+                자리로 확대
+              </li>
+              <li>
+                확대할수록 이름이 더 보여요. 숨은 이름은 마우스를 올리면 떠요
+              </li>
+              <li>
+                키: <kbd>0</kbd> 전체 · <kbd>h</kbd> 지금 여기 · <kbd>f</kbd>{" "}
+                다음 갈림길 · <kbd>Esc</kbd> 고르기 풀기
+              </li>
+              <li>아래 줄: 내가 정할 것 · 교신 · 막힘 수</li>
+            </ul>
+          </div>
+        </div>
       </div>
     </div>
   );

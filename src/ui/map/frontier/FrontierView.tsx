@@ -281,6 +281,9 @@ export function FrontierView({
     const el = ref.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
+      // 도움말 위에서는 도움말을 스크롤한다(지도 확대로 쓰지 않는다)
+      if (e.target instanceof Element && e.target.closest("[data-map-legend]"))
+        return;
       e.preventDefault();
       stopFlight();
       const { box: b, vp: v, s0: s } = geo.current;
