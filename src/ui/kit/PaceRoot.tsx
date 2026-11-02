@@ -64,9 +64,10 @@ export function PaceRoot() {
     };
     const tick = () => {
       clear();
+      pace.focused = document.hasFocus();
       const wait = nextWait({
         hidden: document.hidden,
-        focused: document.hasFocus(),
+        focused: pace.focused,
         now: performance.now(),
         busyUntil: pace.busyUntil,
       });

@@ -39,6 +39,7 @@ import {
   sunlightFactor,
 } from "./bodies";
 import { loadCatalog, loadFaint, type SkyCatalog } from "./catalog";
+import { deco, stepDeco } from "./deco";
 import { Hdr, useHdrEnabled } from "./Hdr";
 import { projector } from "./projector";
 import { ScaleNote } from "./ScaleNote";
@@ -150,7 +151,7 @@ export function SpaceView({
       <Canvas
         linear
         flat
-        // 그리는 빈도는 FramePacer가 하늘 박자에 맞춘다(보이면 30번, 움직이면 매 프레임, 안 보이면 멈춤). src/ui/kit/pace.ts.
+        // 그리는 빈도는 FramePacer가 하늘 박자에 맞춘다(초점 있으면 30번, 없으면 1번, 움직이면 매 프레임, 안 보이면 멈춤). src/ui/kit/pace.ts.
         frameloop="demand"
         dpr={[1, 2]}
         camera={{ fov: 55, near: 0.005, far: 30000, position: [0, 2, 20] }}
@@ -163,6 +164,7 @@ export function SpaceView({
       >
         <color attach="background" args={["#02030a"]} />
         <FramePacer />
+        <DecoClock />
         {hdr && <Hdr />}
         {catalog && (
           <>
@@ -335,10 +337,10 @@ function SkyDome({
     [],
   );
 
-  useFrame((state) => {
+  useFrame(() => {
     group.current?.position.copy(camera.position);
     const u = starMat.uniforms;
-    if (u.uTime) u.uTime.value = state.clock.elapsedTime;
+    if (u.uTime) u.uTime.value = deco.time;
     const [ox, oy, oz] = skyObserver.ly;
     (u.uObserver?.value as THREE.Vector3 | undefined)?.set(ox, oy, oz);
     if (u.uFarFade) u.uFarFade.value = farFade(skyObserver.fromSun);
@@ -895,8 +897,8 @@ function Sun({ hdr }: { hdr: boolean }) {
     g.setAttribute("aSeed", new THREE.Float32BufferAttribute([0.3], 1));
     return g;
   }, []);
-  useFrame((state) => {
-    if (mat.uniforms.uTime) mat.uniforms.uTime.value = state.clock.elapsedTime;
+  useFrame(() => {
+    if (mat.uniforms.uTime) mat.uniforms.uTime.value = deco.time;
     glow.current?.quaternion.copy(camera.quaternion);
     if (far.current)
       far.current.visible =
@@ -1038,7 +1040,7 @@ function Planet({
   const { camera, gl } = useThree();
   // 본체 반지름으로 판단한다(고리는 맨눈으로 보이지 않는다).
   const reach = body.radius;
-  useFrame((state, dt) => {
+  useFrame(() => {
     const now = Date.now();
     const [x, y, z] = bodyPosition(body, catalog.orbits, now);
     const g = group.current;
@@ -1059,7 +1061,7 @@ function Planet({
       m.quaternion.setFromRotationMatrix(basis);
       if (clouds.current) {
         clouds.current.quaternion.copy(m.quaternion);
-        clouds.current.rotateY(state.clock.elapsedTime * 0.004);
+        clouds.current.rotateY(deco.time * 0.004);
       }
     } else if (m && isMoon) {
       // 달은 늘 같은 면(텍스처 경도 0)이 지구를 본다.
@@ -1070,9 +1072,9 @@ function Planet({
       basis.makeBasis(vx, vy, vz);
       m.quaternion.setFromRotationMatrix(basis);
     } else if (m) {
-      m.rotation.y += dt * 0.03;
+      m.rotation.y += deco.dt * 0.03;
     }
-    if (mat.uniforms.uTime) mat.uniforms.uTime.value = state.clock.elapsedTime;
+    if (mat.uniforms.uTime) mat.uniforms.uTime.value = deco.time;
     if (ringMat?.uniforms.uPlanetPos)
       ringMat.uniforms.uPlanetPos.value.set(x, y, z);
   });
@@ -1292,9 +1294,9 @@ function Comet() {
     }),
     [anti],
   );
-  useFrame((state) => {
+  useFrame(() => {
     for (const m of [mats.dust, mats.ion])
-      if (m.uniforms.uTime) m.uniforms.uTime.value = state.clock.elapsedTime;
+      if (m.uniforms.uTime) m.uniforms.uTime.value = deco.time;
     coma.current?.quaternion.copy(camera.quaternion);
   });
   return (
@@ -1945,7 +1947,7 @@ function CameraRig({
       !dragging.current &&
       performance.now() - lastInteract.current > 5000
     )
-      yaw.current += dt * 0.012;
+      yaw.current += deco.dt * 0.012;
     // 목적지가 정한 기본 방향을 방위각·고도각으로 나눠, 끈 만큼 더한다.
     const baseAz = Math.atan2(p.dir.x, p.dir.z);
     const baseEl = Math.asin(THREE.MathUtils.clamp(p.dir.y, -1, 1));
@@ -2473,7 +2475,8 @@ function LabelLayer({
 
 /**
  * frameloop="demand"인 Canvas를 하늘 박자(src/ui/kit/pace.ts의 skyShouldDraw)에 맞춰 그린다:
- * 보이는 동안 1초에 SKY_FPS번, 움직이는 동안은 매 프레임, 창이 안 보이면 멈춘다(rAF가 멈춘다).
+ * 앱 창에 초점이 있으면 1초에 SKY_FPS번, 없으면(장식 움직임을 멈춘 뒤) SKY_BLUR_FPS번, 움직이는 동안은 매 프레임,
+ * 창이 안 보이면 멈춘다(rAF가 멈춘다).
  * CSS 애니메이션 박자(15·6번)와 따로 둔다. 창밖은 매끄럽게, 나머지는 가볍게. 카메라가 움직이면 CameraRig가 markBusy를 부른다.
  */
 function FramePacer() {
@@ -2486,6 +2489,7 @@ function FramePacer() {
       if (
         skyShouldDraw({
           hidden: document.hidden,
+          focused: pace.focused,
           now,
           last,
           busyUntil: pace.busyUntil,
@@ -2498,6 +2502,17 @@ function FramePacer() {
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
   }, [invalidate]);
+  return null;
+}
+
+/**
+ * 장식 시계(deco.ts)를 프레임마다 진행한다. 다른 장면보다 먼저(우선순위 -1).
+ * 초점이 없으면 장식 움직임을 1초쯤에 걸쳐 멈추고, 그동안은 매 프레임 그려 매끄럽게 멈춘다.
+ */
+function DecoClock() {
+  useFrame((_, dt) => {
+    if (stepDeco(deco, dt, pace.focused)) markBusy(200);
+  }, -1);
   return null;
 }
 
