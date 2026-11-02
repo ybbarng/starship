@@ -6,6 +6,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import * as THREE from "three";
+import { markBusy, onPaceTick } from "@/ui/kit/pace";
 import {
   bvToRgb,
   compress,
@@ -149,6 +150,8 @@ export function SpaceView({
       <Canvas
         linear
         flat
+        // 그리는 빈도는 FramePacer가 앱 전체 박자에 맞춘다(가만히 있으면 덜, 안 보이면 멈춤). src/ui/kit/pace.ts.
+        frameloop="demand"
         dpr={[1, 2]}
         camera={{ fov: 55, near: 0.005, far: 30000, position: [0, 2, 20] }}
         gl={{
@@ -159,6 +162,7 @@ export function SpaceView({
         style={{ position: "absolute", inset: 0 }}
       >
         <color attach="background" args={["#02030a"]} />
+        <FramePacer />
         {hdr && <Hdr />}
         {catalog && (
           <>
@@ -1985,6 +1989,15 @@ function CameraRig({
       look.current.lerp(p.center, follow);
       warp.current = 0;
     }
+    // 비행·끌기·미끄러짐·자리 잡기 중에는 매 프레임 그린다. 저절로 도는 것만 남으면 쉰다
+    // (그때 카메라는 목적 자리에서 기본 거리의 0.4%쯤 뒤처져 따라가므로 1%를 경계로 둔다).
+    if (
+      t0 ||
+      dragging.current ||
+      Math.abs(spin.current.yaw) + Math.abs(spin.current.pitch) > 1e-3 ||
+      camera.position.distanceTo(target) > p.dist * 0.01
+    )
+      markBusy(250);
     camera.lookAt(look.current);
     fitClipRange(camera as THREE.PerspectiveCamera, p.dist);
     updateTelemetry(dest, orbits, p, t0, dt);
@@ -2456,6 +2469,21 @@ function LabelLayer({
   return null;
 }
 
+// ── 그리는 빈도 ───────────────────────────────
+
+/**
+ * frameloop="demand"인 Canvas를 앱 전체 박자(src/ui/kit/pace.ts)에 맞춰 그린다: 움직이는 동안은 매 프레임,
+ * 가만히 있으면 1초에 IDLE_FPS번, 창이 안 보이면 멈춘다. 카메라가 움직이는 동안은 CameraRig가 markBusy를 부른다.
+ */
+function FramePacer() {
+  const invalidate = useThree((s) => s.invalidate);
+  useEffect(() => {
+    invalidate();
+    return onPaceTick(() => invalidate());
+  }, [invalidate]);
+  return null;
+}
+
 // ── 워프 줄기(2D 덧그림) ───────────────────────────────
 
 function useWarpStreaks(
@@ -2474,8 +2502,23 @@ function useWarpStreaks(
       hue: 200 + rand() * 40,
     }));
     let raf = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    /** 줄기가 남아 있나. 워프가 아닐 때는 한 번만 지우고 캔버스를 건드리지 않는다(건드리면 매번 다시 합성된다). */
+    let drawn = false;
     const draw = () => {
+      const k = warp.current ?? 0;
+      if (k < 0.01) {
+        if (drawn) {
+          ctx.setTransform(1, 0, 0, 1, 0, 0);
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          drawn = false;
+        }
+        // 워프가 아니면 1초에 10번만 살핀다. 창이 안 보이면 다시 보일 때까지 쉰다.
+        if (!document.hidden) timer = setTimeout(draw, 100);
+        return;
+      }
       raf = requestAnimationFrame(draw);
+      drawn = true;
       const w = canvas.clientWidth;
       const h = canvas.clientHeight;
       if (canvas.width !== w * devicePixelRatio) {
@@ -2484,8 +2527,6 @@ function useWarpStreaks(
       }
       ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
       ctx.clearRect(0, 0, w, h);
-      const k = warp.current ?? 0;
-      if (k < 0.01) return;
       const cx = w / 2;
       const cy = h / 2;
       const maxR = Math.hypot(w, h) / 2;
@@ -2507,8 +2548,19 @@ function useWarpStreaks(
         ctx.stroke();
       }
     };
-    raf = requestAnimationFrame(draw);
-    return () => cancelAnimationFrame(raf);
+    const onVisible = () => {
+      if (document.hidden) return;
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+      draw();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    draw();
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [ref, warp]);
 }
 

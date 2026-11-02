@@ -231,9 +231,18 @@
       "since": "2026-11-01",
       "found": "2026-11-01",
       "links": [
-        { "label": "files.md", "path": "docs/files.md" },
-        { "label": "files.ts", "path": "src/server/files.ts" },
-        { "label": "AppBadge.tsx", "path": "src/ui/AppBadge.tsx" }
+        {
+          "label": "files.md",
+          "path": "docs/files.md"
+        },
+        {
+          "label": "files.ts",
+          "path": "src/server/files.ts"
+        },
+        {
+          "label": "AppBadge.tsx",
+          "path": "src/ui/AppBadge.tsx"
+        }
       ],
       "signs": [
         {
@@ -287,6 +296,25 @@
       "summary": "인터넷은 되는데 VPN만 안 되는 경우를 한눈에. 키 남은 날·라우터 수",
       "since": "2026-11-01",
       "found": "2026-11-01"
+    },
+    {
+      "id": "pace",
+      "title": "하루 종일 켜 둬도 가볍게",
+      "status": "done",
+      "size": 1,
+      "summary": "하늘·CSS·SMIL 애니메이션이 한 박자에: 움직일 때 60, 보고 있을 때 15, 다른 앱에서 일할 때 6, 안 보이면 0",
+      "since": "2026-11-02",
+      "found": "2026-11-02",
+      "links": [
+        {
+          "label": "pace.md",
+          "path": "docs/pace.md"
+        },
+        {
+          "label": "pace.ts",
+          "path": "src/ui/kit/pace.ts"
+        }
+      ]
     },
     {
       "id": "fuel",
