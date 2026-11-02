@@ -33,6 +33,7 @@ import { LinkHud } from "@/ui/link/LinkHud";
 import styles from "./cockpit.module.css";
 import { GazeLayer } from "./Gaze";
 import { GlassFrame, type GlassShape } from "./Glass";
+import { isNews } from "./inboxGroups";
 import { GaugeList, TaskList } from "./Lists";
 import { Dashboard, type ListKind } from "./Panel";
 import {
@@ -109,7 +110,12 @@ export function CockpitGaze() {
   );
   const hail = useHailScreen(hails);
   const currentHail = hails.find((x) => x.id === hail.openId);
-  const warnings = useWarnings(bridge.tasks, bridge.gauges, hails, now);
+  // 경고등은 결재만 센다(마지막 답변은 소식, inboxGroups.ts isNews)
+  const decisions = useMemo(
+    () => bridge.tasks.filter((t) => !isNews(t)),
+    [bridge.tasks],
+  );
+  const warnings = useWarnings(decisions, bridge.gauges, hails, now);
 
   // ?view=gaze 로 열면 감상 모드에서 시작
   // biome-ignore lint/correctness/useExhaustiveDependencies: 처음 한 번만

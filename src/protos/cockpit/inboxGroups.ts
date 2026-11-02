@@ -21,7 +21,27 @@ export type InboxGroup = {
 };
 
 /**
- * 할 일을 승무원별로 묶는다. 묶음 순서: 가장 오래 기다린 일이 있는 승무원부터, 승무원 없는 일은 맨 뒤.
+ * 결재가 아닌 소식: 세션이 차례를 마칠 때마다 본부가 마지막 답변으로 만드는 것(reply).
+ * 사용자가 그 세션에 다음 말을 입력해야 풀려서, 터미널에서 읽고 둔 대화가 결재처럼 남았다(2026-11-02 사용자 지적).
+ * 진짜 기다림은 세션이 책상에 적는다.
+ */
+export function isNews(t: Task): boolean {
+  return t.kind === "reply";
+}
+
+/** 승무원마다 마지막 답변(소식) 하나. 결재 서류 맨 아래에 접어 둔다. */
+export function lastReplies(tasks: readonly Task[]): Map<string, Task> {
+  const by = new Map<string, Task>();
+  for (const t of tasks) {
+    if (!isNews(t) || !t.crewId) continue;
+    const prev = by.get(t.crewId);
+    if (!prev || t.since > prev.since) by.set(t.crewId, t);
+  }
+  return by;
+}
+
+/**
+ * 할 일을 승무원별로 묶는다. 소식(isNews)은 빼고 결재만. 묶음 순서: 가장 오래 기다린 일이 있는 승무원부터, 승무원 없는 일은 맨 뒤.
  * 승무원 목록에 없는 crewId도 그 id로 묶는다(이름은 id로 보인다).
  */
 export function inboxGroups(
@@ -31,6 +51,7 @@ export function inboxGroups(
 ): InboxGroup[] {
   const by = new Map<string, InboxGroup>();
   for (const t of tasks) {
+    if (isNews(t)) continue;
     const key = t.crewId ?? LOOSE_KEY;
     let g = by.get(key);
     if (!g) {

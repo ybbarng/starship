@@ -175,10 +175,13 @@ export function InboxIndex({
 
 export function InboxSheet({
   group,
+  reply,
   now,
   onCrew,
 }: {
   group: InboxGroup | undefined;
+  /** 이 승무원의 마지막 답변(소식). 결재가 아니라 맨 아래에 접어 둔다. */
+  reply?: Task;
   now: number;
   onCrew: (id: string) => void;
 }) {
@@ -205,6 +208,7 @@ export function InboxSheet({
                   showContext={group.key === LOOSE_KEY}
                 />
               ))}
+              {reply && <ReplyNote key={reply.id} task={reply} now={now} />}
             </ul>
           </>
         ) : (
@@ -279,6 +283,26 @@ function SheetHeader({
         {about}
       </p>
     </header>
+  );
+}
+
+/** 마지막 답변: 터미널에서 이미 읽었을 수 있어 한 줄로 접어 두고, 펼치면 서류처럼 답할 수 있다. */
+function ReplyNote({ task, now }: { task: Task; now: number }) {
+  const [open, setOpen] = useState(false);
+  if (open)
+    return <Paper task={task} now={now} showFrom={false} showContext={false} />;
+  return (
+    <li data-inbox-reply={task.id}>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[11.5px] text-white/40 hover:bg-white/[0.05] hover:text-white/65"
+      >
+        <span className="shrink-0">마지막 답변 · {ago(task.since, now)}</span>
+        <span className="min-w-0 flex-1 truncate">{task.title}</span>
+        <span className="shrink-0 text-[#7fb8ff]/70">펼치기</span>
+      </button>
+    </li>
   );
 }
 

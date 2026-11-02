@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { Crew, Task } from "@/protocol/v1";
-import { inboxGroups, LOOSE_KEY, pickGroup, STALE_MS } from "./inboxGroups";
+import {
+  inboxGroups,
+  LOOSE_KEY,
+  lastReplies,
+  pickGroup,
+  STALE_MS,
+} from "./inboxGroups";
 
 const NOW = Date.parse("2026-11-02T11:00:00+09:00");
 const H = 3600_000;
@@ -93,6 +99,44 @@ describe("inboxGroups: 승무원별로 묶기", () => {
     const [g] = inboxGroups([task("x", "ghost", 1)], crewById, NOW);
     expect(g?.key).toBe("ghost");
     expect(g?.crew).toBeUndefined();
+  });
+});
+
+describe("마지막 답변(reply)은 결재가 아닌 소식", () => {
+  const crewById = new Map(["web-shop", "billing"].map((id) => [id, crew(id)]));
+  /** 본부가 차례 끝마다 만드는 모양: id는 이벤트 uuid, 동작에 answer */
+  const reply = (id: string, crewId: string, hoursAgo: number) =>
+    task(id, undefined, hoursAgo, {
+      id: `0b6f${id}-7c8f-4d89-9a3e-3d524ba13f0c`,
+      kind: "reply",
+      source: { kind: "session", service: "Claude Code" },
+      crewId,
+      from: crewId,
+      actions: ["focus", "answer", "snooze", "dismiss"],
+    });
+
+  it("묶음·건수에 넣지 않는다. 답변만 있는 승무원은 묶음이 없다", () => {
+    const groups = inboxGroups(
+      [
+        reply("1", "billing", 0.5),
+        task("a", "web-shop", 1),
+        reply("2", "web-shop", 0.2),
+      ],
+      crewById,
+      NOW,
+    );
+    expect(groups.map((g) => g.key)).toEqual(["web-shop"]);
+    expect(groups[0]?.tasks.map((t) => t.kind)).toEqual(["question"]);
+  });
+
+  it("승무원마다 가장 최근 답변 하나만 남긴다", () => {
+    const r = lastReplies([
+      reply("old", "billing", 3),
+      reply("new", "billing", 0.1),
+      task("a", "web-shop", 1),
+    ]);
+    expect([...r.keys()]).toEqual(["billing"]);
+    expect(r.get("billing")?.since).toBe(NOW - 0.1 * H);
   });
 });
 

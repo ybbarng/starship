@@ -16,7 +16,7 @@ import { VERDICT_LABEL, verdictDetail } from "@/ui/link/model";
 import { FuelGauge } from "@/ui/usage/FuelGauge";
 import styles from "./cockpit.module.css";
 import { InboxIndex, InboxSheet } from "./Inbox";
-import { inboxGroups, pickGroup } from "./inboxGroups";
+import { inboxGroups, isNews, lastReplies, pickGroup } from "./inboxGroups";
 import { type Lamp, PILE_WARN, selecting, type useWarnings } from "./util";
 
 export type Warnings = ReturnType<typeof useWarnings>;
@@ -528,6 +528,8 @@ export function Dashboard({
     () => inboxGroups(tasks, crewById, now),
     [tasks, crewById, now],
   );
+  const replies = useMemo(() => lastReplies(tasks), [tasks]);
+  const decisions = useMemo(() => tasks.filter((t) => !isNews(t)), [tasks]);
   const [picked, setPicked] = useState<string | null>(null);
   const group = pickGroup(groups, picked);
   return (
@@ -535,7 +537,7 @@ export function Dashboard({
       {/* 차양(글레어실드): 유리 바로 아래 둥근 턱 + 경고등 줄 */}
       <div className="relative z-10 -mt-[2px] flex h-[38px] shrink-0 items-center justify-center rounded-t-[22px] border-t border-white/[0.13] bg-[linear-gradient(180deg,#1b212c,#10141b)] px-5 shadow-[0_-8px_22px_rgba(0,0,0,0.55),0_4px_10px_rgba(0,0,0,0.5)]">
         <Annunciators
-          tasks={tasks}
+          tasks={decisions}
           hails={hails}
           warnings={warnings}
           connected={connected}
@@ -555,7 +557,12 @@ export function Dashboard({
           onSelect={setPicked}
           onCrew={onCrew}
         />
-        <InboxSheet group={group} now={now} onCrew={onCrew} />
+        <InboxSheet
+          group={group}
+          reply={group ? replies.get(group.key) : undefined}
+          now={now}
+          onCrew={onCrew}
+        />
         <div className="flex min-h-0 flex-col gap-2">
           <HailReceiver
             hails={hails}
