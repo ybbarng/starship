@@ -204,6 +204,16 @@ export const CrewMapResponse = z.object({
 export type CrewMapResponse = z.infer<typeof CrewMapResponse>;
 
 /**
+ * GET {base}/v1/crew/{id}/map/history 응답: 지도가 지나온 모습, 오래된 것부터(40장 안).
+ * 서버가 주는 map은 검사 전이라 unknown이고, Starship이 장마다 검사해 걸린 장은 뺀다(docs/protocol.md).
+ */
+export const CrewMapHistoryResponse = z.object({
+  frames: z.array(z.object({ at: Millis, map: ProjectMap })),
+});
+export type CrewMapHistoryResponse = z.infer<typeof CrewMapHistoryResponse>;
+export type MapFrame = CrewMapHistoryResponse["frames"][number];
+
+/**
  * GET {base}/v1/crew/{id}/desk 응답. 책상 형식은 ./desk.ts(starship-desk/1).
  * 모양은 지도 응답과 같다: desk가 null이면 책상이 아직 없고, problems는 형식 검사에 걸린 것이다.
  * 기다림 하나하나는 Task로도 나온다(id는 desk:<crewId>:<waitId>). 답은 그 Task의 answer 동작으로 보낸다.

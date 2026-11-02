@@ -212,6 +212,38 @@
       "since": "2026-10-29"
     },
     {
+      "id": "cabin-alive",
+      "title": "살아 있는 지도",
+      "parent": "cabin",
+      "status": "done",
+      "size": 2,
+      "summary": "승무원 걷기·완공 폭죽·말풍선, 프로젝트마다 다른 행성, 날씨와 낮밤, 완공 땅 균열은 집 밑",
+      "since": "2026-11-02",
+      "found": "2026-11-02",
+      "links": [
+        {
+          "label": "frontier.md",
+          "path": "docs/frontier.md"
+        }
+      ]
+    },
+    {
+      "id": "cabin-replay",
+      "title": "개척 되감기",
+      "parent": "cabin",
+      "status": "building",
+      "size": 1,
+      "summary": "지도가 지나온 모습을 한 장씩. starship 쪽은 다 됨, 본부의 map/history 끝점 기다림",
+      "since": "2026-11-02",
+      "found": "2026-11-02",
+      "links": [
+        {
+          "label": "protocol.md",
+          "path": "docs/protocol.md"
+        }
+      ]
+    },
+    {
       "id": "cabin-desk",
       "title": "책상",
       "parent": "cabin",

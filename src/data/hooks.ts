@@ -8,6 +8,7 @@ import {
   type Crew,
   type CrewDeskResponse,
   CrewDeskResponse as CrewDeskResponseSchema,
+  CrewMapHistoryResponse,
   type CrewMapResponse,
   CrewMapResponse as CrewMapResponseSchema,
   type Snapshot,
@@ -78,6 +79,26 @@ export function useCrewMap(crewId: string) {
     queryKey: ["crew-map", crewId],
     queryFn: () => fetchCrewMap(crewId),
     refetchInterval: 30_000,
+  });
+}
+
+/** 지도가 지나온 모습(되감기). 단추를 누를 때만 읽고 다시 읽지 않는다. */
+export function useCrewMapHistory(
+  crewId: string | undefined,
+  enabled: boolean,
+) {
+  return useQuery({
+    queryKey: ["crew-map-history", crewId],
+    queryFn: async (): Promise<CrewMapHistoryResponse> => {
+      const res = await fetch(
+        `/api/v1/crew/${encodeURIComponent(crewId ?? "")}/map/history`,
+        { cache: "no-store" },
+      );
+      if (!res.ok) throw new Error(`map history ${res.status}`);
+      return CrewMapHistoryResponse.parse(await res.json());
+    },
+    enabled: enabled && !!crewId,
+    staleTime: 5 * 60_000,
   });
 }
 

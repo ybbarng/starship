@@ -14,6 +14,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useCrewMapHistory } from "@/data/hooks";
 import {
   droppedIds,
   isForkForMe,
@@ -57,7 +58,15 @@ import {
 import styles from "./frontier.module.css";
 import { FrontierLegend } from "./Legend";
 import { planetFor } from "./planet";
-import { diffSeen, loadSeen, type Seen, saveSeen, seenOf } from "./seen";
+import { ReplayBar, stepMs, useReplay } from "./replay";
+import {
+  diffSeen,
+  loadSeen,
+  type Seen,
+  type SeenDiff,
+  saveSeen,
+  seenOf,
+} from "./seen";
 import { type Weather, weatherOf } from "./weather";
 
 const LEGEND_SEEN = "starship.frontier.legend-seen";
@@ -191,6 +200,15 @@ export function FrontierView({
 
   const layout = useMemo(() => layoutFrontier(map), [map]);
   const dropped = useMemo(() => droppedIds(map), [map]);
+  /* ── 되감기: 지나온 지도를 한 장씩(replay.tsx). 카메라 맞춤은 지금 지도 기준 그대로 ── */
+  const [replayOpen, setReplayOpen] = useState(false);
+  const history = useCrewMapHistory(crew?.id, replayOpen);
+  const frames = history.data?.frames ?? [];
+  const replay = useReplay(frames, replayOpen);
+  const replaying = replayOpen && frames.length >= 2;
+  const shownMap = replaying ? (frames[replay.k]?.map ?? map) : map;
+  const shownLayout = useMemo(() => layoutFrontier(shownMap), [shownMap]);
+  const shownDropped = useMemo(() => droppedIds(shownMap), [shownMap]);
   // 숨긴 칸까지 넣어 맞춘다. "버린 구역 보기"를 껐다 켜도 크기가 그대로다
   const box = useMemo<Box>(
     () => boxOf(layout.leaves.flatMap((l) => l.cells.map((c) => toPixel(c)))),
@@ -444,6 +462,7 @@ export function FrontierView({
     else if (k === "?") setLegend((v) => !v);
     else if (k === "Escape") {
       if (legend) setLegend(false);
+      else if (replayOpen) setReplayOpen(false);
       else if (selected) onSelect(selected);
     } else if (k.startsWith("Arrow")) {
       const dx =
@@ -513,10 +532,14 @@ export function FrontierView({
           stage={stageFor(s, cam.zoom)}
           limb={limb}
           uid={uid}
-          map={map}
+          map={shownMap}
           crew={crew}
-          layout={layout}
-          dropped={dropped}
+          layout={shownLayout}
+          dropped={shownDropped}
+          replay={replaying}
+          walkMs={
+            replaying ? Math.min(WALK_MS, stepMs(frames.length) * 0.9) : WALK_MS
+          }
           selected={selected}
           hover={hover}
           setHover={setHover}
@@ -559,6 +582,16 @@ export function FrontierView({
             ? 도움말
           </CamButton>
         </div>
+        {crew && (
+          <CamButton
+            name="replay"
+            title="개척 되감기: 지도가 지나온 모습"
+            boxed
+            onClick={() => setReplayOpen((v) => !v)}
+          >
+            ⏪ 되감기
+          </CamButton>
+        )}
         {map.here && visible(map.here) && (
           <CamButton name="here" title="지금 여기로 (h)" boxed onClick={goHere}>
             🐾 지금 여기
@@ -580,6 +613,14 @@ export function FrontierView({
         <FrontierLegend crew={crew} onClose={() => setLegend(false)} />
       )}
       <WeatherTag weather={weatherOf(crew)} />
+      {replayOpen && (
+        <ReplayBar
+          frames={frames}
+          replay={replay}
+          loading={history.isLoading}
+          onClose={() => setReplayOpen(false)}
+        />
+      )}
 
       {map.goal && (
         <div
@@ -683,6 +724,8 @@ function Scene({
   onVisit,
   showDropped,
   now,
+  replay = false,
+  walkMs = WALK_MS,
 }: {
   w: number;
   h: number;
@@ -707,6 +750,10 @@ function Scene({
   onVisit: (id: string) => void;
   showDropped: boolean;
   now: number;
+  /** 되감기 중: 바뀐 것은 보여 주되 브라우저에 기억하지 않는다 */
+  replay?: boolean;
+  /** 승무원이 걷는 시간(되감기 중에는 장 사이보다 짧게) */
+  walkMs?: number;
 }) {
   const visible = (id: string) => showDropped || !dropped.has(id);
   const byId = new Map(map.regions.map((r) => [r.id, r]));
@@ -848,16 +895,25 @@ function Scene({
   const [parties, setParties] = useState<{ id: string; t0: number }[]>([]);
   const seenRef = useRef<Seen | undefined>(undefined);
   const seenLoaded = useRef<string | null>(null);
+  const replayPrev = useRef<Seen | undefined>(undefined);
   // 지도가 새로 올 때만 비교한다(카메라가 움직일 때는 아니다). 화면 자리는 이번 그림의 값을 쓴다.
   // biome-ignore lint/correctness/useExhaustiveDependencies: 지도·승무원이 바뀔 때만
   useEffect(() => {
-    if (seenLoaded.current !== who) {
-      seenRef.current = loadSeen(who);
-      seenLoaded.current = who;
+    let diff: SeenDiff;
+    if (replay) {
+      // 되감기: 앞 장과 비교만 한다(기억은 지금 지도 기준 그대로 둔다)
+      diff = diffSeen(replayPrev.current, map);
+      replayPrev.current = seenOf(map);
+    } else {
+      replayPrev.current = undefined;
+      if (seenLoaded.current !== who) {
+        seenRef.current = loadSeen(who);
+        seenLoaded.current = who;
+      }
+      diff = diffSeen(seenRef.current, map);
+      seenRef.current = seenOf(map);
+      saveSeen(who, seenRef.current);
     }
-    const diff = diffSeen(seenRef.current, map);
-    seenRef.current = seenOf(map);
-    saveSeen(who, seenRef.current);
     if (reducedMotion()) return;
     const t0 = performance.now();
     const fromP = diff.walkFrom
@@ -871,9 +927,9 @@ function Scene({
   }, [map, who]);
   useEffect(() => {
     if (!walk) return;
-    const t = setTimeout(() => setWalk(null), WALK_MS + 100);
+    const t = setTimeout(() => setWalk(null), walkMs + 100);
     return () => clearTimeout(t);
-  }, [walk]);
+  }, [walk, walkMs]);
   useEffect(() => {
     if (!parties.length) return;
     const t = setTimeout(() => setParties([]), PARTY_MS + 100);
@@ -1719,6 +1775,7 @@ function Scene({
           from={walk.from}
           to={walk.to}
           t0={walk.t0}
+          ms={walkMs}
           ox={ox}
           oy={oy}
           s={s}

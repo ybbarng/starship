@@ -22,6 +22,7 @@ export function Walker({
   from,
   to,
   t0,
+  ms = WALK_MS,
   ox,
   oy,
   s,
@@ -32,6 +33,8 @@ export function Walker({
   from: P;
   to: P;
   t0: number;
+  /** 걷는 시간 */
+  ms?: number;
   ox: number;
   oy: number;
   s: number;
@@ -42,14 +45,14 @@ export function Walker({
 }) {
   const [now, setNow] = useState(() => performance.now());
   useEffect(() => {
-    markBusy(WALK_MS + 200);
+    markBusy(ms + 200);
     let id = requestAnimationFrame(function step(t) {
       setNow(t);
-      if (t - t0 < WALK_MS) id = requestAnimationFrame(step);
+      if (t - t0 < ms) id = requestAnimationFrame(step);
     });
     return () => cancelAnimationFrame(id);
-  }, [t0]);
-  const k = Math.min(1, Math.max(0, (now - t0) / WALK_MS));
+  }, [t0, ms]);
+  const k = Math.min(1, Math.max(0, (now - t0) / ms));
   const e = ease(k);
   const x = ox + (from.x + (to.x - from.x) * e) * s;
   const y = oy + (from.y + (to.y - from.y) * e) * s;

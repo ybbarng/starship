@@ -8,6 +8,7 @@ import {
   DEMO_BIG_MAP_CREW,
   DEMO_MAP_CREW,
 } from "@/demo/map";
+import { demoMapHistory } from "@/demo/mapHistory";
 import {
   buildSnapshot,
   createDemoState,
@@ -21,6 +22,7 @@ import {
   type ActionRequest,
   ActionResult,
   CrewDeskResponse,
+  type CrewMapHistoryResponse,
   CrewMapResponse,
   Snapshot,
 } from "@/protocol/v1";
@@ -100,6 +102,39 @@ export async function getCrewMap(
         problems: [...(body.problems ?? []), ...parsed.problems],
       };
 }
+
+/**
+ * 승무원 하나의 지도가 지나온 모습(되감기). 서버 연결 모드는 {base}/v1/crew/{id}/map/history 를 중계하고,
+ * 장마다 지도를 검사해 걸린 장은 뺀다. 서버가 이 끝점을 모르면(404) 빈 기록이다.
+ */
+export async function getCrewMapHistory(
+  crewId: string,
+  now = Date.now(),
+): Promise<CrewMapHistoryResponse> {
+  const info = sourceInfo();
+  if (info.mode === "demo") {
+    if (crewId === DEMO_BIG_MAP_CREW)
+      return { frames: demoMapHistory(buildBigDemoMap(now), now) };
+    if (crewId !== DEMO_MAP_CREW) return { frames: [] };
+    return { frames: demoMapHistory(buildDemoMap(now), now) };
+  }
+  const res = await fetch(
+    `${info.base}/v1/crew/${encodeURIComponent(crewId)}/map/history`,
+    { cache: "no-store" },
+  );
+  if (res.status === 404) return { frames: [] };
+  if (!res.ok) throw new Error(`map history ${res.status}`);
+  const body = HistoryEnvelope.parse(await res.json());
+  const frames = body.frames.flatMap((f) => {
+    const parsed = parseMap(f.map);
+    return parsed.ok ? [{ at: f.at, map: parsed.map }] : [];
+  });
+  return { frames };
+}
+
+const HistoryEnvelope = z.object({
+  frames: z.array(z.object({ at: z.number(), map: z.unknown() })),
+});
 
 /** 지도 응답에서 map만 아직 검사하지 않은 껍데기. */
 const MapEnvelope = CrewMapResponse.extend({ map: z.unknown() });
