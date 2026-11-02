@@ -386,7 +386,9 @@ export function CockpitGaze() {
           opacity: p,
           transform: `translateY(${(1 - p) * 40}px)`,
           pointerEvents: stage === 1 ? "auto" : "none",
-          visibility: p < 0.02 ? "hidden" : "visible",
+          // 안 보일 때는 아예 뺀다. visibility: hidden이면 그리지만 않을 뿐 캐릭터 애니메이션 100여 개가
+          // 계속 돌아 스타일 계산을 한다(2026-11-02 사용자 지적). 상태는 남고, 다시 보이면 애니메이션이 새로 시작한다.
+          display: p < 0.02 ? "none" : undefined,
         }}
       >
         <Interior active={stage === 1} onCockpit={() => goTo(0)} />
