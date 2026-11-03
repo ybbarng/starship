@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { DEMO_MAP_CREW } from "@/demo/map";
+import { buildDemoMap, DEMO_MAP_CREW } from "@/demo/map";
+import { demoMapHistory } from "@/demo/mapHistory";
 import { PROTOCOL } from "@/protocol/v1";
 import {
   demoSeatCount,
@@ -398,6 +399,23 @@ describe("데모 모드", () => {
       (await getSnapshot("default", seat)).tasks.some((t) => t.id === first.id);
     expect(await has("/keep")).toBe(false); // 치운 상태가 남아 있다
     expect(await has("/gone")).toBe(true); // 버려져 처음 상태로 다시 생겼다
+  });
+
+  it("지도 되감기도 그 자리의 데모 시작(startedAt) 기준이라 지도와 맞고, 시간이 지나도 같다", async () => {
+    const seat = "/seat-history";
+    const { mapAt } = await getCrewMap(DEMO_MAP_CREW, Date.now(), seat);
+    // 데모 지도의 mapAt은 startedAt - 2시간(getCrewMap)
+    const startedAt = (mapAt ?? 0) + 2 * 3_600_000;
+    const want = demoMapHistory(buildDemoMap(startedAt), startedAt);
+    const first = await getCrewMapHistory(DEMO_MAP_CREW, seat);
+    expect(first.frames).toEqual(want);
+    vi.useFakeTimers({ now: startedAt + 3 * 3_600_000 });
+    try {
+      const later = await getCrewMapHistory(DEMO_MAP_CREW, seat);
+      expect(later.frames).toEqual(want);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("아주 긴 seat는 200자로 잘라 같은 자리로 본다", async () => {

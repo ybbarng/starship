@@ -162,14 +162,16 @@ function withProblems<T extends { problems?: string[] }>(
  */
 export async function getCrewMapHistory(
   crewId: string,
-  now = Date.now(),
+  seat = "default",
 ): Promise<CrewMapHistoryResponse> {
   const info = sourceInfo();
   if (info.mode === "demo") {
+    // 지도(getCrewMap)와 같이 그 자리의 데모 시작 기준. 전에는 지금 시각으로 만들어 되감기 끝이 지도와 어긋났다(2026-11-03)
+    const { startedAt } = demoState(seat);
     if (crewId === DEMO_BIG_MAP_CREW)
-      return { frames: demoMapHistory(buildBigDemoMap(now), now) };
+      return { frames: demoMapHistory(buildBigDemoMap(startedAt), startedAt) };
     if (crewId !== DEMO_MAP_CREW) return { frames: [] };
-    return { frames: demoMapHistory(buildDemoMap(now), now) };
+    return { frames: demoMapHistory(buildDemoMap(startedAt), startedAt) };
   }
   const res = await fetchUpstream(
     `${info.base}/v1/crew/${encodeURIComponent(crewId)}/map/history`,

@@ -98,7 +98,8 @@ export function useCrewMapHistory(
     queryKey: ["crew-map-history", crewId],
     queryFn: async (): Promise<CrewMapHistoryResponse> => {
       const res = await fetch(
-        `/api/v1/crew/${encodeURIComponent(crewId ?? "")}/map/history`,
+        // 데모는 자리(seat)마다 시작 시각이 달라 지도와 같은 자리를 넘긴다
+        `/api/v1/crew/${encodeURIComponent(crewId ?? "")}/map/history${scenarioParam()}`,
         { cache: "no-store" },
       );
       if (!res.ok) throw new Error(`map history ${res.status}`);
