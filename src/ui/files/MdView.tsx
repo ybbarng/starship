@@ -5,12 +5,15 @@
 // 보안: md 속 HTML은 그리지 않는다(rehype-raw를 쓰지 않아 글자로만 나온다).
 // 위험한 주소(javascript: 등)는 react-markdown 기본 urlTransform이 빈 값으로 바꾼다.
 // 그림은 불러오지 않고 대체 글로 둔다: 로컬 경로 그림이 /api/files 검사를 우회하지 않고, 바깥 주소로 요청도 나가지 않게.
-import { type ReactNode, useEffect, useState } from "react";
+// 상대 경로 링크는 지금 파일의 폴더 기준으로 풀어 같은 탭에서 연다(md는 이 화면, 그 밖은 /api/files). 검사는 서버가 한다.
+// 제목에는 GitHub식 id를 붙여 `#절` 링크가 그 제목으로 간다.
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import Markdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useOpenFile } from "@/ui/kit/FileButtons";
-import { baseName } from "@/ui/kit/filePaths";
+import { baseName, fileViewHref } from "@/ui/kit/filePaths";
 import { Toasts } from "@/ui/kit/Toasts";
+import { createSlugger, resolveMdLink } from "./mdLinks";
 import { MAX_MD_RENDER_BYTES, mdTooBig, megabytes } from "./mdSize";
 
 type Load =
@@ -35,35 +38,95 @@ function ExternalLink({
   );
 }
 
-const COMPONENTS: Components = {
-  a: ({ href, children }) => {
-    if (href?.startsWith("#")) return <a href={href}>{children}</a>;
-    if (href && WEB.test(href))
-      return <ExternalLink href={href}>{children}</ExternalLink>;
-    // 상대 경로·막힌 주소는 링크로 두지 않는다
-    return (
-      <span data-md-nolink title={href || undefined}>
-        {children}
-      </span>
-    );
-  },
-  img: ({ src, alt }) => {
-    const s = typeof src === "string" ? src : "";
-    const label = `그림${alt ? `: ${alt}` : ""}`;
-    return /^https?:/i.test(s) ? (
-      <ExternalLink href={s}>[{label} ↗]</ExternalLink>
-    ) : (
-      <span data-md-img title={s || undefined}>
-        [{label}]
-      </span>
-    );
-  },
+/** hast 마디 중 여기서 보는 것만(타입 의존을 늘리지 않으려고 모양만 적는다) */
+type HastNode = {
+  type: string;
+  tagName?: string;
+  value?: string;
+  properties?: Record<string, unknown>;
+  children?: HastNode[];
 };
+
+const HEADING = /^h[1-6]$/;
+
+const textOf = (n: HastNode): string =>
+  n.type === "text" ? (n.value ?? "") : (n.children ?? []).map(textOf).join("");
+
+/**
+ * 제목(h1~h6)에 GitHub식 id를 붙이는 작은 rehype 단계. 문서 순서대로 한 번 돈다.
+ * heading 그리기 함수 안에서 세면 React가 두 번 그릴 때(StrictMode) 겹침 번호가 밀려서, 그리기 전에 나무에 적는다.
+ */
+function rehypeHeadingIds() {
+  return (tree: HastNode) => {
+    const slug = createSlugger();
+    const walk = (n: HastNode) => {
+      if (n.type === "element" && n.tagName && HEADING.test(n.tagName))
+        n.properties = { ...n.properties, id: slug(textOf(n)) };
+      for (const c of n.children ?? []) walk(c);
+    };
+    walk(tree);
+  };
+}
+
+const REHYPE = [rehypeHeadingIds];
+
+function componentsFor(current: string): Components {
+  return {
+    a: ({ href, children }) => {
+      if (href?.startsWith("#")) return <a href={href}>{children}</a>;
+      if (href && WEB.test(href))
+        return <ExternalLink href={href}>{children}</ExternalLink>;
+      const to = href ? resolveMdLink(current, href) : null;
+      if (to) {
+        const hash = to.hash ? `#${encodeURIComponent(to.hash)}` : "";
+        return (
+          <a href={`${fileViewHref(to.path)}${hash}`} data-md-file-link>
+            {children}
+          </a>
+        );
+      }
+      // 풀 수 없는 경로·막힌 주소는 링크로 두지 않는다
+      return (
+        <span data-md-nolink title={href || undefined}>
+          {children}
+        </span>
+      );
+    },
+    img: ({ src, alt }) => {
+      const s = typeof src === "string" ? src : "";
+      const label = `그림${alt ? `: ${alt}` : ""}`;
+      return /^https?:/i.test(s) ? (
+        <ExternalLink href={s}>[{label} ↗]</ExternalLink>
+      ) : (
+        <span data-md-img title={s || undefined}>
+          [{label}]
+        </span>
+      );
+    },
+  };
+}
+
+/** 주소의 #조각이 가리키는 제목으로 간다. 내용은 fetch한 뒤에 그려지니 브라우저가 처음에는 못 찾는다. */
+function scrollToHash() {
+  const raw = window.location.hash.slice(1);
+  if (!raw) return;
+  let id = raw;
+  try {
+    id = decodeURIComponent(raw);
+  } catch {}
+  document.getElementById(id)?.scrollIntoView();
+}
 
 export function MdView({ path }: { path: string }) {
   const [load, setLoad] = useState<Load>({ state: "loading" });
   const [raw, setRaw] = useState(false);
   const { open, busy } = useOpenFile(path);
+  const components = useMemo(() => componentsFor(path), [path]);
+  const shown = load.state === "ok" && !raw;
+
+  useEffect(() => {
+    if (shown) scrollToHash();
+  }, [shown]);
 
   useEffect(() => {
     if (!path) {
@@ -193,7 +256,11 @@ export function MdView({ path }: { path: string }) {
             </pre>
           ) : (
             <article data-md-body className="md-body">
-              <Markdown remarkPlugins={[remarkGfm]} components={COMPONENTS}>
+              <Markdown
+                remarkPlugins={[remarkGfm]}
+                rehypePlugins={REHYPE}
+                components={components}
+              >
                 {load.text}
               </Markdown>
             </article>

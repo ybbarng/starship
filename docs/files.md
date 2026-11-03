@@ -6,7 +6,7 @@
 - **열기**: `POST /api/files/open` `{ "path": "<절대 경로>" }` — 맥의 맞는 프로그램(미리보기·QuickTime 등)에서 연다.
 - **PWA**: `src/app/manifest.ts`로 Chrome "앱으로 설치"를 켠다. 선실을 따로 된 창으로 띄워 두고 쓴다.
 
-코드: [`src/server/files.ts`](../src/server/files.ts)(검사), [`src/app/api/files/route.ts`](../src/app/api/files/route.ts)(보기), [`src/app/api/files/open/route.ts`](../src/app/api/files/open/route.ts)(열기), [`src/ui/kit/FileButtons.tsx`](../src/ui/kit/FileButtons.tsx)(단추), [`src/ui/desk/waitFiles.ts`](../src/ui/desk/waitFiles.ts)(책상 글 속 경로 고르기), [`src/app/files/view/page.tsx`](../src/app/files/view/page.tsx)·[`src/ui/files/MdView.tsx`](../src/ui/files/MdView.tsx)(md 보기 화면). 시험: [`src/server/files.test.ts`](../src/server/files.test.ts), [`src/ui/desk/waitFiles.test.ts`](../src/ui/desk/waitFiles.test.ts), [`src/ui/kit/filePaths.test.ts`](../src/ui/kit/filePaths.test.ts).
+코드: [`src/server/files.ts`](../src/server/files.ts)(검사), [`src/app/api/files/route.ts`](../src/app/api/files/route.ts)(보기), [`src/app/api/files/open/route.ts`](../src/app/api/files/open/route.ts)(열기), [`src/ui/kit/FileButtons.tsx`](../src/ui/kit/FileButtons.tsx)(단추), [`src/ui/desk/waitFiles.ts`](../src/ui/desk/waitFiles.ts)(책상 글 속 경로 고르기), [`src/app/files/view/page.tsx`](../src/app/files/view/page.tsx)·[`src/ui/files/MdView.tsx`](../src/ui/files/MdView.tsx)(md 보기 화면). 시험: [`src/server/files.test.ts`](../src/server/files.test.ts), [`src/ui/desk/waitFiles.test.ts`](../src/ui/desk/waitFiles.test.ts), [`src/ui/kit/filePaths.test.ts`](../src/ui/kit/filePaths.test.ts), [`src/ui/files/mdLinks.test.ts`](../src/ui/files/mdLinks.test.ts).
 
 ## 비서가 설정할 환경 변수
 
@@ -43,7 +43,7 @@
 | 실행 파일은 열지 않는다 | 열기는 `OPEN_EXTS`(문서·이미지·영상·소리) 확장자만. 보통 파일만(`.app`·폴더 거절), 실행 권한 비트가 붙은 파일도 거절 |
 | 셸을 거치지 않는다 | `execFile("/usr/bin/open", ["--", 경로])` |
 | md 보기 화면도 같은 검사를 받는다(2026-11-03) | `/files/view`는 서버에서 파일을 읽지 않는다(주소의 경로로 문서 제목만 정한다). 화면이 브라우저에서 `/api/files`를 fetch하므로 `Sec-Fetch-Site: same-origin`·허용 폴더·숨김 검사가 그대로 걸린다. 거절되면 서버가 준 까닭 글을 그대로 보인다 |
-| md 속 HTML·스크립트는 그리지 않는다 | `react-markdown`에 `rehype-raw`를 붙이지 않아 HTML은 글자로만 나온다(`<script>`·`<img onerror>`도 글자). 위험한 주소(`javascript:` 등)는 기본 `urlTransform`이 빈 값으로 바꾸고, 링크는 http(s)·mailto만 새 탭(`noopener noreferrer`)으로 연다. 상대 경로 링크는 링크로 두지 않는다 |
+| md 속 HTML·스크립트는 그리지 않는다 | `react-markdown`에 `rehype-raw`를 붙이지 않아 HTML은 글자로만 나온다(`<script>`·`<img onerror>`도 글자). 위험한 주소(`javascript:` 등)는 기본 `urlTransform`이 빈 값으로 바꾸고, 바깥 링크는 http(s)·mailto만 새 탭(`noopener noreferrer`)으로 연다. 상대 경로 링크는 글로만 풀어(아래 "md 보기 화면") 같은 탭의 `/files/view`·`/api/files`로 보내고, 허용 폴더·숨김·종류 검사는 서버가 그대로 한다. 풀 수 없는 경로(`/`·`~`로 시작, 맨 위를 넘는 `..`)는 링크로 두지 않는다 |
 | md 속 그림이 검사를 우회하지 않는다 | 그림은 불러오지 않고 `[그림: 대체 글]`로 둔다(http(s)면 그 주소로 가는 링크). 로컬 경로 그림을 `<img>`로 부르면 같은 출처 요청이라 다른 파일을 끌어 쓸 수 있고, 바깥 주소면 파일을 연 사실이 밖으로 나간다 |
 | 글 속 경로에도 단추를 단다(2026-11-03) | 책상 선택지·확인 항목에 `path`가 없으면 label·look·note에서, 기다림 세부에서도 `findPaths`로 경로를 찾는다. `path`가 있으면 그것만. 같은 경로는 한 번만 붙인다(`src/ui/desk/waitFiles.ts`, 시험 `waitFiles.test.ts`). 찾은 경로도 서버가 똑같이 검사한다 |
 
@@ -57,6 +57,7 @@
 - **사람**: 선실 책상 카드에서 파일 이름 옆 "보기"(새 탭) 또는 "열기"(맥 프로그램)를 누른다. 조종석 결재함에서는 서류 제목·세부에 적힌 경로(`/…`·`~/…`, 확장자로 끝남, `src/ui/kit/filePaths.ts`의 `findPaths`)마다 같은 단추가 붙는다. 거절되면 까닭이 알림으로 뜬다("허용 폴더 밖이에요", "숨김 파일·폴더예요" 등).
 - **글 속 경로**: 세션이 `path`를 빠뜨리고 label 글에만 "초안 /…/foo.md"처럼 적어도 선실 책상 카드가 그 경로에 단추를 붙인다. 그래도 세션은 되도록 `path`에 적는다(단추 자리가 분명하다).
 - **md 보기 화면**: md의 "보기"는 `/files/view?path=<경로>`를 새 탭으로 연다. 제목·목록·표·체크 목록·코드·인용을 어두운 화면에 72ch 폭으로 그린다(`src/ui/files/MdView.tsx`, 글 모양은 `globals.css`의 `.md-body`). 위에 파일 이름·전체 경로·"열기"·"날 글 보기" 전환이 있다. 탭 제목은 파일 이름이다. 2MB가 넘는 md는(응답의 `Content-Length`로 판단) 받다 말고 그리지 않으며, 새 탭의 날 글(`/api/files`)과 "열기"만 권한다(`src/ui/files/mdSize.ts`, 2026-11-03). `/api/files`는 200MB까지 내주지만 그만한 md를 그리면 탭이 멈춘다. 라이브러리: `react-markdown` 10.1.0, `remark-gfm` 4.0.1(정확한 버전으로 고정).
+  - **문서 사이 링크(2026-11-03)**: `[map.md](map.md)`·`../x.md#절` 같은 상대 경로는 지금 파일의 폴더 기준으로 `..`까지 풀어 절대 경로로 만든 뒤 `fileViewHref`로 같은 탭에서 연다(md는 이 화면, 그 밖은 `/api/files`). 제목(h1~h6)에는 GitHub식 id(소문자, 빈칸→`-`, 문장부호 빼기, 한글 그대로, 겹치면 `-1`·`-2`)를 붙여 `#절`이 그 제목으로 간다. 내용을 fetch한 뒤에 그려지므로 다른 문서에서 `#절`로 오면 그린 뒤 그 제목으로 스크롤한다. 순수 함수는 `src/ui/files/mdLinks.ts`(시험 `mdLinks.test.ts`). 데모 예: `release-notes.md` ↔ `release-checklist.md`.
 - **직접 확인**: 선실 책상 카드의 "보기"로 연다. 데모 선실(`/crew/web-shop`) "결제 화면 연출 4개 확인"의 릴리스 노트 항목이 label 글 속 경로 + md 보기 예다(`public/demo-files/release-notes.md`). 주소창에 직접 넣으면(`Sec-Fetch-Site: none`) 거절된다.
 - **PWA**: Chrome 주소창 오른쪽의 설치 아이콘 또는 메뉴 → "앱으로 설치". 따로 된 창에서 "보기"는 기본 브라우저 탭으로 열린다.
 - **Dock 배지**: 설치한 앱의 Dock 아이콘에 모든 승무원 책상의 기다림 수 합계가 뜬다(`src/ui/AppBadge.tsx`, Badging API, 0이면 지운다). 모든 화면이 쓰는 5초 스냅숏의 `crew[].desk.waiting`을 더한다. 앱 창이 열려 있을 때만 바뀌고, 창을 닫으면 마지막 숫자가 남는다. 서버에 못 닿으면 마지막 숫자를 그대로 둔다. 브라우저 탭에서는 아무 일도 하지 않는다.
