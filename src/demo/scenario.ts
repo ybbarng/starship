@@ -117,7 +117,10 @@ const BRIEFS: Record<string, NonNullable<Crew["brief"]>> = {
   },
 };
 
-/** 이 자리에서 보이는 데모 책상들. 답하거나 치우거나 미룬 기다림은 빠진다. */
+/**
+ * 이 자리에서 보이는 데모 책상들. 답하거나 치우거나 미룬 기다림은 빠진다.
+ * 시각은 데모 시작(startedAt) 기준이라 내용이 같으면 몇 번을 물어도 같은 값이다.
+ */
 export function demoDesks(
   state: DemoState,
   now = Date.now(),
@@ -125,7 +128,7 @@ export function demoDesks(
   const hidden = (id: string) =>
     state.dismissed.has(id) || (state.snoozed.get(id) ?? 0) > now;
   return Object.fromEntries(
-    Object.entries(buildDemoDesks(now)).map(([id, desk]) => [
+    Object.entries(buildDemoDesks(state.startedAt)).map(([id, desk]) => [
       id,
       visibleDesk(id, desk, hidden),
     ]),
@@ -311,6 +314,11 @@ function actionsFor(seed: TaskSeed): TaskAction[] {
 }
 
 export type DemoState = {
+  /**
+   * 데모를 시작한 때. 지어낸 시각(since·at)은 모두 이것을 기준으로 둔다(2026-11-03).
+   * 요청마다 now로 새로 만들면 내용이 같아도 값이 5초마다 바뀌어 react-query가 같은 객체를
+   * 돌려주지 못하고 조종석 전체가 다시 그려졌다. "n분 전"은 화면 시계가 센다.
+   */
   startedAt: number;
   dismissed: Set<string>;
   snoozed: Map<string, number>;
@@ -328,6 +336,7 @@ export function buildSnapshot(
   now = Date.now(),
   link: LinkMode = "ok",
 ): Snapshot {
+  const t0 = state.startedAt;
   const arrived = Math.min(
     INCOMING.length,
     Math.floor((now - state.startedAt) / INCOMING_EVERY),
@@ -339,7 +348,7 @@ export function buildSnapshot(
           ...TASKS,
           ...INCOMING.slice(0, arrived).map((s, i) => ({
             ...s,
-            ago: now - (state.startedAt + (i + 1) * INCOMING_EVERY),
+            ago: -(i + 1) * INCOMING_EVERY,
           })),
         ];
   const visible = seeds.filter(
@@ -358,7 +367,7 @@ export function buildSnapshot(
         detail: s.detail,
         from: s.from,
         crewId: s.crewId,
-        since: now - s.ago,
+        since: t0 - s.ago,
         actions: actionsFor(s),
         choices: s.choices,
         url: s.url,
@@ -366,7 +375,7 @@ export function buildSnapshot(
     )
     .concat(
       Object.entries(desks).flatMap(([id, desk]) =>
-        deskTasks(id, desk, crewContext(id), now),
+        deskTasks(id, desk, crewContext(id), t0),
       ),
     )
     .sort((a, b) => RANK[a.kind] - RANK[b.kind] || a.since - b.since);
@@ -410,11 +419,11 @@ export function buildSnapshot(
       : CREW;
 
   const demoMapSummary = {
-    ...summarizeMap(buildDemoMap(now)),
+    ...summarizeMap(buildDemoMap(t0)),
     stale: false,
   };
   const bigMapSummary = {
-    ...summarizeMap(buildBigDemoMap(now)),
+    ...summarizeMap(buildBigDemoMap(t0)),
     stale: false,
   };
   const crew: Crew[] = seeds2.map((c, i) => {
@@ -430,9 +439,9 @@ export function buildSnapshot(
       status,
       activity:
         status === "working" ? (c.activity ?? "다음 단계 진행 중") : c.activity,
-      since: now - (i + 1) * 7 * MIN,
+      since: t0 - (i + 1) * 7 * MIN,
       onDeck: c.onDeck,
-      brief: brief ? { ...brief, at: now - 2 * HOUR } : undefined,
+      brief: brief ? { ...brief, at: t0 - 2 * HOUR } : undefined,
       actions: c.status === "off" ? ["brief"] : ["focus", "brief"],
       map:
         c.id === DEMO_MAP_CREW
@@ -450,21 +459,21 @@ export function buildSnapshot(
       label: "아침 브리핑",
       status: "ok",
       value: "08:00",
-      at: now - 6 * HOUR,
+      at: t0 - 6 * HOUR,
     },
     {
       id: "collect",
       label: "부름 모으기",
       status: "ok",
       value: "5분마다",
-      at: now - 2 * MIN,
+      at: t0 - 2 * MIN,
     },
     {
       id: "backup",
       label: "백업",
       status: scenario === "empty" ? "ok" : "error",
       value: scenario === "empty" ? "어젯밤" : "2회 실패",
-      at: now - 90 * MIN,
+      at: t0 - 90 * MIN,
     },
     {
       id: "doctor",
@@ -472,7 +481,7 @@ export function buildSnapshot(
       status: "warn",
       value: "경고 1",
       detail: "디스크 사용량 82%",
-      at: now - 3 * HOUR,
+      at: t0 - 3 * HOUR,
     },
     { id: "notify", label: "폰 알림", status: "ok", value: "켜짐" },
     { id: "sync", label: "원격 동기화", status: "off", value: "꺼짐" },
@@ -485,7 +494,7 @@ export function buildSnapshot(
     hails,
     crew,
     gauges,
-    link: buildDemoLink(link, now),
+    link: buildDemoLink(link, now, t0),
     notice: "데모 데이터 · 지어낸 할 일이에요",
   };
 }

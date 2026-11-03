@@ -110,23 +110,25 @@ export async function getSnapshot(
  */
 export async function getCrewMap(
   crewId: string,
-  now = Date.now(),
+  // 데모 지도는 데모 시작 시각을 쓰고, 서버 연결 모드는 시각을 받지 않는다. 부르는 쪽 자리를 지키려 남겨 둔다
+  _now = Date.now(),
   seat = "default",
 ): Promise<CrewMapResponse> {
   const info = sourceInfo();
   if (info.mode === "demo") {
-    const decided = demoState(seat).decidedSigns;
+    // 지도 시각도 데모 시작 기준(src/demo/scenario.ts DemoState.startedAt). 내용이 같으면 같은 값
+    const { decidedSigns: decided, startedAt } = demoState(seat);
     if (crewId === DEMO_BIG_MAP_CREW)
       return {
-        map: applyDecided(buildBigDemoMap(now), crewId, decided),
+        map: applyDecided(buildBigDemoMap(startedAt), crewId, decided),
         stale: false,
-        mapAt: now - HOUR,
+        mapAt: startedAt - HOUR,
       };
     if (crewId !== DEMO_MAP_CREW) return { map: null };
     return {
-      map: applyDecided(buildDemoMap(now), crewId, decided),
+      map: applyDecided(buildDemoMap(startedAt), crewId, decided),
       stale: false,
-      mapAt: now - 2 * HOUR,
+      mapAt: startedAt - 2 * HOUR,
     };
   }
   const res = await fetchUpstream(

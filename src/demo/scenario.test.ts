@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import { parseDesk } from "@/protocol/desk";
 import { Snapshot } from "@/protocol/v1";
 import { buildDemoDesks } from "./desk";
-import { buildSnapshot, createDemoState, INCOMING_EVERY } from "./scenario";
+import {
+  buildSnapshot,
+  createDemoState,
+  demoDesks,
+  INCOMING_EVERY,
+} from "./scenario";
 
 describe("데모 시나리오", () => {
   const t0 = 1_800_000_000_000;
@@ -44,6 +49,46 @@ describe("데모 시나리오", () => {
     const snap = buildSnapshot(state, "default", t0);
     expect(snap.crew.find((c) => c.id === "orbit-notes")?.status).toBe(
       "working",
+    );
+  });
+});
+
+describe("데모 시각: 데모 시작 기준이라 내용이 같으면 같은 값", () => {
+  const t0 = 1_800_000_000_000;
+  const strip = ({
+    generatedAt: _,
+    ...rest
+  }: ReturnType<typeof buildSnapshot>) => rest;
+
+  it("5초 뒤에 다시 물어도 스냅샷이 같다(만든 시각만 다르다)", () => {
+    const state = createDemoState(t0);
+    for (const link of ["ok", "warn", "down", "off", "vpn-warn"] as const) {
+      const a = buildSnapshot(state, "default", t0 + 1_000, link);
+      const b = buildSnapshot(state, "default", t0 + 6_000, link);
+      expect(strip(b)).toEqual(strip(a));
+    }
+  });
+
+  it("관제 링크 측정 시각은 20초마다만 바뀐다", () => {
+    const state = createDemoState(t0);
+    const at = (now: number) => buildSnapshot(state, "default", now).link?.at;
+    expect(at(t0 + 19_000)).toBe(at(t0));
+    expect(at(t0 + 20_000)).toBe((at(t0) ?? 0) + 20_000);
+  });
+
+  it("책상도 요청 시각과 상관없이 같다", () => {
+    const state = createDemoState(t0);
+    expect(demoDesks(state, t0 + 30 * 60_000)).toEqual(demoDesks(state, t0));
+  });
+
+  it("교신 도착 시각은 시작부터 INCOMING_EVERY마다", () => {
+    const state = createDemoState(t0);
+    const snap = buildSnapshot(state, "default", t0 + 2 * INCOMING_EVERY + 5);
+    expect(snap.tasks.find((t) => t.id === "t-in-doc")?.since).toBe(
+      t0 + INCOMING_EVERY,
+    );
+    expect(snap.tasks.find((t) => t.id === "t-in-dm")?.since).toBe(
+      t0 + 2 * INCOMING_EVERY,
     );
   });
 });

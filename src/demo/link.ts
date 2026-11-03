@@ -15,11 +15,23 @@ export function parseLinkMode(value: string | null | undefined): LinkMode {
 
 const SSID = "별빛정거장-5G";
 
-export function buildDemoLink(mode: LinkMode, now = Date.now()): Link {
+/** 실제 측정처럼 20초마다 한 번 새로 잰다. 그 사이 요청에는 같은 값이 나간다 */
+const MEASURE_EVERY = 20_000;
+
+/**
+ * 데모 관제 링크. 측정 시각(at)은 20초 단위로만 바뀌고, 끊김 기록(lastAt)은 데모 시작(startedAt) 기준이라
+ * 요청마다 값이 바뀌지 않는다(2026-11-03: 5초마다 화면 전체가 다시 그려지던 것).
+ */
+export function buildDemoLink(
+  mode: LinkMode,
+  now = Date.now(),
+  startedAt = now,
+): Link {
+  const measured = Math.floor(now / MEASURE_EVERY) * MEASURE_EVERY;
   switch (mode) {
     case "ok":
       return {
-        at: now - 12_000,
+        at: measured - 2_000,
         place: "home",
         verdict: "ok",
         hops: [
@@ -28,14 +40,14 @@ export function buildDemoLink(mode: LinkMode, now = Date.now()): Link {
           { id: "internet", status: "ok", value: "18ms" },
           { id: "dns", status: "ok" },
         ],
-        drops: { today: 1, lastAt: now - 47 * MIN, lastSecs: 103 },
+        drops: { today: 1, lastAt: startedAt - 47 * MIN, lastSecs: 103 },
         tunnel: "ok",
         vpn: { status: "ok", keyDays: 7, routers: { online: 3, total: 3 } },
       };
     case "vpn-warn":
     case "vpn-down":
       return {
-        ...buildDemoLink("ok", now),
+        ...buildDemoLink("ok", now, startedAt),
         vpn:
           mode === "vpn-warn"
             ? {
@@ -53,7 +65,7 @@ export function buildDemoLink(mode: LinkMode, now = Date.now()): Link {
       };
     case "warn":
       return {
-        at: now - 8_000,
+        at: measured - 1_000,
         place: "office",
         verdict: "warn",
         cause: "인터넷까지 지연이 길어요(평소 18ms → 240ms)",
@@ -74,7 +86,7 @@ export function buildDemoLink(mode: LinkMode, now = Date.now()): Link {
       };
     case "down":
       return {
-        at: now - 5_000,
+        at: measured,
         place: "home",
         verdict: "down",
         cause: "공유기까지는 닿는데 그 너머 인터넷이 끊겼어요",
@@ -88,7 +100,7 @@ export function buildDemoLink(mode: LinkMode, now = Date.now()): Link {
           },
           { id: "dns", status: "off" },
         ],
-        drops: { today: 2, lastAt: now - 2 * MIN, lastSecs: 120 },
+        drops: { today: 2, lastAt: startedAt - 2 * MIN, lastSecs: 120 },
         tunnel: "error",
         vpn: {
           status: "error",
@@ -99,7 +111,7 @@ export function buildDemoLink(mode: LinkMode, now = Date.now()): Link {
       };
     case "off":
       return {
-        at: now - 6 * MIN,
+        at: startedAt - 6 * MIN,
         place: "home",
         verdict: "off",
         cause: "측정이 6분째 멈췄어요",
@@ -109,7 +121,7 @@ export function buildDemoLink(mode: LinkMode, now = Date.now()): Link {
           { id: "internet", status: "off" },
           { id: "dns", status: "off" },
         ],
-        drops: { today: 1, lastAt: now - 3 * 60 * MIN, lastSecs: 41 },
+        drops: { today: 1, lastAt: startedAt - 3 * 60 * MIN, lastSecs: 41 },
         tunnel: "off",
       };
   }
