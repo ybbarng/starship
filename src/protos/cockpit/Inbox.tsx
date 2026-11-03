@@ -6,7 +6,7 @@
 //   가운데 = 고른 승무원의 결재 서류: 제목 전체·세부·선택지를 모두 펼치고 그 자리에서 처리
 import Link from "next/link";
 import { useState } from "react";
-import { useCrewDesk } from "@/data/hooks";
+import { useBridgeStatus, useCrewDesk } from "@/data/hooks";
 import type { Context, Crew, Task } from "@/protocol/v1";
 import { AnswerList } from "@/ui/desk/Answers";
 import {
@@ -21,6 +21,7 @@ import {
 import { FileButtons } from "@/ui/kit/FileButtons";
 import { findPaths } from "@/ui/kit/filePaths";
 import styles from "./cockpit.module.css";
+import { inboxEmpty } from "./hqLink";
 import {
   type InboxGroup,
   LOOSE_KEY,
@@ -263,7 +264,7 @@ export function InboxIndex({
           })}
           {groups.length === 0 && (
             <li className="px-2 py-3 text-[12px] text-white/40">
-              결재할 것이 없어요. 순항 중.
+              <EmptyLine />
             </li>
           )}
         </ul>
@@ -344,14 +345,57 @@ export function InboxSheet({
             </ul>
           </>
         ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-            <span className="h-3.5 w-3.5 rounded-full bg-[#5ee08a] shadow-[0_0_16px_#5ee08a]" />
-            <div className="text-[24px] font-semibold text-white">순항 중</div>
-            <div className="text-[13px] text-white/45">
-              결재할 것이 없어요. 승무원이 부르면 여기 쌓여요.
-            </div>
-          </div>
+          <EmptySheet />
         )}
+      </div>
+    </div>
+  );
+}
+
+/** 결재함이 비었을 때 상태. 받은 때·오류는 이 작은 부품만 읽는다(결재함 전체가 5초마다 다시 그려지지 않게) */
+function useEmptyState() {
+  const { ready, error } = useBridgeStatus();
+  return inboxEmpty(ready, !!error);
+}
+
+const EMPTY_LINE = {
+  loading: "본부에서 받아 오는 중…",
+  unreachable: "본부에 닿지 않아요. 아직 받은 자료가 없어요.",
+  calm: "결재할 것이 없어요. 순항 중.",
+} as const;
+
+function EmptyLine() {
+  const state = useEmptyState();
+  return <span data-inbox-empty={state}>{EMPTY_LINE[state]}</span>;
+}
+
+function EmptySheet() {
+  const state = useEmptyState();
+  const lamp =
+    state === "calm"
+      ? "bg-[#5ee08a] shadow-[0_0_16px_#5ee08a]"
+      : state === "unreachable"
+        ? "bg-[#ff8a7a] shadow-[0_0_16px_#ff8a7a]"
+        : `bg-white/40 ${styles.wait}`;
+  return (
+    <div
+      data-inbox-empty={state}
+      className="flex flex-1 flex-col items-center justify-center gap-2 text-center"
+    >
+      <span className={`h-3.5 w-3.5 rounded-full ${lamp}`} />
+      <div className="text-[24px] font-semibold text-white">
+        {state === "calm"
+          ? "순항 중"
+          : state === "unreachable"
+            ? "본부에 닿지 않아요"
+            : "받아 오는 중"}
+      </div>
+      <div className="text-[13px] text-white/45">
+        {state === "calm"
+          ? "결재할 것이 없어요. 승무원이 부르면 여기 쌓여요."
+          : state === "unreachable"
+            ? "아직 받은 자료가 없어요. 본부(비서 서버)가 켜지면 저절로 채워져요."
+            : "본부에서 받아 오는 중…"}
       </div>
     </div>
   );
