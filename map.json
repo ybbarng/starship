@@ -247,9 +247,9 @@
       "id": "cabin-fork-answer",
       "title": "깃발 눌러 바로 정하기",
       "parent": "cabin",
-      "status": "building",
+      "status": "done",
       "size": 1,
-      "summary": "노란 깃발·구역 판에서 갈림길에 답하면 본부가 그 세션에 전함. 실제 답 보내기는 사용자 확인 기다림",
+      "summary": "노란 깃발·구역 판에서 갈림길에 답하면 본부가 그 세션에 전함. 사용자가 깃발로 실제 답(push 허락)을 보내 확인함",
       "since": "2026-11-02",
       "found": "2026-11-02",
       "links": [
