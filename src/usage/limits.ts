@@ -83,6 +83,41 @@ export function resetText(resetsAt: number, timeZone?: string): string {
   return `${v("month")}월 ${v("day")}일(${v("weekday")}) ${v("hour").padStart(2, "0")}:${v("minute").padStart(2, "0")}`;
 }
 
+/**
+ * 짧은 리셋 시각: 6일 안이면 "수 02:00"(요일만으로 헷갈리지 않는다), 그보다 멀면 resetText처럼 날짜까지.
+ * 연료실 주 연료통 이름판처럼 좁은 자리에 쓴다.
+ */
+export function resetShort(
+  resetsAt: number,
+  now: number,
+  timeZone?: string,
+): string {
+  if (resetsAt - now >= 6 * 24 * 60 * 60_000)
+    return resetText(resetsAt, timeZone);
+  const parts = new Intl.DateTimeFormat("ko-KR", {
+    timeZone,
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(resetsAt));
+  const v = (t: Intl.DateTimeFormatPartTypes) =>
+    parts.find((p) => p.type === t)?.value ?? "";
+  return `${v("weekday")} ${v("hour").padStart(2, "0")}:${v("minute").padStart(2, "0")}`;
+}
+
+/**
+ * 영역마다 쓴 몫(splitUsed의 parts)을 0..1 비율로. 연료실에서 주 연료통 → 탱크 배관 굵기·흐름 밝기에 쓴다.
+ * 쓴 것이 없으면 모두 0.
+ */
+export function feedShares(parts: Record<Area, number>): Record<Area, number> {
+  const sum = AREAS.reduce((s, a) => s + Math.max(0, parts[a]), 0);
+  const out = { work: 0, personal: 0, other: 0 };
+  if (sum <= 0) return out;
+  for (const a of AREAS) out[a] = Math.max(0, parts[a]) / sum;
+  return out;
+}
+
 /** 쓴 몫에 따른 경고 단계: 80% 넘으면 주황, 95% 넘으면 빨강 */
 export function levelOf(usedPct: number): "ok" | "warn" | "danger" {
   return usedPct > 95 ? "danger" : usedPct > 80 ? "warn" : "ok";

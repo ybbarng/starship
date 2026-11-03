@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import { demoLimits, nextTwoAm } from "@/demo/limits";
 import {
   agoText,
+  feedShares,
   isExpired,
   isStale,
   levelOf,
+  resetShort,
   resetText,
   splitUsed,
   untilText,
@@ -51,6 +53,22 @@ describe("splitUsed", () => {
   });
 });
 
+describe("feedShares", () => {
+  it("쓴 몫을 합이 1인 비율로 바꾼다", () => {
+    const r = feedShares({ work: 30, personal: 15, other: 5 });
+    expect(r.work).toBeCloseTo(0.6);
+    expect(r.personal).toBeCloseTo(0.3);
+    expect(r.other).toBeCloseTo(0.1);
+  });
+  it("쓴 것이 없으면 모두 0", () => {
+    expect(feedShares({ work: 0, personal: 0, other: 0 })).toEqual({
+      work: 0,
+      personal: 0,
+      other: 0,
+    });
+  });
+});
+
 describe("untilText", () => {
   const now = Date.UTC(2026, 10, 3, 10, 0);
   it.each([
@@ -89,6 +107,13 @@ describe("resetText·levelOf", () => {
   it("한국 시각으로 날짜·요일·시각을 적는다", () => {
     // 2026-11-03T17:00Z = 11월 4일(수) 02:00 KST
     expect(resetText(Date.UTC(2026, 10, 3, 17, 0), "Asia/Seoul")).toBe(
+      "11월 4일(수) 02:00",
+    );
+  });
+  it("짧은 리셋 시각: 6일 안이면 요일과 시각만", () => {
+    const reset = Date.UTC(2026, 10, 3, 17, 0); // 11월 4일(수) 02:00 KST
+    expect(resetShort(reset, reset - 6 * HOUR, "Asia/Seoul")).toBe("수 02:00");
+    expect(resetShort(reset, reset - 6 * 24 * HOUR, "Asia/Seoul")).toBe(
       "11월 4일(수) 02:00",
     );
   });
