@@ -47,7 +47,14 @@ export function ForkAnswer({
       setSending(false);
     }
   };
-  if (sent && open)
+  // 이미 정해진 갈림길(깃발 창이 열린 채 세션이 지도를 고친 때)에는 단추를 다시 보이지 않는다
+  if (!open)
+    return (
+      <p data-fork-decided className="mt-1.5 text-[12px] text-white/60">
+        정했어요{sign.decided ? `: ${sign.decided}` : ""}
+      </p>
+    );
+  if (sent)
     return (
       <p data-fork-sent className="mt-1.5 text-[12px] text-[#bff3d2]">
         “{sent}”로 세션에 전했어요. 세션이 지도를 고치면 깃발이 내려가요.
