@@ -9,7 +9,7 @@
 // 창밖(SpaceView)은 하나만 두고 크기를 바꾸지 않는다. 화면 크기 캔버스를 위아래로 옮기고 그 위에 유리 모양만
 // 바꿔 그려서, 전환 중에도 매 프레임 다시 그리는 일이 없게 했다.
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useBridge } from "@/data/hooks";
 import type { Crew, Task } from "@/protocol/v1";
 import { CrewHeader } from "@/protos/classic/CrewDetail";
@@ -138,11 +138,25 @@ export function CockpitGaze() {
     setGrid(false);
   };
 
-  const openHail = (id?: string) => {
-    const target = id ?? hails[0]?.id;
-    if (!target) return;
-    hail.open(target);
-  };
+  // 계기판(Dashboard memo)에 넘기는 처리는 useCallback으로 묶어 폴링·시계에 다시 그리지 않게 한다
+  const openHail = useCallback(
+    (id?: string) => {
+      const target = id ?? hails[0]?.id;
+      if (!target) return;
+      hail.open(target);
+    },
+    [hails, hail.open],
+  );
+  const onList = useCallback(
+    (kind: ListKind) => setModal({ type: "list", kind }),
+    [],
+  );
+  const onCrew = useCallback(
+    (id: string) => setModal({ type: "crew", id }),
+    [],
+  );
+  const onPicker = useCallback(() => setModal({ type: "nav" }), []);
+  const onInterior = useCallback(() => goTo(1), [goTo]);
 
   // 단축키: G = 감상하기, Esc = 열린 것부터 닫고 마지막엔 조종석으로.
   // 조종석에서는 결재함 키도(J/K 서류, [ ] 묶음, 1~9 선택지, S 1시간 뒤. inboxFocus.ts inboxKey)
@@ -330,11 +344,11 @@ export function CockpitGaze() {
           link={bridge.link}
           now={now}
           push={push}
-          onList={(kind) => setModal({ type: "list", kind })}
+          onList={onList}
           onHail={openHail}
-          onCrew={(id) => setModal({ type: "crew", id })}
-          onPicker={() => setModal({ type: "nav" })}
-          onInterior={() => goTo(1)}
+          onCrew={onCrew}
+          onPicker={onPicker}
+          onInterior={onInterior}
           picked={inboxPick}
           onPick={setInboxPick}
         />

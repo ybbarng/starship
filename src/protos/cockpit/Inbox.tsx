@@ -5,7 +5,7 @@
 //   왼쪽 = 승무원 목차: 기다리는 일이 있는 승무원(건수·가장 오래 기다린 시간·지금 하는 일), 그 아래 나머지 승무원
 //   가운데 = 고른 승무원의 결재 서류: 제목 전체·세부·선택지를 모두 펼치고 그 자리에서 처리
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useBridgeStatus, useCrewDesk } from "@/data/hooks";
 import type { Context, Crew, Task } from "@/protocol/v1";
 import { AnswerList } from "@/ui/desk/Answers";
@@ -144,7 +144,7 @@ function ReviewLaneBox({
   );
 }
 
-export function InboxIndex({
+function InboxIndexView({
   groups,
   reviews,
   selected,
@@ -300,9 +300,12 @@ export function InboxIndex({
   );
 }
 
+// 5초 폴링·30초 시계에 내용이 같으면 다시 그리지 않게(2026-11-03)
+export const InboxIndex = memo(InboxIndexView);
+
 /* ───────────── 가운데: 결재 서류 ───────────── */
 
-export function InboxSheet({
+function InboxSheetView({
   group,
   reply,
   now,
@@ -400,6 +403,8 @@ export function InboxSheet({
     </div>
   );
 }
+
+export const InboxSheet = memo(InboxSheetView);
 
 /** 결재함이 비었을 때 상태. 받은 때·오류는 이 작은 부품만 읽는다(결재함 전체가 5초마다 다시 그려지지 않게) */
 function useEmptyState() {
@@ -546,7 +551,7 @@ export function ReplyNote({ task, now }: { task: Task; now: number }) {
 }
 
 /** 결재 서류 한 장: 무엇을·언제부터·전문·단추. 세부가 길면 접어 두고 펼친다. */
-export function Paper({
+function PaperView({
   task,
   now,
   showFrom,
@@ -564,7 +569,10 @@ export function Paper({
     (task.detail?.split("\n").length ?? 0) > 4;
   const stale = now - task.since > STALE_MS;
   // 제목·세부에 적힌 이 맥의 파일 경로는 그 자리에서 보기·열기(2026-11-02 사용자 요청)
-  const files = findPaths(`${task.title}\n${task.detail ?? ""}`);
+  const files = useMemo(
+    () => findPaths(`${task.title}\n${task.detail ?? ""}`),
+    [task.title, task.detail],
+  );
   return (
     <li
       data-inbox-item={task.id}
@@ -646,3 +654,6 @@ export function Paper({
     </li>
   );
 }
+
+/** 서류 한 장. 묶음 안 다른 서류가 바뀌어도 이 서류는 다시 그리지 않는다 */
+export const Paper = memo(PaperView);

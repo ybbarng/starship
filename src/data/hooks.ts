@@ -151,6 +151,9 @@ export function useSnapshot() {
   });
 }
 
+const NO_TASKS: Task[] = [];
+const NO_CREW: Crew[] = [];
+
 /** 만든 시각(generatedAt)은 매번 바뀌니 뺀다. 그래야 내용이 같을 때 react-query가 같은 객체를 돌려준다. */
 function withoutStamp(s: Snapshot): Omit<Snapshot, "generatedAt"> {
   const { generatedAt: _, ...rest } = s;
@@ -167,17 +170,24 @@ export function useBridge() {
     select: withoutStamp,
   });
   const snap = query.data;
-  const derived = useMemo(() => {
-    const tasks = snap?.tasks ?? [];
-    const crew = snap?.crew ?? [];
-    const crewById = new Map(crew.map((c) => [c.id, c]));
-    const tasksByCrew = new Map<string, Task[]>();
-    for (const t of tasks) {
+  // 관제 링크·계기만 바뀐 폴링에 승무원·할 일 묶음까지 새로 만들지 않게 따로 묶는다
+  const crewById = useMemo(
+    () => new Map((snap?.crew ?? []).map((c) => [c.id, c])),
+    [snap?.crew],
+  );
+  const tasksByCrew = useMemo(() => {
+    const by = new Map<string, Task[]>();
+    for (const t of snap?.tasks ?? []) {
       if (!t.crewId) continue;
-      const list = tasksByCrew.get(t.crewId) ?? [];
+      const list = by.get(t.crewId) ?? [];
       list.push(t);
-      tasksByCrew.set(t.crewId, list);
+      by.set(t.crewId, list);
     }
+    return by;
+  }, [snap?.tasks]);
+  const derived = useMemo(() => {
+    const tasks = snap?.tasks ?? NO_TASKS;
+    const crew = snap?.crew ?? NO_CREW;
     return {
       now: tasks[0],
       next: tasks.slice(1, 4),
@@ -191,7 +201,7 @@ export function useBridge() {
       link: snap?.link,
       notice: snap?.notice,
     };
-  }, [snap]);
+  }, [snap, crewById, tasksByCrew]);
   // 받은 때(dataUpdatedAt)·오류는 여기서 읽지 않는다. react-query는 읽은 값이 바뀔 때만 다시 그리게 하는데,
   // 받은 때는 내용이 같아도 5초마다 바뀌어 이 훅을 쓰는 화면 전체가 5초마다 다시 그려졌다(2026-11-03).
   // 그 둘이 필요한 곳(본부 연결 등, 빈 결재함)은 useBridgeStatus를 따로 쓴다.

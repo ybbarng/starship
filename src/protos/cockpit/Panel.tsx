@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { useBridgeStatus } from "@/data/hooks";
 import type { Crew, CrewStatus, Hail, Link, Task } from "@/protocol/v1";
 import { formatSpeed } from "@/sky/telemetry";
@@ -521,7 +521,8 @@ function PlanetKey({
 
 /* ───────────── 판 전체 ───────────── */
 
-export function Dashboard({
+// 5초 폴링에 내용이 같으면 다시 그리지 않게 memo(2026-11-03). 부르는 쪽(CockpitGaze)은 단추 처리를 useCallback으로 넘긴다
+export const Dashboard = memo(function Dashboard({
   tasks,
   hails,
   seen,
@@ -574,8 +575,12 @@ export function Dashboard({
     if (current !== picked) onPick(current);
   }, [order, current, picked, onPick]);
   // 리뷰 칸에서 고른 서류가 있으면 그 한 장, 아니면 승무원 묶음
-  const group =
-    pickReview(reviews, current, crewById, now) ?? pickGroup(groups, current);
+  // pickReview는 부를 때마다 새 묶음을 만들어서, 결재 서류(InboxSheet memo)가 매번 다시 그려지지 않게 묶어 둔다
+  const group = useMemo(
+    () =>
+      pickReview(reviews, current, crewById, now) ?? pickGroup(groups, current),
+    [reviews, current, crewById, now, groups],
+  );
   const firstReview = reviews.tasks[0];
   return (
     <div className={`relative flex h-full flex-col ${styles.panel}`}>
@@ -641,4 +646,4 @@ export function Dashboard({
       </button>
     </div>
   );
-}
+});
