@@ -475,6 +475,15 @@ export function FrontierView({
   const goHere = () => {
     if (map.here && visible(map.here)) visit(map.here, true);
   };
+  // 도움말(왼쪽 위)과 되감기 막대(위 가운데)는 넓은 도움말이 막대를 가리니 하나만 연다
+  const toggleLegend = () => {
+    if (!legend) setReplayOpen(false);
+    setLegend(!legend);
+  };
+  const toggleReplay = () => {
+    if (!replayOpen) setLegend(false);
+    setReplayOpen(!replayOpen);
+  };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
@@ -496,7 +505,7 @@ export function FrontierView({
     else if (k === "0") showAll();
     else if (k === "h" || k === "H") goHere();
     else if (k === "f" || k === "F") nextFork();
-    else if (k === "?") setLegend((v) => !v);
+    else if (k === "?") toggleLegend();
     else if (k === "Escape") {
       if (forkPop) setForkPop(null);
       else if (legend) setLegend(false);
@@ -620,7 +629,7 @@ export function FrontierView({
           <CamButton
             name="help"
             title="이 지도 읽는 법 (?)"
-            onClick={() => setLegend((v) => !v)}
+            onClick={toggleLegend}
           >
             ? 도움말
           </CamButton>
@@ -630,7 +639,7 @@ export function FrontierView({
             name="replay"
             title="개척 되감기: 지도가 지나온 모습"
             boxed
-            onClick={() => setReplayOpen((v) => !v)}
+            onClick={toggleReplay}
           >
             ⏪ 되감기
           </CamButton>
