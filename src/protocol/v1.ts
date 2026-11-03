@@ -343,43 +343,50 @@ export const Snapshot = z
   });
 export type Snapshot = z.infer<typeof Snapshot>;
 
+/** 동작 요청의 id·crewId·region 길이 상한. */
+const ReqId = z.string().min(1).max(200);
+/** 동작 요청의 답 글 길이 상한. 세션 창에 그대로 넘기는 글이라 넉넉히 두되 끝없이 받지는 않는다. */
+const ReqAnswer = z.string().max(4000);
+
 export const ActionRequest = z.discriminatedUnion("target", [
+  /** 할 일에 동작 하나(답하기·미루기 등). */
   z.object({
     target: z.literal("task"),
-    id: z.string().min(1),
+    id: ReqId,
     action: TaskAction,
     /** answer일 때 고른 선택지나 쓴 글. */
-    answer: z.string().optional(),
+    answer: ReqAnswer.optional(),
     /** snooze일 때 다시 보일 시각. */
     until: Millis.optional(),
   }),
+  /** 승무원에 동작 하나(창으로 가기·브리핑 다시 만들기). */
   z.object({
     target: z.literal("crew"),
-    id: z.string().min(1),
+    id: ReqId,
     action: CrewAction,
+  }),
+  /** 책상의 답해 둔 것을 읽음으로: 서버가 그 책상에서 뺀다(docs/desk.md "답해 둔 것"). */
+  z.object({
+    target: z.literal("answer"),
+    crewId: ReqId,
+    id: ReqId,
+    action: z.literal("read"),
   }),
   /**
    * 지도 갈림길에 선실에서 바로 답하기(docs/map.md "갈림길에 답하기"). 서버가 그 세션에 넘기고,
    * map.json은 세션이 고친다(화면이 파일을 직접 쓰지 않는다).
    */
-  /** 책상의 답해 둔 것을 읽음으로: 서버가 그 책상에서 뺀다(docs/desk.md "답해 둔 것"). */
-  z.object({
-    target: z.literal("answer"),
-    crewId: z.string().min(1),
-    id: z.string().min(1),
-    action: z.literal("read"),
-  }),
   z.object({
     target: z.literal("sign"),
     /** 승무원(프로젝트) id */
-    crewId: z.string().min(1),
+    crewId: ReqId,
     /** 표지가 놓인 구역 id */
-    region: z.string().min(1),
+    region: ReqId,
     /** 갈림길 표지 id */
-    id: z.string().min(1),
+    id: ReqId,
     action: z.literal("answer"),
     /** 고른 선택지나 쓴 글 */
-    answer: z.string().min(1),
+    answer: ReqAnswer.min(1),
   }),
 ]);
 export type ActionRequest = z.infer<typeof ActionRequest>;
