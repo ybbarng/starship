@@ -78,7 +78,17 @@ export function DeskPanel({
               className="flex items-baseline gap-2 text-white/75"
             >
               <span className="inline-block h-1.5 w-1.5 shrink-0 translate-y-[-1px] animate-pulse rounded-full bg-[#5ee08a]" />
-              <span className="min-w-0 flex-1">{d.title}</span>
+              <span className="min-w-0 flex-1">
+                {d.title}
+                {d.approved && (
+                  <span
+                    data-desk-approved
+                    className="mt-0.5 block text-[11.5px] whitespace-pre-line text-white/45"
+                  >
+                    승인받은 것 · {d.approved}
+                  </span>
+                )}
+              </span>
               {d.since && (
                 <span className="shrink-0 text-[11px] text-white/35">
                   {agoLabel(Date.parse(d.since), now)}

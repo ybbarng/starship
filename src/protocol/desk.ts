@@ -91,6 +91,8 @@ export const Doing = z.object({
   id: z.string().min(1).optional(),
   title: z.string().min(1),
   since: When.optional(),
+  /** 이 일에서 사용자가 미리 승인한 바깥 일(push·게시 등) 한두 줄. 선실 카드에 "승인받은 것"으로 보인다(2026-11-03 전역 규칙) */
+  approved: z.string().min(1).max(500).optional(),
 });
 export type Doing = z.infer<typeof Doing>;
 

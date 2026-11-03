@@ -276,6 +276,22 @@
       ]
     },
     {
+      "id": "desk-approved",
+      "title": "승인받은 것",
+      "parent": "cabin",
+      "status": "done",
+      "size": 1,
+      "summary": "하는 일(doing)에 사용자가 미리 승인한 바깥 일을 approved로 적으면 선실 \"지금 하는 일\" 아래에 보임. 전역 규칙 \"승인은 일을 받을 때 한 번에\"를 받침",
+      "since": "2026-11-03",
+      "found": "2026-11-03",
+      "links": [
+        {
+          "label": "desk.md",
+          "path": "docs/desk.md"
+        }
+      ]
+    },
+    {
       "id": "cabin-desk",
       "title": "책상",
       "parent": "cabin",

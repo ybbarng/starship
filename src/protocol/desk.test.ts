@@ -184,6 +184,24 @@ describe("parseDesk", () => {
       ]);
     });
   });
+
+  describe("하는 일의 승인받은 것(approved)", () => {
+    const ship = {
+      id: "ship",
+      title: "쿠폰 화면 고친 것 내보내기",
+      since: "2026-11-03T11:40:00+09:00",
+      approved: "main에 push, 시험 서버 배포. 운영 배포는 안 함",
+    };
+
+    it("있으면 버리지 않고 그대로 읽는다", () => {
+      const result = parseDesk(desk([], [ship]));
+      expect(result.ok && result.desk.doing[0]?.approved).toBe(ship.approved);
+    });
+
+    it("빈 글은 거절한다", () => {
+      expect(parseDesk(desk([], [{ ...ship, approved: "" }])).ok).toBe(false);
+    });
+  });
 });
 
 describe("할 일과 이어 주기", () => {

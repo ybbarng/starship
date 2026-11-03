@@ -135,6 +135,7 @@ export function buildDemoDesks(now = Date.now()): Record<string, Desk> {
           id: "unit",
           title: "쿠폰 계산 단위 시험 돌리는 중",
           since: iso(now, 3),
+          approved: "시험이 통과하면 main에 push. 운영 배포는 안 함",
         },
       ],
     },
