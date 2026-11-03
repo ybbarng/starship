@@ -90,6 +90,11 @@ export function buildDemoDesks(now = Date.now()): Record<string, Desk> {
               path: demoFile("slow-phone.log"),
               look: "끊긴 프레임이 있나",
             },
+            {
+              // path 없이 글 속에만 경로를 적는 세션도 있다. 선실이 글 속 경로에도 보기·열기를 붙인다.
+              label: `릴리스 노트 초안 ${demoFile("release-notes.md")}`,
+              look: "표의 숫자가 점검표와 맞나, 남은 일이 맞나",
+            },
           ],
           after: "고칠 것이 없으면 연출을 그대로 굳혀요",
         },
