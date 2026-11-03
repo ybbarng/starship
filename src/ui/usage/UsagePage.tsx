@@ -287,7 +287,7 @@ function Body({ data }: { data: UsageResponse }) {
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_1.4fr]">
         <Models data={data} />
-        <Limits />
+        <Limits accountSwitch={data.meta.accountSwitch} />
       </div>
     </div>
   );
@@ -459,21 +459,28 @@ function ProjectRows({
         className="cursor-pointer border-t border-white/[0.05] hover:bg-white/[0.03]"
       >
         <td className="px-2 py-1.5 text-right text-white/35">{rank}</td>
-        <td className="px-2 py-1.5" title={p.path ?? p.key}>
-          <span className="flex items-center gap-1.5">
+        <td className="max-w-[260px] px-2 py-1.5" title={p.path ?? p.key}>
+          {/* 표는 자동 배치라 칸 너비만으로는 줄지 않는다. 안쪽 줄에도 상한을 두고 이름만 줄인다 */}
+          <span className="flex max-w-[260px] min-w-0 items-center gap-1.5">
             <span
               className="inline-block h-2 w-2 shrink-0 rounded-full"
               style={{ background: AREA_COLOR[p.area] }}
             />
-            <span className="truncate text-white/90">{p.name}</span>
-            <span className="text-[10.5px] text-white/30">
+            <span
+              data-project-name
+              title={p.name}
+              className="min-w-0 truncate text-white/90"
+            >
+              {p.name}
+            </span>
+            <span className="shrink-0 text-[10.5px] text-white/30">
               {open ? "▾" : "▸"}
             </span>
             {cabin && (
               <Link
                 href={`/crew/${encodeURIComponent(cabin)}`}
                 onClick={(e) => e.stopPropagation()}
-                className="text-[11px] text-[#7ce0ff]/80 hover:text-[#7ce0ff]"
+                className="shrink-0 text-[11px] text-[#7ce0ff]/80 hover:text-[#7ce0ff]"
               >
                 선실
               </Link>
@@ -584,7 +591,8 @@ function Models({ data }: { data: UsageResponse }) {
   );
 }
 
-function Limits() {
+/** 계기 읽는 법. 계정을 바꾼 날 줄은 서버에 STARSHIP_USAGE_ACCOUNT_SWITCH가 있을 때만 */
+function Limits({ accountSwitch }: { accountSwitch?: string }) {
   return (
     <section
       data-usage-limits
@@ -607,9 +615,10 @@ function Limits() {
           않아요. 한도 계산법은 공개되지 않았어요.
         </li>
         <li>
-          이 맥북의 기록만 셉니다. 지운 세션, 웹이나 다른 기기에서 쓴 것은
-          빠져요. 계정을 바꾼 날(2026-11-01) 앞뒤 기록이 섞여 있고, 기록에는
-          계정을 나눌 값이 없어요.
+          이 컴퓨터의 기록만 셉니다. 지운 세션, 웹이나 다른 기기에서 쓴 것은
+          빠져요.
+          {accountSwitch &&
+            ` 계정을 바꾼 날(${accountSwitch}) 앞뒤 기록이 섞여 있고, 기록에는 계정을 나눌 값이 없어요.`}
         </li>
         <li>
           서브에이전트는 부모 세션에 더하고, 다른 폴더(worktree)에서 돌았어도
@@ -617,7 +626,7 @@ function Limits() {
           한 번만 세요.
         </li>
         <li>
-          맥북을 붙잡지 않으려고 기록은 이 화면이 물을 때만, 5분보다 자주 읽지
+          컴퓨터를 붙잡지 않으려고 기록은 이 화면이 물을 때만, 5분보다 자주 읽지
           않아요. 지금 숫자가 필요하면 "다시 읽기"를 누르세요.
         </li>
       </ul>

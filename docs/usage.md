@@ -25,6 +25,7 @@
 | `STARSHIP_USAGE_DIR` | 기록 폴더. 없으면 데모 숫자를 보인다 | `~/.claude/projects` |
 | `STARSHIP_USAGE_AREAS` | 영역 규칙. `영역:경로`를 `;`로 잇는다. 영역은 `work`·`personal`·`other` | `work:~/company;personal:~/personal` |
 | `STARSHIP_STATE_DIR` | 읽은 위치와 합계를 남길 폴더(기본 `~/.local/state/starship`) | |
+| `STARSHIP_USAGE_ACCOUNT_SWITCH` | 계정을 바꾼 날(`YYYY-MM-DD`). 있으면 연료 기록 노트 "계기 읽는 법"에 "그날 앞뒤 기록이 섞여 있다"는 줄을 둔다(`/api/usage`의 `meta.accountSwitch`). 형식이 틀리면 없는 것으로 친다 | `2026-11-01` |
 
 회사 경로는 공개 저장소에 적지 않으려고 코드가 아니라 설정으로 받는다.
 

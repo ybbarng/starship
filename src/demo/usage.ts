@@ -15,6 +15,13 @@ const CREWS: [string, "work" | "personal", number, string][] = [
   ["star-atlas", "personal", 30, "claude-opus-5-5"],
   ["garden-bot", "personal", 12, "claude-haiku-5-5"],
   ["lunar-blog", "personal", 6, "claude-opus-5-5"],
+  // 긴 이름이 사용량 표에서 잘리는지 보는 몫(지어낸 이름)
+  [
+    "interplanetary-weather-station-telemetry-archive-experiments",
+    "personal",
+    4,
+    "claude-sonnet-5-5",
+  ],
 ];
 
 const project = (id: string) => `-demo-${id}`;

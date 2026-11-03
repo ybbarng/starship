@@ -6,6 +6,7 @@ import {
   buildReport,
   burnRate,
   costOf,
+  parseAccountSwitch,
   parseAreaRules,
   rangeStart,
   recordFromLine,
@@ -477,5 +478,19 @@ describe("시간별과 지금 속도", () => {
     expect(burn.perMin.work).toBe(20);
     expect(burn.perMin.personal).toBe(10);
     expect(burn.total).toBe(30);
+  });
+});
+
+describe("계정을 바꾼 날(STARSHIP_USAGE_ACCOUNT_SWITCH)", () => {
+  it("YYYY-MM-DD면 그대로, 앞뒤 공백은 뗀다", () => {
+    expect(parseAccountSwitch("2026-11-01")).toBe("2026-11-01");
+    expect(parseAccountSwitch(" 2026-11-01\n")).toBe("2026-11-01");
+  });
+  it("없거나 형식이 틀리거나 없는 날이면 undefined(화면에 줄을 두지 않는다)", () => {
+    expect(parseAccountSwitch(undefined)).toBeUndefined();
+    expect(parseAccountSwitch("")).toBeUndefined();
+    expect(parseAccountSwitch("2026-11-1")).toBeUndefined();
+    expect(parseAccountSwitch("2026/11/01")).toBeUndefined();
+    expect(parseAccountSwitch("2026-02-30")).toBeUndefined();
   });
 });
