@@ -3,7 +3,7 @@
   "title": "Starship",
   "goal": "세션들을 우주선 승무원으로 보며, 나를 기다리는 것·하는 일·쓴 연료를 한 화면(조종석)에서 묻지 않고 보고 답한다",
   "baselineAt": "2026-10-25",
-  "updatedAt": "2026-11-01T19:50:00+09:00",
+  "updatedAt": "2026-11-03T11:15:00+09:00",
   "here": "window-3d-sky",
   "regions": [
     {
@@ -318,6 +318,30 @@
           "recommend": "starship 서버 + PWA",
           "status": "decided",
           "decided": "starship 서버 + PWA"
+        }
+      ]
+    },
+    {
+      "id": "cabin-files-md",
+      "title": "md 읽기 좋게 보기",
+      "parent": "cabin",
+      "status": "done",
+      "size": 1,
+      "summary": "md의 보기는 그린 글 화면(/files/view)으로. 책상 글 속에만 적힌 경로에도 보기·열기 단추. md 속 HTML·그림은 그리지 않는다",
+      "since": "2026-11-03",
+      "found": "2026-11-03",
+      "links": [
+        {
+          "label": "files.md",
+          "path": "docs/files.md"
+        },
+        {
+          "label": "MdView.tsx",
+          "path": "src/ui/files/MdView.tsx"
+        },
+        {
+          "label": "waitFiles.ts",
+          "path": "src/ui/desk/waitFiles.ts"
         }
       ]
     },

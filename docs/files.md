@@ -2,11 +2,11 @@
 
 세션이 만든 결과물 중에는 주소가 없는 것이 많다. 스크린샷, PDF 보고서, 화면 녹화, 기록 파일. 지금까지는 경로를 복사해 Finder나 터미널에서 찾아 열어야 했다. 이제 책상 카드의 "보기"·"열기" 단추로 바로 본다.
 
-- **보기**: `GET /api/files?path=<절대 경로>` — 새 탭에서 바로 보인다(내려받지 않는다).
+- **보기**: `GET /api/files?path=<절대 경로>` — 새 탭에서 바로 보인다(내려받지 않는다). md는 날 글 대신 그린 글로 보이는 화면 `/files/view?path=<경로>`로 연다(아래 "md 보기 화면").
 - **열기**: `POST /api/files/open` `{ "path": "<절대 경로>" }` — 맥의 맞는 프로그램(미리보기·QuickTime 등)에서 연다.
 - **PWA**: `src/app/manifest.ts`로 Chrome "앱으로 설치"를 켠다. 선실을 따로 된 창으로 띄워 두고 쓴다.
 
-코드: [`src/server/files.ts`](../src/server/files.ts)(검사), [`src/app/api/files/route.ts`](../src/app/api/files/route.ts)(보기), [`src/app/api/files/open/route.ts`](../src/app/api/files/open/route.ts)(열기), [`src/ui/desk/DeskPanel.tsx`](../src/ui/desk/DeskPanel.tsx)의 `FileButtons`(단추). 시험: [`src/server/files.test.ts`](../src/server/files.test.ts).
+코드: [`src/server/files.ts`](../src/server/files.ts)(검사), [`src/app/api/files/route.ts`](../src/app/api/files/route.ts)(보기), [`src/app/api/files/open/route.ts`](../src/app/api/files/open/route.ts)(열기), [`src/ui/kit/FileButtons.tsx`](../src/ui/kit/FileButtons.tsx)(단추), [`src/ui/desk/waitFiles.ts`](../src/ui/desk/waitFiles.ts)(책상 글 속 경로 고르기), [`src/app/files/view/page.tsx`](../src/app/files/view/page.tsx)·[`src/ui/files/MdView.tsx`](../src/ui/files/MdView.tsx)(md 보기 화면). 시험: [`src/server/files.test.ts`](../src/server/files.test.ts), [`src/ui/desk/waitFiles.test.ts`](../src/ui/desk/waitFiles.test.ts), [`src/ui/kit/filePaths.test.ts`](../src/ui/kit/filePaths.test.ts).
 
 ## 비서가 설정할 환경 변수
 
@@ -41,6 +41,10 @@
 | 다른 사이트가 내 맥에서 파일을 열지 못한다 | 열기는 `isSameOrigin`(Origin = Host)일 때만 |
 | 실행 파일은 열지 않는다 | 열기는 `OPEN_EXTS`(문서·이미지·영상·소리) 확장자만. 보통 파일만(`.app`·폴더 거절), 실행 권한 비트가 붙은 파일도 거절 |
 | 셸을 거치지 않는다 | `execFile("/usr/bin/open", ["--", 경로])` |
+| md 보기 화면도 같은 검사를 받는다(2026-11-03) | `/files/view`는 서버에서 파일을 읽지 않는다(주소의 경로로 문서 제목만 정한다). 화면이 브라우저에서 `/api/files`를 fetch하므로 `Sec-Fetch-Site: same-origin`·허용 폴더·숨김 검사가 그대로 걸린다. 거절되면 서버가 준 까닭 글을 그대로 보인다 |
+| md 속 HTML·스크립트는 그리지 않는다 | `react-markdown`에 `rehype-raw`를 붙이지 않아 HTML은 글자로만 나온다(`<script>`·`<img onerror>`도 글자). 위험한 주소(`javascript:` 등)는 기본 `urlTransform`이 빈 값으로 바꾸고, 링크는 http(s)·mailto만 새 탭(`noopener noreferrer`)으로 연다. 상대 경로 링크는 링크로 두지 않는다 |
+| md 속 그림이 검사를 우회하지 않는다 | 그림은 불러오지 않고 `[그림: 대체 글]`로 둔다(http(s)면 그 주소로 가는 링크). 로컬 경로 그림을 `<img>`로 부르면 같은 출처 요청이라 다른 파일을 끌어 쓸 수 있고, 바깥 주소면 파일을 연 사실이 밖으로 나간다 |
+| 글 속 경로에도 단추를 단다(2026-11-03) | 책상 선택지·확인 항목에 `path`가 없으면 label·look·note에서, 기다림 세부에서도 `findPaths`로 경로를 찾는다. `path`가 있으면 그것만. 같은 경로는 한 번만 붙인다(`src/ui/desk/waitFiles.ts`, 시험 `waitFiles.test.ts`). 찾은 경로도 서버가 똑같이 검사한다 |
 
 시험(`files.test.ts`)은 임시 폴더에 진짜 파일·링크를 만들어 위 규칙을 하나씩 확인한다: `../`, 밖으로 가는 링크, 안에서 도는 링크, 이름만 pdf인 링크, 숨김 파일·숨김을 가리키는 링크, 허용 폴더 밖·옆 폴더, html·sh·.app·실행 권한 파일.
 
@@ -50,7 +54,9 @@
 
 - **세션(AI)**: 결과물을 허용 폴더(예: `~/Desktop`) 아래에 저장하고, 책상 기다림의 `options[].path`나 `items[].path`에 절대 경로를 적는다. `~`는 쓰지 않는다(형식 검사에서 걸린다).
 - **사람**: 선실 책상 카드에서 파일 이름 옆 "보기"(새 탭) 또는 "열기"(맥 프로그램)를 누른다. 조종석 결재함에서는 서류 제목·세부에 적힌 경로(`/…`·`~/…`, 확장자로 끝남, `src/ui/kit/filePaths.ts`의 `findPaths`)마다 같은 단추가 붙는다. 거절되면 까닭이 알림으로 뜬다("허용 폴더 밖이에요", "숨김 파일·폴더예요" 등).
-- **직접 확인**: 선실 책상 카드의 "보기"로 연다. 주소창에 직접 넣으면(`Sec-Fetch-Site: none`) 거절된다.
+- **글 속 경로**: 세션이 `path`를 빠뜨리고 label 글에만 "초안 /…/foo.md"처럼 적어도 선실 책상 카드가 그 경로에 단추를 붙인다. 그래도 세션은 되도록 `path`에 적는다(단추 자리가 분명하다).
+- **md 보기 화면**: md의 "보기"는 `/files/view?path=<경로>`를 새 탭으로 연다. 제목·목록·표·체크 목록·코드·인용을 어두운 화면에 72ch 폭으로 그린다(`src/ui/files/MdView.tsx`, 글 모양은 `globals.css`의 `.md-body`). 위에 파일 이름·전체 경로·"열기"·"날 글 보기" 전환이 있다. 탭 제목은 파일 이름이다. 라이브러리: `react-markdown` 10.1.0, `remark-gfm` 4.0.1(정확한 버전으로 고정).
+- **직접 확인**: 선실 책상 카드의 "보기"로 연다. 데모 선실(`/crew/web-shop`) "결제 화면 연출 4개 확인"의 릴리스 노트 항목이 label 글 속 경로 + md 보기 예다(`public/demo-files/release-notes.md`). 주소창에 직접 넣으면(`Sec-Fetch-Site: none`) 거절된다.
 - **PWA**: Chrome 주소창 오른쪽의 설치 아이콘 또는 메뉴 → "앱으로 설치". 따로 된 창에서 "보기"는 기본 브라우저 탭으로 열린다.
 - **Dock 배지**: 설치한 앱의 Dock 아이콘에 모든 승무원 책상의 기다림 수 합계가 뜬다(`src/ui/AppBadge.tsx`, Badging API, 0이면 지운다). 모든 화면이 쓰는 5초 스냅숏의 `crew[].desk.waiting`을 더한다. 앱 창이 열려 있을 때만 바뀌고, 창을 닫으면 마지막 숫자가 남는다. 서버에 못 닿으면 마지막 숫자를 그대로 둔다. 브라우저 탭에서는 아무 일도 하지 않는다.
 - **새 빌드 반영**: 앱 창은 7790 화면을 그대로 보여 주므로 따로 업데이트할 것이 없다. 다만 열려 있는 창은 새 빌드가 떠도 옛 화면 코드를 계속 돌린다(데이터는 5초마다 새로 받는다). Cmd+R로 새로 고치면 새 화면이 된다. 이름·아이콘(manifest)이 바뀌면 Chrome이 스스로 다시 받는다.
