@@ -11,10 +11,12 @@ import remarkGfm from "remark-gfm";
 import { useOpenFile } from "@/ui/kit/FileButtons";
 import { baseName } from "@/ui/kit/filePaths";
 import { Toasts } from "@/ui/kit/Toasts";
+import { MAX_MD_RENDER_BYTES, mdTooBig, megabytes } from "./mdSize";
 
 type Load =
   | { state: "loading" }
   | { state: "ok"; text: string }
+  | { state: "big"; bytes: number }
   | { state: "error"; reason: string };
 
 const WEB = /^(https?:|mailto:)/i;
@@ -72,6 +74,13 @@ export function MdView({ path }: { path: string }) {
     setLoad({ state: "loading" });
     fetch(`/api/files?path=${encodeURIComponent(path)}`, { cache: "no-store" })
       .then(async (res) => {
+        // 너무 큰 파일은 받지 않고 그만둔다(그리면 탭이 멈춘다)
+        const big = res.ok ? mdTooBig(res.headers.get("content-length")) : null;
+        if (big !== null) {
+          await res.body?.cancel().catch(() => {});
+          if (alive) setLoad({ state: "big", bytes: big });
+          return;
+        }
         const text = await res.text();
         if (!alive) return;
         setLoad(
@@ -142,6 +151,37 @@ export function MdView({ path }: { path: string }) {
           >
             {load.reason}
           </p>
+        )}
+        {load.state === "big" && (
+          <div
+            data-md-big
+            className="rounded-md border border-white/[0.12] bg-white/[0.04] px-3 py-3 text-[13px] text-white/80"
+          >
+            <p>
+              {megabytes(load.bytes)}짜리라 여기서 그려 보이지 않아요(
+              {megabytes(MAX_MD_RENDER_BYTES)}까지). 날 글로 보거나 맥에서 열어
+              보세요.
+            </p>
+            <div className="mt-2 flex gap-2">
+              <a
+                data-md-raw-link
+                href={`/api/files?path=${encodeURIComponent(path)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded bg-white/[0.08] px-2 py-1 text-[12px] text-white/80 hover:bg-white/[0.14]"
+              >
+                날 글 보기
+              </a>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={open}
+                className="rounded bg-white/[0.08] px-2 py-1 text-[12px] text-white/80 hover:bg-white/[0.14] disabled:opacity-40"
+              >
+                열기
+              </button>
+            </div>
+          </div>
         )}
         {load.state === "ok" &&
           (raw ? (
