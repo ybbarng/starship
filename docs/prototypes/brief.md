@@ -48,7 +48,7 @@ dev 서버는 `http://127.0.0.1:7790`에 늘 떠 있다(새로 띄우지 않는�
    - 전환 뒤: `... --scroll 900` 붙여서 `<slug>-2.png`
    - 빈 화면과 많은 화면: `?demo=empty&reset=1`, `?demo=busy&reset=1`
    - **버튼이 실제로 눌리는지**: `--click "text=치우기" --click "text=1시간 뒤" --after <slug>-3.png`처럼 눌러 토스트 글이 찍히는지, 지금 할 일이 다음으로 바뀌는지 본다. 목적지 모달을 열어 한 곳을 골라 창밖이 이동하는지도 본다.
-   - 스크래치 폴더: `/private/tmp/claude-504/-Users-ybbarng-personal-projects-starship/81f0dc1e-ad58-4aef-8c96-a5dc7f5de73d/scratchpad/`
+   - 스크래치 폴더: 각 작업자의 임시 폴더(저장소 밖)
 3. 커밋하지 않는다(여러 작업이 git index를 같이 쓴다). 끝나면 만든 파일, 화면 구성 한 줄, 확인한 것(클릭 결과 포함), 못 한 것을 7줄 안으로 보고한다.
 
 ---

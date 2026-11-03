@@ -67,7 +67,7 @@
           "id": "receipt",
           "type": "fork",              // 갈림길
           "title": "영수증 발급 방식",
-          "owner": "me",               // me = Brice, 그 밖에는 사람 이름
+          "owner": "me",               // me = 이 화면을 쓰는 사람, 그 밖에는 사람 이름
           "options": ["A 대행사 영수증", "B 직접 발급"],
           "recommend": "A 대행사 영수증",
           "status": "open",            // open · decided
