@@ -53,6 +53,8 @@ export const UsageLimitsResponse = z.object({
   at: Ms.optional(),
   limits: LenientLimits.default([]),
   note: z.string().optional(),
+  /** 선택. 본부가 방금 실패해 Starship 서버가 기억해 둔 마지막 성공값을 준 것이면 true(까닭은 note) */
+  stale: z.boolean().optional(),
 });
 export type UsageLimitsResponse = z.infer<typeof UsageLimitsResponse>;
 
