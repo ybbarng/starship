@@ -156,6 +156,20 @@ function worldCenterOf(
   };
 }
 
+/**
+ * 키를 친 곳이 지도 단축키를 받지 않는 곳인가. 깃발 답 창·되감기 막대 안이면 그 이름,
+ * 그 밖의 글 칸(input·textarea·select·contenteditable)이면 "field", 아니면 null.
+ */
+function keyOwnerOf(
+  t: EventTarget | null,
+): "fork-pop" | "replay-bar" | "field" | null {
+  if (!(t instanceof Element)) return null;
+  if (t.closest("[data-fork-pop]")) return "fork-pop";
+  if (t.closest("[data-replay-bar]")) return "replay-bar";
+  if (t.closest("input,textarea,select,[contenteditable]")) return "field";
+  return null;
+}
+
 /** 누른 곳이 땅·이름표·단추가 아닌 빈 곳인가 */
 const isEmptySpot = (t: EventTarget | null) =>
   !(t instanceof Element) ||
@@ -312,8 +326,11 @@ export function FrontierView({
     const el = ref.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      // 도움말 위에서는 도움말을 스크롤한다(지도 확대로 쓰지 않는다)
-      if (e.target instanceof Element && e.target.closest("[data-map-legend]"))
+      // 도움말·깃발 답 창 위에서는 그 창을 스크롤한다(지도 확대로 쓰지 않는다)
+      if (
+        e.target instanceof Element &&
+        e.target.closest("[data-map-legend],[data-fork-pop]")
+      )
         return;
       e.preventDefault();
       stopFlight();
@@ -462,6 +479,17 @@ export function FrontierView({
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key;
+    // 깃발 답 창·되감기 막대·글 칸에서 친 키는 지도 단축키가 아니다(답 글의 "f"가 다음 갈림길로 새지 않게).
+    // Esc만 받아 그 창을 닫는다
+    const owner = keyOwnerOf(e.target);
+    if (owner) {
+      if (k !== "Escape") return;
+      if (owner === "fork-pop") setForkPop(null);
+      else if (owner === "replay-bar") setReplayOpen(false);
+      else return;
+      e.preventDefault();
+      return;
+    }
     let done = true;
     if (k === "+" || k === "=") zoomBy(ZOOM_STEP);
     else if (k === "-" || k === "_") zoomBy(1 / ZOOM_STEP);
