@@ -26,6 +26,7 @@ import {
   CrewMapResponse,
   Snapshot,
 } from "@/protocol/v1";
+import { dedupeSnapshot } from "./dedupe";
 
 const HOUR = 3_600_000;
 
@@ -67,7 +68,8 @@ export async function getSnapshot(
     return buildSnapshot(demoState(seat), scenario, Date.now(), link);
   const res = await fetch(`${info.base}/v1/snapshot`, { cache: "no-store" });
   if (!res.ok) throw new Error(`snapshot ${res.status}`);
-  return Snapshot.parse(await res.json());
+  // 본부가 같은 승무원·할 일을 두 번 보내도 화면에는 하나만(src/server/dedupe.ts)
+  return dedupeSnapshot(Snapshot.parse(await res.json()));
 }
 
 /**
