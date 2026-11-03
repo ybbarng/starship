@@ -6,7 +6,8 @@ import type { Hail, Task } from "@/protocol/v1";
 // 거기서 할 일 버튼으로 답한다. 여러 통이면 창 안에서 넘긴다.
 import { BridgeScene } from "@/protos/classic/Bridges";
 import { BRIDGE_NAME, bridgeOf, initialOf } from "@/protos/classic/util";
-import { useTelemetry } from "@/sky/useTelemetry";
+import type { Telemetry } from "@/sky/telemetry";
+import { useTelemetryPick } from "@/sky/useTelemetry";
 import {
   ACTION_LABEL,
   ago,
@@ -92,6 +93,11 @@ export function HailChips({
   );
 }
 
+/** 교신 지연 글만(같으면 다시 그리지 않는다) */
+function lightPick(t: Telemetry) {
+  return { light: lightTime(t.earthKm) };
+}
+
 export function HailScreen({
   hail,
   task,
@@ -111,7 +117,7 @@ export function HailScreen({
 }) {
   const bridge = bridgeOf(hail.source);
   const service = sourceLabel(hail.source);
-  const { earthKm } = useTelemetry(2);
+  const { light } = useTelemetryPick(lightPick, 2, 1);
   return (
     <section
       key={hail.id}
@@ -178,7 +184,7 @@ export function HailScreen({
           className="absolute top-1.5 right-2 rounded bg-black/55 px-1.5 py-px font-mono text-[10px] tabular-nums text-white/65"
           title="지구까지 빛이 가는 시간"
         >
-          지연 {lightTime(earthKm)}
+          지연 {light}
         </div>
         <div
           className="absolute right-2 bottom-1.5 flex items-end gap-[2px]"
