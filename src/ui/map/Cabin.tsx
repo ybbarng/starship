@@ -21,8 +21,9 @@ import type { Crew, Task } from "@/protocol/v1";
 import { CrewBrief, CrewHeader } from "@/protos/classic/CrewDetail";
 import { CrewTasks, crewTaskCount } from "@/ui/desk/CrewTasks";
 import { Toasts } from "@/ui/kit";
+import { agoLabel } from "@/ui/kit/labels";
 import { FrontierView } from "./frontier/FrontierView";
-import { agoLabel, SIGN_ICON } from "./labels";
+import { SIGN_ICON } from "./labels";
 import { MapView, type MapViewProps } from "./MapView";
 import { RegionPanel } from "./RegionPanel";
 

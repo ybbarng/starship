@@ -9,7 +9,7 @@ import { parseWhen } from "@/protocol/common";
 import type { Answered } from "@/protocol/desk";
 import { FileButtons } from "@/ui/kit/FileButtons";
 import { findPaths } from "@/ui/kit/filePaths";
-import { agoLabel } from "@/ui/map/labels";
+import { agoLabel } from "@/ui/kit/labels";
 
 export function AnswerList({
   crewId,

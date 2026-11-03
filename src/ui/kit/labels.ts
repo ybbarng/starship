@@ -75,6 +75,24 @@ export function ago(since: number, now = Date.now()): string {
 }
 
 /**
+ * 얼마 전인가: "방금", "23분 전", "2시간 전", "3일 전".
+ * seconds를 켜면 1분 안을 "12초 전"처럼 초로 적는다(사용량 화면의 "기록 읽은 때").
+ * 화면 곳곳의 "몇 분 전"은 모두 이것을 쓴다(조종석 Panel의 짧은 꼴 agoShort는 따로).
+ */
+export function agoLabel(
+  at: number,
+  now = Date.now(),
+  { seconds = false }: { seconds?: boolean } = {},
+): string {
+  if (seconds) {
+    const s = Math.max(0, Math.round((now - at) / 1000));
+    if (s < 60) return `${s}초 전`;
+  }
+  const a = ago(at, now);
+  return a === "방금" ? a : `${a} 전`;
+}
+
+/**
  * 얼마나 이어졌나: "23분째", "2시간째". 1분이 안 됐어도 "1분째"로 적는다.
  * "방금째"·"방금부터 기다림"은 어색해서, 뒤에 "기다림" 등이 붙는 자리에서도 자연스럽게 읽히게 한다.
  */

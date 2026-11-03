@@ -14,7 +14,7 @@ import {
 } from "@/protocol/desk";
 import type { Task } from "@/protocol/v1";
 import { FileButtons } from "@/ui/kit/FileButtons";
-import { agoLabel } from "@/ui/map/labels";
+import { agoLabel } from "@/ui/kit/labels";
 import { waitFiles } from "./waitFiles";
 
 export const WAIT_LABEL: Record<WaitType, string> = {
