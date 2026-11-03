@@ -89,7 +89,7 @@ export function Cabin({
           title={data.problems.join("\n")}
         >
           지도 파일이 틀렸어요 ({data.problems.length}){" "}
-          {map ? "· 마지막으로 맞았던 지도를 보여요" : ""} ·{" "}
+          {map ? "· 틀린 곳만 빼고 보여요" : ""} ·{" "}
           <span className="text-white/60">{data.problems[0]}</span>
         </div>
       )}
@@ -101,7 +101,7 @@ export function Cabin({
           title={deskProblems.join("\n")}
         >
           책상 파일이 틀렸어요 ({deskProblems.length}){" "}
-          {desk ? "· 마지막으로 맞았던 책상을 보여요" : ""} ·{" "}
+          {desk ? "· 틀린 곳만 빼고 보여요" : ""} ·{" "}
           <span className="text-white/60">{deskProblems[0]}</span>
         </div>
       )}
