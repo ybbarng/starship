@@ -148,6 +148,14 @@ export function MdView({ path }: { path: string }) {
         }
         const text = await res.text();
         if (!alive) return;
+        // 길이를 적지 않고 온 응답은 받은 글 길이로 다시 본다
+        const late = res.ok
+          ? mdTooBig(res.headers.get("content-length"), undefined, text)
+          : null;
+        if (late !== null) {
+          setLoad({ state: "big", bytes: late });
+          return;
+        }
         setLoad(
           res.ok
             ? { state: "ok", text }

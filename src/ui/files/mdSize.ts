@@ -3,13 +3,21 @@
 
 export const MAX_MD_RENDER_BYTES = 2 * 1024 * 1024;
 
-/** 응답의 Content-Length로 보아 그리기엔 너무 큰가. 길이를 모르면 그려 본다. */
+/**
+ * 그리기엔 너무 큰가(너무 크면 그 바이트 수). 응답의 Content-Length로 보고, 길이를 모르면
+ * 받은 글(received)의 UTF-8 바이트 수로 다시 본다(2026-11-03, 전에는 길이를 모르면 그냥 그렸다).
+ * 길이도 받은 글도 없으면 그려 본다.
+ */
 export function mdTooBig(
   contentLength: string | null,
   max = MAX_MD_RENDER_BYTES,
+  received?: string,
 ): number | null {
   const n = Number(contentLength);
-  return contentLength && Number.isFinite(n) && n > max ? n : null;
+  if (contentLength && Number.isFinite(n)) return n > max ? n : null;
+  if (received === undefined) return null;
+  const bytes = new TextEncoder().encode(received).byteLength;
+  return bytes > max ? bytes : null;
 }
 
 /** "3.4MB" */
