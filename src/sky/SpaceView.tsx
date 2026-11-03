@@ -76,6 +76,7 @@ import {
   STAR_RADIUS_SUN,
   telemetry,
 } from "./telemetry";
+import { type ViewFrame, viewDistance } from "./viewScale";
 import { useVoyage } from "./voyage";
 
 const SKY_RADIUS = 9000;
@@ -1661,9 +1662,32 @@ function StarTargets({
 
 // ── 카메라: 목적지 자리 잡기와 이동 ─────────────────────────
 
+/** 지금 화면 모양(시야각·가로세로 비). 창 크기가 바뀌면 보는 거리도 따라 바뀐다. */
+function frameOf(camera: THREE.Camera): ViewFrame {
+  const cam = camera as THREE.PerspectiveCamera;
+  return { fov: cam.fov, aspect: cam.aspect };
+}
+
 type Pose = { center: THREE.Vector3; dir: THREE.Vector3; dist: number };
 
-function poseFor(dest: Destination, orbits: SkyCatalog["orbits"] | null): Pose {
+/** 별 목적지의 보는 거리: 태양에 견준 실제 반지름으로 키운다(viewScale.ts). */
+function starViewDist(dest: Destination, frame: ViewFrame): number {
+  const star = dest.star;
+  if (!star) return 1;
+  const ratio = star.radiusSun ?? STAR_RADIUS_SUN[dest.id] ?? 1;
+  return viewDistance(star.radius, star.radius * 12, ratio, frame);
+}
+
+/** 행성·위성의 크기 비율(지구 = 1) */
+function earthRatio(body: BodyDef): number {
+  return (REAL_RADIUS_KM[body.id] ?? 6_371) / 6_371;
+}
+
+function poseFor(
+  dest: Destination,
+  orbits: SkyCatalog["orbits"] | null,
+  frame: ViewFrame,
+): Pose {
   const now = Date.now();
   if (dest.view === "overview") {
     return {
@@ -1704,7 +1728,7 @@ function poseFor(dest: Destination, orbits: SkyCatalog["orbits"] | null): Pose {
       .add(perp.multiplyScalar(0.55))
       .add(UP.clone().multiplyScalar(0.12))
       .normalize();
-    return { center, dir, dist: dest.star.radius * 12 };
+    return { center, dir, dist: starViewDist(dest, frame) };
   }
   if (dest.id === "halley") {
     const center = new THREE.Vector3(
@@ -1754,17 +1778,30 @@ function poseFor(dest: Destination, orbits: SkyCatalog["orbits"] | null): Pose {
       .add(sunDir.multiplyScalar(0.45))
       .add(UP.clone().multiplyScalar(0.12))
       .normalize();
-    return { center, dir, dist: body.radius * 12 };
+    return {
+      center,
+      dir,
+      dist: viewDistance(
+        body.radius,
+        body.radius * 12,
+        earthRatio(body),
+        frame,
+      ),
+    };
   }
   dir = sunDir
     .multiplyScalar(0.55)
     .add(side.multiplyScalar(0.8))
     .add(UP.clone().multiplyScalar(0.2))
     .normalize();
-  const reach = body.ring
-    ? body.radius * body.ring.outer * 5.5
-    : body.radius * 9;
-  return { center, dir, dist: reach };
+  // 고리가 있으면 고리 바깥까지 화면에 담는다.
+  const reach = body.ring ? body.radius * body.ring.outer : body.radius;
+  const base = body.ring ? reach * 5.5 : reach * 9;
+  return {
+    center,
+    dir,
+    dist: viewDistance(reach, base, earthRatio(body), frame),
+  };
 }
 
 /**
@@ -1895,7 +1932,7 @@ function CameraRig({
     if (!dest) return;
     if (first.current) {
       first.current = false;
-      const p = poseFor(dest, orbits);
+      const p = poseFor(dest, orbits, frameOf(camera));
       camera.position.copy(
         p.center.clone().add(p.dir.clone().multiplyScalar(p.dist)),
       );
@@ -1906,7 +1943,7 @@ function CameraRig({
     }
     // 별로 갈 때는 지금 하늘에서 그 별이 보이는 방향으로 도착 자리를 정한다.
     if (dest.star) placeStar(dest, camera.position);
-    const p = poseFor(dest, orbits);
+    const p = poseFor(dest, orbits, frameOf(camera));
     const to = p.center.clone().add(p.dir.clone().multiplyScalar(p.dist));
     const d = camera.position.distanceTo(to);
     const { previousId } = useVoyage.getState();
@@ -1984,7 +2021,7 @@ function CameraRig({
     if (!orbits) return;
     const dest = DESTINATION_BY_ID.get(destinationId);
     if (!dest) return;
-    const p = poseFor(dest, orbits);
+    const p = poseFor(dest, orbits, frameOf(camera));
     // 놓은 뒤에는 잠깐 미끄러지다 멈춘다.
     if (!dragging.current) {
       const s = spin.current;
@@ -2077,7 +2114,7 @@ function CameraRig({
   ) {
     const offsetAt = (cam: THREE.Vector3): Vec3 => {
       if (!dest.star) return [0, 0, 0];
-      const k = NEAR_STAR_OFFSET_LY / (dest.star.radius * 12);
+      const k = NEAR_STAR_OFFSET_LY / p.dist;
       return [
         (cam.x - p.center.x) * k,
         (cam.y - p.center.y) * k,
@@ -2112,7 +2149,11 @@ function CameraRig({
       // 옮겨 간다. 실제 위치만 쓰면 진행 1%도 안 돼 별에서 0.5광년을 넘어 선이 구에서 떨어졌다.
       const from = t0?.fromStar;
       const back = from?.star
-        ? observerNearStar(from, camera.position, from.star.radius * 12)
+        ? observerNearStar(
+            from,
+            camera.position,
+            starViewDist(from, frameOf(camera)),
+          )
         : null;
       if (back) {
         skyObserver.ly = departureObserver(back, real, e);
