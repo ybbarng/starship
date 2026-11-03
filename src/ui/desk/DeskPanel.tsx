@@ -3,7 +3,7 @@
 // 선실 오른쪽 판의 책상: 세션이 나를 기다리는 것(카드)과 지금 하는 일. 설계: docs/desk.md.
 // 답은 책상이 아니라 같은 기다림의 Task(id desk:<crewId>:<waitId>)에 answer로 보낸다.
 import { useEffect, useState } from "react";
-import { SNOOZE_MS, useAct } from "@/data/hooks";
+import { useAct } from "@/data/hooks";
 import { deskSentKey, useSent } from "@/data/sent";
 import { parseWhen } from "@/protocol/common";
 import {
@@ -138,15 +138,13 @@ function WaitCard({
   // 그 사이 "아직 답할 수 없어요"가 잘못 뜨지 않게, 보낸 답을 남겨 두고 보여 준다(2026-11-03)
   const sent = useSent((s) => s.sent[sentKey]);
   const mark = useSent((s) => s.mark);
-  // 미뤄도 할 일은 잠시 빠지고 카드는 남는다. 본부가 받았을 때만 미룬 끝을 남겨 "n분 뒤 다시 와요"로 보인다
+  // 미뤄도 할 일은 잠시 빠지고 카드는 남는다. 본부가 받으면 useAct().task가 미룬 끝을 남겨
+  // (조종석 결재함에서 미뤄도 같다) "n분 뒤 다시 와요"로 보인다
   const snoozedUntil = useSent((s) => s.snoozed[sentKey]);
-  const snoozeIt = useSent((s) => s.snooze);
   const state = waitAnswerState({ sent, canAnswer, snoozedUntil, now });
   const snooze = async () => {
     if (!task) return;
-    const until = Date.now() + SNOOZE_MS;
-    const result = await act.task(task, "snooze", undefined, until);
-    if (result.ok) snoozeIt(sentKey, until);
+    await act.task(task, "snooze");
   };
   const send = async (choice?: string) => {
     const answer = deskAnswer(choice, text);

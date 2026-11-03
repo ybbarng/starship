@@ -2,7 +2,14 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { type Desk, deskTaskId } from "@/protocol/desk";
 import type { Task } from "@/protocol/v1";
 import { crewTaskCount } from "@/ui/desk/CrewTasks";
-import { deskSentKey, forkKey, isReadHidden, readKey, useSent } from "./sent";
+import {
+  deskSentKey,
+  forkKey,
+  isReadHidden,
+  noteTaskResult,
+  readKey,
+  useSent,
+} from "./sent";
 
 beforeEach(() => useSent.setState({ sent: {}, read: {}, snoozed: {} }));
 
@@ -28,6 +35,20 @@ describe("보낸 답: 화면 하나가 아니라 저장소에", () => {
     expect(Object.keys(useSent.getState().sent).sort()).toEqual(
       [keep, other].sort(),
     );
+  });
+
+  it("noteTaskResult: 본부가 받은 책상 할 일 미룸은 어느 화면에서 눌렀든 남긴다", () => {
+    const id = deskTaskId("web-shop", "coupon-ui");
+    const until = Date.parse("2026-11-03T11:00:00+09:00");
+    const req = { target: "task", id, action: "snooze", until } as const;
+    // 본부가 못 받았으면 남기지 않는다
+    noteTaskResult(req, { ok: false });
+    expect(useSent.getState().snoozed).toEqual({});
+    // 책상 밖 할 일은 카드가 없으니 남기지 않는다
+    noteTaskResult({ ...req, id: "gh:pr:1" }, { ok: true });
+    expect(useSent.getState().snoozed).toEqual({});
+    noteTaskResult(req, { ok: true });
+    expect(useSent.getState().snoozed).toEqual({ [deskSentKey(id)]: until });
   });
 
   it("미룬 기다림도 책상에서 빠지면 함께 지운다", () => {

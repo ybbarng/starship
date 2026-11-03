@@ -6,6 +6,7 @@
 // 탭 안에서만 산다(새로 고치면 사라진다). 세션이 반영하면(깃발 decided, 책상에서 기다림이 빠짐) 지운다.
 // 책상 기다림을 1시간 미룬 것도 여기 둔다: 미루면 할 일은 빠지지만 책상 카드는 남기 때문이다.
 import { create } from "zustand";
+import type { ActionRequest, ActionResult } from "@/protocol/v1";
 
 /** 지도 갈림길 답의 열쇠 */
 export function forkKey(crewId: string, region: string, signId: string) {
@@ -72,6 +73,21 @@ export const useSent = create<SentStore>((set) => ({
   snooze: (key, until) =>
     set((s) => ({ snoozed: { ...s.snoozed, [key]: until } })),
 }));
+
+/**
+ * 할 일 동작의 결과를 이 저장소에 남긴다. 지금은 책상 기다림(id desk:…) 미룸만:
+ * 본부가 받았을 때 미룬 끝을 남겨, 조종석 결재함에서 미뤘든 선실 카드에서 미뤘든
+ * 선실 카드가 "n분 뒤 다시 와요"로 보이게 한다(전에는 선실 카드에서 미룰 때만 남겨
+ * 결재함에서 미루면 "아직 답할 수 없어요"가 잘못 떴다, 2026-11-03). useAct().task가 부른다.
+ */
+export function noteTaskResult(
+  req: Extract<ActionRequest, { target: "task" }>,
+  result: ActionResult,
+): void {
+  if (!result.ok || !req.id.startsWith("desk:")) return;
+  if (req.action === "snooze" && req.until !== undefined)
+    useSent.getState().snooze(deskSentKey(req.id), req.until);
+}
 
 /**
  * 읽음으로 숨긴 답인지. crewId를 모르면 id만으로 본다(답 id는 책상 안에서만 겹치지 않는다).

@@ -17,6 +17,7 @@ import {
 } from "@/protocol/v1";
 import type { UsageRange, UsageResponse } from "@/usage/model";
 import { failNote } from "./actionNote";
+import { noteTaskResult } from "./sent";
 import { useToast } from "./toast";
 
 /** 데모 시나리오(?demo=, ?link=)와 자리(페이지 경로)를 서버에 넘긴다. */
@@ -248,21 +249,26 @@ export function useAct() {
   const send = (req: ActionRequest): Promise<ActionResult> =>
     mutation.mutateAsync(req).catch(() => ({ ok: false }));
   return {
-    task: (
+    /** 책상 기다림 미룸은 여기 한 곳에서 남긴다(noteTaskResult). 어느 화면에서 눌러도 선실 카드가 같게 보인다 */
+    task: async (
       task: Task,
       action: Extract<ActionRequest, { target: "task" }>["action"],
       answer?: string,
       /** 미룰 끝(Unix 밀리초). 안 주면 지금부터 1시간 */
       until?: number,
-    ) =>
-      send({
+    ): Promise<ActionResult> => {
+      const req = {
         target: "task",
         id: task.id,
         action,
         answer,
         until:
           action === "snooze" ? (until ?? Date.now() + SNOOZE_MS) : undefined,
-      }),
+      } as const;
+      const result = await send(req);
+      noteTaskResult(req, result);
+      return result;
+    },
     crew: (crew: Crew, action: Crew["actions"][number]) =>
       send({ target: "crew", id: crew.id, action }),
     /** 책상의 답해 둔 것을 읽음으로(서버가 책상에서 뺀다) */
