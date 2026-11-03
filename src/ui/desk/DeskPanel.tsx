@@ -14,6 +14,7 @@ import {
 import type { Task } from "@/protocol/v1";
 import { FileButtons } from "@/ui/kit/FileButtons";
 import { agoLabel } from "@/ui/map/labels";
+import { waitFiles } from "./waitFiles";
 
 export const WAIT_LABEL: Record<WaitType, string> = {
   decide: "고르기",
@@ -105,6 +106,8 @@ function WaitCard({
   const act = useAct();
   const [text, setText] = useState("");
   const color = WAIT_COLOR[wait.type];
+  // path가 없으면 글 속 경로에도 보기·열기를 붙인다(2026-11-03). 고르는 규칙: waitFiles.ts
+  const files = waitFiles(wait);
   const canAnswer = task?.actions.includes("answer") ?? false;
   const send = (choice?: string) => {
     const answer = deskAnswer(choice, text);
@@ -162,10 +165,11 @@ function WaitCard({
             {wait.detail}
           </p>
         )}
+        {files.detail.length > 0 && <FileList paths={files.detail} />}
 
         {wait.type === "decide" && (
           <ul className="flex flex-col gap-1.5">
-            {(wait.options ?? []).map((o) => (
+            {(wait.options ?? []).map((o, i) => (
               <li
                 key={o.id}
                 data-option={o.id}
@@ -190,10 +194,8 @@ function WaitCard({
                     {o.note}
                   </div>
                 )}
-                {o.path && (
-                  <div className="mt-1.5">
-                    <FileButtons path={o.path} />
-                  </div>
+                {(files.options[i] ?? []).length > 0 && (
+                  <FileList paths={files.options[i] ?? []} className="mt-1.5" />
                 )}
                 <div className="mt-1.5 flex items-center gap-2">
                   {o.url && <OpenLink href={o.url}>데모 열기</OpenLink>}
@@ -208,18 +210,18 @@ function WaitCard({
 
         {wait.type === "check" && (
           <ol className="flex list-inside list-decimal flex-col gap-1.5 text-white/80">
-            {(wait.items ?? []).map((it) => (
+            {(wait.items ?? []).map((it, i) => (
               <li key={`${it.label}|${it.url ?? ""}`} data-check-item>
                 {it.url ? (
                   <OpenLink href={it.url}>{it.label}</OpenLink>
                 ) : (
                   it.label
                 )}
-                {it.path && (
-                  <span className="ml-2 inline-flex align-baseline">
-                    <FileButtons path={it.path} />
+                {(files.items[i] ?? []).map((p) => (
+                  <span key={p} className="ml-2 inline-flex align-baseline">
+                    <FileButtons path={p} />
                   </span>
-                )}
+                ))}
                 {it.look && (
                   <div className="pl-4 text-[11.5px] text-white/50">
                     보실 점 · {it.look}
@@ -286,6 +288,26 @@ function WaitCard({
         )}
       </div>
     </article>
+  );
+}
+
+/** 경로 여러 개의 보기·열기 단추를 줄 바꿈하며 늘어놓는다 */
+function FileList({
+  paths,
+  className = "",
+}: {
+  paths: string[];
+  className?: string;
+}) {
+  return (
+    <div
+      data-wait-files
+      className={`flex flex-wrap gap-x-3 gap-y-1 ${className}`}
+    >
+      {paths.map((p) => (
+        <FileButtons key={p} path={p} />
+      ))}
+    </div>
   );
 }
 
