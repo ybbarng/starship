@@ -17,3 +17,15 @@ export function agoShort(at: number, now: number): string {
   const s = Math.max(0, Math.round((now - at) / 1000));
   return s < 60 ? `${s}초 전` : `${Math.round(s / 60)}분 전`;
 }
+
+export type InboxEmpty = "loading" | "unreachable" | "calm";
+
+/**
+ * 결재함이 비었을 때 무엇이라 적을지. 아직 한 번도 받지 못했으면 "순항 중"이라 하지 않는다
+ * (불러오는 중·본부가 꺼져 있을 때도 순항 중으로 보였다, 2026-11-03).
+ * 한 번이라도 받았으면 그 자료로 판단한다(끊김은 연결 등이 알린다).
+ */
+export function inboxEmpty(ready: boolean, error: boolean): InboxEmpty {
+  if (ready) return "calm";
+  return error ? "unreachable" : "loading";
+}

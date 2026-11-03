@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
+import { useBridgeStatus } from "@/data/hooks";
 import type { Crew, CrewStatus, Hail, Link, Task } from "@/protocol/v1";
 import { formatSpeed } from "@/sky/telemetry";
 import { useTelemetry } from "@/sky/useTelemetry";
@@ -19,11 +20,13 @@ import { agoShort, HQ_CLOCK_MS, hqConnected } from "./hqLink";
 import { InboxIndex, InboxSheet } from "./Inbox";
 import {
   inboxGroups,
+  inboxOrder,
   isNews,
   lastReplies,
   pickGroup,
   pickReview,
   REVIEW_PREFIX,
+  repick,
   reviewLane,
 } from "./inboxGroups";
 import {
@@ -81,9 +84,11 @@ function Tile({
 }
 
 /** 본부 연결 등. 화면 시계(30초)와 따로 2초 시계로 끊김과 "마지막으로 받은 때"를 센다. */
-function HqTile({ error, lastAt }: { error: boolean; lastAt: number }) {
+function HqTile() {
+  // 받은 때·오류는 이 등만 읽는다(조종석 전체가 5초마다 다시 그려지지 않게, hooks.ts useBridgeStatus)
+  const { error, updatedAt: lastAt } = useBridgeStatus();
   const now = useNow(HQ_CLOCK_MS);
-  const connected = hqConnected(error, lastAt, now);
+  const connected = hqConnected(!!error, lastAt, now);
   return (
     <Tile
       id="link"
@@ -108,8 +113,6 @@ export function Annunciators({
   tasks,
   hails,
   warnings,
-  hqError,
-  lastAt,
   link,
   onList,
   onHail,
@@ -118,9 +121,6 @@ export function Annunciators({
   tasks: Task[];
   hails: Hail[];
   warnings: Warnings;
-  /** 본부에서 상태를 받다 오류가 났는지. 끊김 판정은 연결 등이 자기 시계로 한다 */
-  hqError: boolean;
-  lastAt: number;
   link?: Link;
   onList: (k: ListKind) => void;
   onHail: () => void;
@@ -178,7 +178,7 @@ export function Annunciators({
         hint="사람이 부른 교신. 누르면 화상 창"
         onClick={hails.length ? onHail : undefined}
       />
-      <HqTile error={hqError} lastAt={lastAt} />
+      <HqTile />
       {link && link.verdict !== "ok" && (
         <Tile
           id="relay"
@@ -521,15 +521,14 @@ function PlanetKey({
 
 /* ───────────── 판 전체 ───────────── */
 
-export function Dashboard({
+// 5초 폴링에 내용이 같으면 다시 그리지 않게 memo(2026-11-03). 부르는 쪽(CockpitGaze)은 단추 처리를 useCallback으로 넘긴다
+export const Dashboard = memo(function Dashboard({
   tasks,
   hails,
   seen,
   crew,
   crewById,
   warnings,
-  hqError,
-  lastAt,
   link,
   now,
   push,
@@ -547,10 +546,6 @@ export function Dashboard({
   crew: Crew[];
   crewById: Map<string, Crew>;
   warnings: Warnings;
-  /** 본부에서 상태를 받다 오류가 났는지 */
-  hqError: boolean;
-  /** 본부에서 상태를 마지막으로 받은 때 */
-  lastAt: number;
   link?: Link;
   now: number;
   push: number;
@@ -561,7 +556,7 @@ export function Dashboard({
   onInterior: () => void;
   /** 결재함에서 고른 승무원 묶음 열쇠(없으면 첫 묶음) */
   picked: string | null;
-  onPick: (key: string) => void;
+  onPick: (key: string | null) => void;
 }) {
   const groups = useMemo(
     () => inboxGroups(tasks, crewById, now),
@@ -570,9 +565,22 @@ export function Dashboard({
   const replies = useMemo(() => lastReplies(tasks), [tasks]);
   const decisions = useMemo(() => tasks.filter((t) => !isNews(t)), [tasks]);
   const reviews = useMemo(() => reviewLane(tasks, now), [tasks, now]);
+  const order = useMemo(() => inboxOrder(reviews, groups), [reviews, groups]);
+  // 고른 묶음이 사라지면(다 처리하면) 지난 순서에서 이웃을 고른다(inboxGroups.ts repick).
+  // 그리는 이번 판에 바로 쓰고, 고른 상태에도 적어 옛 열쇠가 남지 않게 한다.
+  const lastOrder = useRef(order);
+  const current = repick(lastOrder.current, order, picked);
+  useEffect(() => {
+    lastOrder.current = order;
+    if (current !== picked) onPick(current);
+  }, [order, current, picked, onPick]);
   // 리뷰 칸에서 고른 서류가 있으면 그 한 장, 아니면 승무원 묶음
-  const group =
-    pickReview(reviews, picked, crewById, now) ?? pickGroup(groups, picked);
+  // pickReview는 부를 때마다 새 묶음을 만들어서, 결재 서류(InboxSheet memo)가 매번 다시 그려지지 않게 묶어 둔다
+  const group = useMemo(
+    () =>
+      pickReview(reviews, current, crewById, now) ?? pickGroup(groups, current),
+    [reviews, current, crewById, now, groups],
+  );
   const firstReview = reviews.tasks[0];
   return (
     <div className={`relative flex h-full flex-col ${styles.panel}`}>
@@ -582,8 +590,6 @@ export function Dashboard({
           tasks={decisions}
           hails={hails}
           warnings={warnings}
-          hqError={hqError}
-          lastAt={lastAt}
           link={link}
           onList={onList}
           onHail={() => onHail()}
@@ -640,4 +646,4 @@ export function Dashboard({
       </button>
     </div>
   );
-}
+});

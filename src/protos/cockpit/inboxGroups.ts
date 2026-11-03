@@ -155,3 +155,61 @@ export function pickReview(
     answers: 0,
   };
 }
+
+/* ───────────── 고른 것 이어 가기(2026-11-03) ───────────── */
+
+/** 목차 위에서 아래로 늘어선 열쇠: 리뷰 칸 줄(REVIEW_PREFIX + id) 다음 승무원 묶음. [ ] 키도 이 순서로 옮긴다 */
+export function inboxOrder(
+  lane: ReviewLane,
+  groups: readonly InboxGroup[],
+): string[] {
+  return [
+    ...lane.tasks.map((t) => `${REVIEW_PREFIX}${t.id}`),
+    ...groups.map((g) => g.key),
+  ];
+}
+
+/**
+ * 고른 열쇠가 목록에서 사라졌을 때(다 처리했을 때) 이어서 볼 열쇠.
+ * 고른 것이 아직 있으면 그대로, 고른 것이 없으면(null) 그대로 null(첫 묶음).
+ * - 리뷰 줄이 사라지면 리뷰 칸에서 그다음 줄, 없으면 첫 승무원 묶음
+ * - 승무원 묶음이 사라지면 같은 자리(지난 순서에서 뒤에 있던 것), 없으면 앞 묶음
+ * - 지난 순서에도 없던 열쇠(승무원 정보에서 결재 없는 승무원을 고른 것 등)는 첫 묶음으로 바꾼다.
+ *   옛 열쇠가 남아 있으면 그 승무원에게 결재가 오는 순간 저절로 다시 열렸다.
+ * 묶음이 하나도 없으면 null.
+ */
+export function repick(
+  prev: readonly string[],
+  next: readonly string[],
+  picked: string | null,
+): string | null {
+  if (picked === null || next.includes(picked)) return picked;
+  const has = new Set(next);
+  const isReview = (k: string) => k.startsWith(REVIEW_PREFIX);
+  const firstGroup = next.find((k) => !isReview(k)) ?? next[0] ?? null;
+  const i = prev.indexOf(picked);
+  if (i < 0) return firstGroup;
+  if (isReview(picked)) {
+    const after = prev.slice(i + 1).find((k) => isReview(k) && has.has(k));
+    return after ?? firstGroup;
+  }
+  const after = prev.slice(i + 1).find((k) => !isReview(k) && has.has(k));
+  if (after) return after;
+  const before = prev
+    .slice(0, i)
+    .reverse()
+    .find((k) => !isReview(k) && has.has(k));
+  return before ?? firstGroup;
+}
+
+/** [ ] 키: 목차 순서에서 지금 것의 앞(-1)·뒤(+1). 끝에서는 멈춘다. 지금 것이 없으면 맨 앞 */
+export function stepKey(
+  order: readonly string[],
+  current: string | undefined,
+  d: -1 | 1,
+): string | undefined {
+  if (!order.length) return undefined;
+  const i = current === undefined ? -1 : order.indexOf(current);
+  if (i < 0) return order[0];
+  return order[Math.max(0, Math.min(order.length - 1, i + d))];
+}

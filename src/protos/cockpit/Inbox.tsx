@@ -5,8 +5,8 @@
 //   왼쪽 = 승무원 목차: 기다리는 일이 있는 승무원(건수·가장 오래 기다린 시간·지금 하는 일), 그 아래 나머지 승무원
 //   가운데 = 고른 승무원의 결재 서류: 제목 전체·세부·선택지를 모두 펼치고 그 자리에서 처리
 import Link from "next/link";
-import { useState } from "react";
-import { useCrewDesk } from "@/data/hooks";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
+import { useBridgeStatus, useCrewDesk } from "@/data/hooks";
 import type { Context, Crew, Task } from "@/protocol/v1";
 import { AnswerList } from "@/ui/desk/Answers";
 import {
@@ -21,6 +21,8 @@ import {
 import { FileButtons } from "@/ui/kit/FileButtons";
 import { findPaths } from "@/ui/kit/filePaths";
 import styles from "./cockpit.module.css";
+import { inboxEmpty } from "./hqLink";
+import { focusLost, focusPaper, indexButton, sheetPapers } from "./inboxFocus";
 import {
   type InboxGroup,
   LOOSE_KEY,
@@ -142,7 +144,7 @@ function ReviewLaneBox({
   );
 }
 
-export function InboxIndex({
+function InboxIndexView({
   groups,
   reviews,
   selected,
@@ -163,6 +165,8 @@ export function InboxIndex({
   const busy = new Set(groups.map((g) => g.key));
   const others = sortCrew(crew.filter((c) => !busy.has(c.id)));
   const total = groups.reduce((n, g) => n + g.tasks.length, 0);
+  // "곳"은 결재가 있는 묶음만(답해 둔 것만 있는 승무원은 세지 않는다)
+  const places = groups.filter((g) => g.tasks.length > 0).length;
   const answerTotal = groups.reduce((n, g) => n + g.answers, 0);
   return (
     <section
@@ -181,8 +185,7 @@ export function InboxIndex({
         <span>승무원</span>
         <span className="h-px flex-1 bg-white/[0.07]" />
         <span className="tracking-normal text-white/45">
-          결재 {total} · {groups.length}곳
-          {answerTotal > 0 && ` · 답 ${answerTotal}`}
+          결재 {total} · {places}곳{answerTotal > 0 && ` · 답 ${answerTotal}`}
         </span>
       </div>
       <div
@@ -262,7 +265,7 @@ export function InboxIndex({
           })}
           {groups.length === 0 && (
             <li className="px-2 py-3 text-[12px] text-white/40">
-              결재할 것이 없어요. 순항 중.
+              <EmptyLine />
             </li>
           )}
         </ul>
@@ -297,9 +300,12 @@ export function InboxIndex({
   );
 }
 
+// 5초 폴링·30초 시계에 내용이 같으면 다시 그리지 않게(2026-11-03)
+export const InboxIndex = memo(InboxIndexView);
+
 /* ───────────── 가운데: 결재 서류 ───────────── */
 
-export function InboxSheet({
+function InboxSheetView({
   group,
   reply,
   now,
@@ -311,6 +317,45 @@ export function InboxSheet({
   now: number;
   onCrew: (id: string) => void;
 }) {
+  const listRef = useRef<HTMLUListElement>(null);
+  // 처리 단추를 누른 서류의 자리. 그 서류가 빠지면 같은 자리(없으면 바로 앞) 서류로 포커스를 옮긴다.
+  // 누른 단추가 서류와 함께 사라져 포커스가 body로 떨어지면 키보드로 이어 처리할 수 없었다(2026-11-03).
+  const pending = useRef<{ group: string; index: number; id: string } | null>(
+    null,
+  );
+  const remember = (e: React.SyntheticEvent) => {
+    const t = e.target as HTMLElement;
+    // 동작 단추를 눌렀거나 글 답을 보냈을 때
+    if (e.type === "click" && !t.closest("[data-action]")) return;
+    const item = t.closest<HTMLElement>("[data-inbox-item]");
+    const ul = listRef.current;
+    if (!item || !ul || !group) return;
+    pending.current = {
+      group: group.key,
+      index: sheetPapers(ul).indexOf(item),
+      id: item.dataset.inboxItem ?? "",
+    };
+  };
+  const key = group?.key;
+  const ids = group?.tasks.map((t) => t.id).join("|") ?? "";
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 묶음과 서류 목록이 바뀔 때만 본다(ids가 그 목록)
+  useEffect(() => {
+    const p = pending.current;
+    if (!p) return;
+    const ul = listRef.current;
+    if (key === p.group && ul) {
+      const papers = sheetPapers(ul);
+      if (papers.some((el) => el.dataset.inboxItem === p.id)) return; // 아직 남아 있다(보내는 중·실패)
+      pending.current = null;
+      // 그사이 다른 곳으로 옮겨 갔으면 건드리지 않는다
+      if (!focusLost() && !ul.contains(document.activeElement)) return;
+      focusPaper(papers[Math.min(p.index, papers.length - 1)]);
+      return;
+    }
+    // 묶음을 다 처리해 다른 묶음으로 넘어갔으면 목차에서 새로 고른 묶음 단추로
+    pending.current = null;
+    if (key && focusLost()) indexButton(key)?.focus();
+  }, [key, ids]);
   return (
     <div className="relative flex h-full min-w-0 flex-col rounded-xl bg-[#07090d] p-[3px] shadow-[0_0_0_1px_rgba(255,255,255,0.07),0_8px_22px_rgba(0,0,0,0.55)]">
       <div
@@ -322,6 +367,9 @@ export function InboxSheet({
             <SheetHeader group={group} now={now} onCrew={onCrew} />
             <ul
               key={group.key}
+              ref={listRef}
+              onClickCapture={remember}
+              onSubmitCapture={remember}
               data-scroll-inside
               className={`min-h-0 flex-1 space-y-2 overflow-y-auto px-4 pt-2 pb-3 [scrollbar-color:rgba(255,255,255,.15)_transparent] [scrollbar-width:thin] ${styles.swap}`}
             >
@@ -341,16 +389,68 @@ export function InboxSheet({
               ))}
               {reply && <ReplyNote key={reply.id} task={reply} now={now} />}
             </ul>
+            <p
+              data-inbox-keys
+              className="shrink-0 border-t border-white/[0.05] px-4 py-1 font-mono text-[10px] text-white/30"
+            >
+              J/K 서류 · [ ] 묶음 · 1–9 선택지 · S 1시간 뒤 · O 원래 곳 · G 창밖
+              감상
+            </p>
           </>
         ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
-            <span className="h-3.5 w-3.5 rounded-full bg-[#5ee08a] shadow-[0_0_16px_#5ee08a]" />
-            <div className="text-[24px] font-semibold text-white">순항 중</div>
-            <div className="text-[13px] text-white/45">
-              결재할 것이 없어요. 승무원이 부르면 여기 쌓여요.
-            </div>
-          </div>
+          <EmptySheet />
         )}
+      </div>
+    </div>
+  );
+}
+
+export const InboxSheet = memo(InboxSheetView);
+
+/** 결재함이 비었을 때 상태. 받은 때·오류는 이 작은 부품만 읽는다(결재함 전체가 5초마다 다시 그려지지 않게) */
+function useEmptyState() {
+  const { ready, error } = useBridgeStatus();
+  return inboxEmpty(ready, !!error);
+}
+
+const EMPTY_LINE = {
+  loading: "본부에서 받아 오는 중…",
+  unreachable: "본부에 닿지 않아요. 아직 받은 자료가 없어요.",
+  calm: "결재할 것이 없어요. 순항 중.",
+} as const;
+
+function EmptyLine() {
+  const state = useEmptyState();
+  return <span data-inbox-empty={state}>{EMPTY_LINE[state]}</span>;
+}
+
+function EmptySheet() {
+  const state = useEmptyState();
+  const lamp =
+    state === "calm"
+      ? "bg-[#5ee08a] shadow-[0_0_16px_#5ee08a]"
+      : state === "unreachable"
+        ? "bg-[#ff8a7a] shadow-[0_0_16px_#ff8a7a]"
+        : `bg-white/40 ${styles.wait}`;
+  return (
+    <div
+      data-inbox-empty={state}
+      className="flex flex-1 flex-col items-center justify-center gap-2 text-center"
+    >
+      <span className={`h-3.5 w-3.5 rounded-full ${lamp}`} />
+      <div className="text-[24px] font-semibold text-white">
+        {state === "calm"
+          ? "순항 중"
+          : state === "unreachable"
+            ? "본부에 닿지 않아요"
+            : "받아 오는 중"}
+      </div>
+      <div className="text-[13px] text-white/45">
+        {state === "calm"
+          ? "결재할 것이 없어요. 승무원이 부르면 여기 쌓여요."
+          : state === "unreachable"
+            ? "아직 받은 자료가 없어요. 본부(비서 서버)가 켜지면 저절로 채워져요."
+            : "본부에서 받아 오는 중…"}
       </div>
     </div>
   );
@@ -452,7 +552,7 @@ export function ReplyNote({ task, now }: { task: Task; now: number }) {
 }
 
 /** 결재 서류 한 장: 무엇을·언제부터·전문·단추. 세부가 길면 접어 두고 펼친다. */
-export function Paper({
+function PaperView({
   task,
   now,
   showFrom,
@@ -470,10 +570,14 @@ export function Paper({
     (task.detail?.split("\n").length ?? 0) > 4;
   const stale = now - task.since > STALE_MS;
   // 제목·세부에 적힌 이 맥의 파일 경로는 그 자리에서 보기·열기(2026-11-02 사용자 요청)
-  const files = findPaths(`${task.title}\n${task.detail ?? ""}`);
+  const files = useMemo(
+    () => findPaths(`${task.title}\n${task.detail ?? ""}`),
+    [task.title, task.detail],
+  );
   return (
     <li
       data-inbox-item={task.id}
+      tabIndex={-1}
       className={`rounded-lg border px-3 pt-2 pb-2.5 ${
         stale
           ? "border-[#ff8a7a]/25 bg-[#ff8a7a]/[0.035]"
@@ -489,6 +593,18 @@ export function Paper({
         <span className="truncate text-white/35">
           · {sourceLabel(task.source)}
         </span>
+        {/* 원래 곳으로(코드 리뷰면 PR). 책상 코드 리뷰는 본부가 첫 확인 항목 주소를 url로 준다. O 키로도 연다 */}
+        {task.url && (
+          <a
+            href={task.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-paper-url
+            className="shrink-0 text-[#7fb8ff]/85 hover:text-[#7fb8ff] hover:underline"
+          >
+            {task.source.kind === "review" ? "PR 열기 ↗" : "원래 곳에서 열기 ↗"}
+          </a>
+        )}
         <span
           className={`ml-auto shrink-0 font-mono tabular-nums ${ageTone(task.since, now)}`}
         >
@@ -533,6 +649,8 @@ export function Paper({
             key={b.key}
             type="button"
             data-action={b.action}
+            // 1~9 키가 누를 선택지(inboxFocus.ts runInboxKey)
+            data-choice={b.choice !== undefined ? "" : undefined}
             onClick={b.onClick}
             className={`${KEY_SMALL} ${
               b.action === "answer" && b.choice
@@ -549,3 +667,6 @@ export function Paper({
     </li>
   );
 }
+
+/** 서류 한 장. 묶음 안 다른 서류가 바뀌어도 이 서류는 다시 그리지 않는다 */
+export const Paper = memo(PaperView);

@@ -6,6 +6,7 @@
 import { type ReactNode, useRef, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { useAct } from "@/data/hooks";
+import { deskSentKey, useSent } from "@/data/sent";
 import type { ActionResult, Task, TaskAction } from "@/protocol/v1";
 import { ACTION_LABEL } from "./labels";
 
@@ -49,10 +50,15 @@ export function useTaskButtons(task: Task | undefined): {
       setBusy(false);
     }
   };
+  const mark = useSent((s) => s.mark);
+  // 책상 기다림에 답했으면 보낸 답을 남긴다: 세션이 책상을 고치기 전까지 선실 책상 카드가 "보냈어요"로 보이게
+  const answer = async (t: Task, text: string): Promise<ActionResult> => {
+    const result = await act.task(t, "answer", text);
+    if (result.ok && t.id.startsWith("desk:")) mark(deskSentKey(t.id), text);
+    return result;
+  };
   const sendAnswer = (text: string) =>
-    task
-      ? run(() => act.task(task, "answer", text))
-      : Promise.resolve({ ok: false });
+    task ? run(() => answer(task, text)) : Promise.resolve({ ok: false });
   if (!task) return { buttons: [], answering, setAnswering, busy, sendAnswer };
   const out: TaskButton[] = [];
   for (const action of task.actions) {
@@ -67,7 +73,7 @@ export function useTaskButtons(task: Task | undefined): {
             choice: c,
             primary: i === 0,
             busy,
-            onClick: () => void run(() => act.task(task, "answer", c)),
+            onClick: () => void run(() => answer(task, c)),
           });
         }
       } else {

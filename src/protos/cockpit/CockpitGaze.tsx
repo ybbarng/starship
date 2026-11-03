@@ -9,7 +9,7 @@
 // 창밖(SpaceView)은 하나만 두고 크기를 바꾸지 않는다. 화면 크기 캔버스를 위아래로 옮기고 그 위에 유리 모양만
 // 바꿔 그려서, 전환 중에도 매 프레임 다시 그리는 일이 없게 했다.
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useBridge } from "@/data/hooks";
 import type { Crew, Task } from "@/protocol/v1";
 import { CrewHeader } from "@/protos/classic/CrewDetail";
@@ -34,6 +34,7 @@ import { CrewPeek } from "./CrewPeek";
 import styles from "./cockpit.module.css";
 import { GazeLayer } from "./Gaze";
 import { GlassFrame, type GlassShape } from "./Glass";
+import { inboxKey, runInboxKey } from "./inboxFocus";
 import { isNews } from "./inboxGroups";
 import { GaugeList, TaskList } from "./Lists";
 import { Dashboard, type ListKind } from "./Panel";
@@ -137,18 +138,33 @@ export function CockpitGaze() {
     setGrid(false);
   };
 
-  const openHail = (id?: string) => {
-    const target = id ?? hails[0]?.id;
-    if (!target) return;
-    hail.open(target);
-  };
+  // 계기판(Dashboard memo)에 넘기는 처리는 useCallback으로 묶어 폴링·시계에 다시 그리지 않게 한다
+  const openHail = useCallback(
+    (id?: string) => {
+      const target = id ?? hails[0]?.id;
+      if (!target) return;
+      hail.open(target);
+    },
+    [hails, hail.open],
+  );
+  const onList = useCallback(
+    (kind: ListKind) => setModal({ type: "list", kind }),
+    [],
+  );
+  const onCrew = useCallback(
+    (id: string) => setModal({ type: "crew", id }),
+    [],
+  );
+  const onPicker = useCallback(() => setModal({ type: "nav" }), []);
+  const onInterior = useCallback(() => goTo(1), [goTo]);
 
-  // 단축키: G = 감상하기, Esc = 열린 것부터 닫고 마지막엔 조종석으로
+  // 단축키: G = 감상하기, Esc = 열린 것부터 닫고 마지막엔 조종석으로.
+  // 조종석에서는 결재함 키도(J/K 서류, [ ] 묶음, 1~9 선택지, S 1시간 뒤. inboxFocus.ts inboxKey)
   useEffect(() => {
     if (stage !== 0) return;
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
-      if (el?.closest("input, textarea, [contenteditable]")) return;
+      if (el?.closest("input, textarea, select, [contenteditable]")) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (document.querySelector('[role="dialog"]')) return;
       if (e.key === "Escape") {
@@ -157,6 +173,9 @@ export function CockpitGaze() {
       } else if ((e.key === "g" || e.key === "G" || e.key === "ㅎ") && !gaze) {
         e.preventDefault();
         enterGaze();
+      } else if (!gaze) {
+        const cmd = inboxKey(e.key);
+        if (cmd && runInboxKey(cmd)) e.preventDefault();
       }
     };
     window.addEventListener("keydown", onKey);
@@ -215,10 +234,10 @@ export function CockpitGaze() {
   const close = () => setModal(null);
   const modalCrew =
     modal?.type === "crew" ? bridge.crewById.get(modal.id) : undefined;
+  // 전체 목록도 경고등·목차처럼 결재만 센다. 마지막 답변(소식)은 수만 제목에 따로 적는다(화면마다 건수가 달랐다)
   const listTasks =
-    modal?.type === "list" && modal.kind === "late"
-      ? warnings.old
-      : bridge.tasks;
+    modal?.type === "list" && modal.kind === "late" ? warnings.old : decisions;
+  const newsCount = bridge.tasks.length - decisions.length;
 
   const inCockpit = stage === 0 && !gaze;
 
@@ -321,17 +340,15 @@ export function CockpitGaze() {
           crew={bridge.crew}
           crewById={bridge.crewById}
           warnings={warnings}
-          // 끊김 판정(15초 유예)은 연결 등이 2초 시계로 한다(30초 시계로는 늦고 "0초 전"에 머물렀다)
-          hqError={!!bridge.error}
-          lastAt={bridge.updatedAt}
+          // 끊김 판정(15초 유예)은 연결 등(HqTile)이 useBridgeStatus와 2초 시계로 한다
           link={bridge.link}
           now={now}
           push={push}
-          onList={(kind) => setModal({ type: "list", kind })}
+          onList={onList}
           onHail={openHail}
-          onCrew={(id) => setModal({ type: "crew", id })}
-          onPicker={() => setModal({ type: "nav" })}
-          onInterior={() => goTo(1)}
+          onCrew={onCrew}
+          onPicker={onPicker}
+          onInterior={onInterior}
           picked={inboxPick}
           onPick={setInboxPick}
         />
@@ -347,7 +364,8 @@ export function CockpitGaze() {
           }}
         >
           <GazeLayer
-            tasks={bridge.tasks}
+            // 띠의 "내 차례"와 맨 앞 일도 결재만(마지막 답변이 맨 앞에 오지 않게)
+            tasks={decisions}
             hails={hails}
             seen={hail.seen}
             now={now}
@@ -414,7 +432,7 @@ export function CockpitGaze() {
         title={
           modal?.type === "list" && modal.kind === "late"
             ? `1시간 넘게 기다린 일 ${warnings.old.length}`
-            : `내 차례 전체 ${bridge.tasks.length}`
+            : `내 차례 ${decisions.length}${newsCount ? ` · 마지막 답변 ${newsCount}` : ""}`
         }
         width={760}
       >
