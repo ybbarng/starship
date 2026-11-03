@@ -34,6 +34,52 @@ describe("readJsonBody: 본문 크기 상한", () => {
     expect(await readJsonBody(req)).toEqual({ ok: false, status: 413 });
   });
 
+  it("길이를 적지 않은 긴 본문은 64KB를 넘는 순간 그만 읽는다(끝까지 메모리에 올리지 않는다)", async () => {
+    const CHUNK = 16 * 1024;
+    const TOTAL = 64; // 1MB
+    let pulled = 0;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(c) {
+        if (pulled >= TOTAL) return c.close();
+        pulled++;
+        c.enqueue(new Uint8Array(CHUNK).fill(0x61));
+      },
+    });
+    const req = new Request("http://127.0.0.1:7790/api/v1/actions", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: stream,
+      duplex: "half",
+    } as RequestInit);
+    expect(req.headers.get("content-length")).toBeNull();
+    expect(await readJsonBody(req)).toEqual({ ok: false, status: 413 });
+    // 64KB + 한 조각을 넘게 당기지 않는다(스트림이 미리 한두 조각 더 당길 수는 있다)
+    expect(pulled).toBeLessThan(TOTAL / 4);
+  });
+
+  it("여러 조각으로 온 한글 본문도 그대로 읽는다", async () => {
+    const bytes = new TextEncoder().encode(
+      JSON.stringify({ answer: "결제 칸 안에 바로 입력" }),
+    );
+    const stream = new ReadableStream<Uint8Array>({
+      start(c) {
+        // 한글 글자 한가운데서 자른다
+        c.enqueue(bytes.slice(0, 13));
+        c.enqueue(bytes.slice(13));
+        c.close();
+      },
+    });
+    const req = new Request("http://127.0.0.1:7790/api/v1/actions", {
+      method: "POST",
+      body: stream,
+      duplex: "half",
+    } as RequestInit);
+    expect(await readJsonBody(req)).toEqual({
+      ok: true,
+      value: { answer: "결제 칸 안에 바로 입력" },
+    });
+  });
+
   it("JSON이 아니면 value가 null", async () => {
     expect(await readJsonBody(post("not json"))).toEqual({
       ok: true,
