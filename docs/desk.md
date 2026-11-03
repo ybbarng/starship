@@ -81,7 +81,7 @@
 | `waiting[].id`가 겹치지 않는다 | `parseDesk`가 앞쪽을 남기고 겹친 뒤쪽 기다림을 뺀다(`checkDesk`로도 볼 수 있다). Task id가 여기서 나오므로, 겹치면 답이 엉뚱한 곳으로 간다 |
 | decide는 선택지 2개 이상, check는 항목 1개 이상 | `Waiting` 스키마(`superRefine`) |
 | 한 기다림 안에서 `options[].id`가 겹치지 않는다 | `parseDesk`가 겹친 뒤쪽 선택지를 뺀다. 그래서 decide 선택지가 2개보다 적어지면 그 기다림을 뺀다 |
-| `answers[].id`가 겹치지 않는다 | `parseDesk`가 겹친 뒤쪽을 뺀다 |
+| `answers[].id`가 겹치지 않는다 | `parseDesk`가 답한 때(`at`)가 늦은 쪽을 처음 자리에 남기고 이른 쪽을 뺀다(세션이 같은 답을 고쳐 다시 적었을 수 있어서. 본부 쪽 `dedupeDesk`와 같은 규칙) |
 | 날짜는 `Date.parse`로 읽힌다 | `When` 스키마 |
 | `topic`은 정한 값(`code-review`)만 | `WaitTopic` 스키마 |
 | 주소는 http(s)만 | `WebUrl` 스키마. 카드가 주소를 그대로 링크로 여니까 `javascript:`·`data:`·`file:` 같은 주소는 막는다. 원본은 `src/protocol/common.ts`(지도·스냅숏의 주소 칸도 같은 규칙) |

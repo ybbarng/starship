@@ -2,7 +2,7 @@
 // 이 파일이 스키마의 원본이다. 비서도 같은 규칙으로 읽으니 여기 함수는 모두 순수 함수로 둔다.
 // 자세한 설명은 docs/desk.md.
 import { z } from "zod";
-import { parseEach, WebUrl, When } from "./common";
+import { parseEach, parseWhen, WebUrl, When } from "./common";
 
 export const DESK_FORMAT = "starship-desk/1" as const;
 
@@ -188,9 +188,18 @@ function fixOptions(w: Waiting, note: (why: string) => void): Waiting | string {
 }
 
 /**
+ * 같은 id의 답해 둔 것 둘 가운데 뒤쪽(next)을 남길지: 답한 때(at)가 앞쪽보다 이르지 않으면 뒤쪽.
+ * parseDesk와 본부 쪽 dedupeDesk(src/server/dedupe.ts)가 함께 쓴다.
+ */
+export function answeredLater(prev: Answered, next: Answered): boolean {
+  return !(parseWhen(prev.at) > parseWhen(next.at));
+}
+
+/**
  * 책상 내용(이미 JSON.parse한 값)을 읽는다. 겉이 틀리면 책상 전체를 거절하고,
  * waiting·doing·answers는 항목마다 따로 검사해 틀린 항목만 뺀다(2026-11-03, 스냅숏과 같은 규칙).
  * 뺀 까닭은 "waiting[2] (id x): …" 꼴로 problems에 적는다. 겹친 id는 앞쪽을 남기고 뒤쪽만 뺀다.
+ * 다만 answers는 답한 때(at)가 늦은 쪽을 처음 자리에 남긴다(answeredLater).
  * 돌려준 책상은 checkDesk를 늘 통과한다.
  */
 export function parseDesk(raw: unknown): DeskParse {
@@ -213,7 +222,13 @@ export function parseDesk(raw: unknown): DeskParse {
   const doing = parseEach(s.doing, Doing, "doing", problems);
   const answers =
     s.answers &&
-    parseEach(s.answers, Answered, "answers", problems, { keyOf: (a) => a.id });
+    parseEach(s.answers, Answered, "answers", problems, {
+      keyOf: (a) => a.id,
+      // 세션이 같은 답을 고쳐 다시 적었을 수 있으니 답한 때가 늦은 쪽을 남긴다(dedupeDesk와 같은 규칙).
+      // 전에는 앞쪽을 남겨 dedupeDesk의 규칙이 돌 기회가 없었다(2026-11-03)
+      later: answeredLater,
+      laterNote: "id가 앞 항목과 겹쳐 답한 때가 이른 쪽을 뺐어요",
+    });
   return {
     ok: true,
     desk: {

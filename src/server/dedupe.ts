@@ -2,7 +2,7 @@
 // 본부가 같은 승무원을 꺼진 것(off)과 일하는 것으로 두 번 보낸 일이 있었다. 그러면 결재함에 같은 서류가 두 장 생기고,
 // React key가 겹쳐 처리한 서류가 새로 고칠 때까지 화면에 남았다. 원인은 본부에서 고치고, 화면은 여기서 막는다.
 // 책상의 답해 둔 것(answers)도 id를 React key로 쓰니 같은 까닭으로 합친다.
-import type { Desk } from "@/protocol/desk";
+import { answeredLater, type Desk } from "@/protocol/desk";
 import type { Snapshot } from "@/protocol/v1";
 
 type Crew = Snapshot["crew"][number];
@@ -55,7 +55,8 @@ export function dedupeDesk(desk: Desk): Desk {
   const byId = new Map<string, NonNullable<Desk["answers"]>[number]>();
   for (const a of list) {
     const prev = byId.get(a.id);
-    byId.set(a.id, prev && Date.parse(prev.at) > Date.parse(a.at) ? prev : a);
+    // parseDesk와 같은 규칙(answeredLater, 날짜만 적은 at도 parseWhen으로 읽는다)
+    byId.set(a.id, prev && !answeredLater(prev, a) ? prev : a);
   }
   if (byId.size === list.length) return desk;
   return { ...desk, answers: [...byId.values()] };

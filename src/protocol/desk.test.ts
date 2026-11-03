@@ -466,12 +466,31 @@ describe("답해 둔 것(answers)", () => {
     expect(r.ok && r.desk.answers?.[0]?.q).toBe(answer("a1").q);
   });
 
-  it("id가 겹치면 뒤쪽만 뺀다", () => {
-    const r = parseDesk(withAnswers([answer("a1"), answer("a1")]));
-    expect(r.desk?.answers).toHaveLength(1);
-    expect(r.problems).toEqual([
-      "answers[1] (id a1): id가 앞 항목과 겹쳐 뺐어요",
+  it("id가 겹치면 답한 때(at)가 늦은 쪽을 처음 자리에 남긴다(dedupeDesk와 같은 규칙)", () => {
+    const r = parseDesk(
+      withAnswers([
+        { ...answer("a1"), a: "OLD", at: "2026-11-03T09:00:00+09:00" },
+        answer("a2"),
+        { ...answer("a1"), a: "NEW", at: "2026-11-03T10:00:00+09:00" },
+      ]),
+    );
+    expect(r.desk?.answers?.map((a) => [a.id, a.a])).toEqual([
+      ["a1", "NEW"],
+      ["a2", answer("a2").a],
     ]);
+    expect(r.problems).toEqual([
+      "answers[2] (id a1): id가 앞 항목과 겹쳐 답한 때가 이른 쪽을 뺐어요",
+    ]);
+  });
+
+  it("id가 겹친 앞쪽이 더 늦게 답했으면 앞쪽을 남긴다", () => {
+    const r = parseDesk(
+      withAnswers([
+        { ...answer("a1"), a: "NEW", at: "2026-11-03T10:00:00+09:00" },
+        { ...answer("a1"), a: "OLD", at: "2026-11-03T09:00:00+09:00" },
+      ]),
+    );
+    expect(r.desk?.answers?.map((a) => a.a)).toEqual(["NEW"]);
   });
 
   it("요약에 답 수가 붙는다(없으면 빠진다)", () => {

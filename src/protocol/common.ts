@@ -58,6 +58,7 @@ export function issuesText(error: z.ZodError): string {
 /**
  * 항목마다 스키마로 읽고, 틀린 항목만 뺀다(까닭은 problems에 "label[i] (id x): …"로 더한다).
  * keyOf가 있으면 같은 열쇠(보통 id)가 앞에 이미 있는 뒤쪽 항목도 뺀다.
+ * later가 있으면 뒤쪽을 그냥 빼지 않고, later(앞, 뒤)가 true일 때 뒤쪽을 앞쪽 자리에 대신 남긴다.
  * fix는 스키마를 통과한 항목을 한 번 더 손볼 때 쓴다: 고친 항목을 돌려주거나, 뺄 까닭 글(string)을 돌려준다.
  * 손보며 남길 말은 note로 적는다. 책상·지도가 함께 쓴다.
  */
@@ -69,10 +70,14 @@ export function parseEach<T extends z.ZodType>(
   opts: {
     keyOf?: (v: z.output<T>) => string | undefined;
     fix?: (v: z.output<T>, note: (why: string) => void) => z.output<T> | string;
+    /** 열쇠가 겹칠 때 뒤쪽을 남길지. 주면 겹침 글도 later의 뜻을 담은 laterNote로 적는다 */
+    later?: (prev: z.output<T>, next: z.output<T>) => boolean;
+    laterNote?: string;
   } = {},
 ): z.output<T>[] {
   const out: z.output<T>[] = [];
-  const seen = new Set<string>();
+  /** 열쇠 → out에서의 자리 */
+  const seen = new Map<string, number>();
   raw.forEach((v, i) => {
     const at = itemLabel(label, i, v);
     const r = schema.safeParse(v);
@@ -81,7 +86,16 @@ export function parseEach<T extends z.ZodType>(
       return;
     }
     const key = opts.keyOf?.(r.data);
-    if (key !== undefined && seen.has(key)) {
+    const prevAt = key === undefined ? undefined : seen.get(key);
+    if (prevAt !== undefined) {
+      const prev = out[prevAt] as z.output<T>;
+      if (opts.later) {
+        problems.push(
+          `${at}: ${opts.laterNote ?? "id가 앞 항목과 겹쳐 하나를 뺐어요"}`,
+        );
+        if (opts.later(prev, r.data)) out[prevAt] = r.data;
+        return;
+      }
       problems.push(`${at}: id가 앞 항목과 겹쳐 뺐어요`);
       return;
     }
@@ -92,7 +106,7 @@ export function parseEach<T extends z.ZodType>(
       problems.push(`${at}: ${fixed}`);
       return;
     }
-    if (key !== undefined) seen.add(key);
+    if (key !== undefined) seen.set(key, out.length);
     out.push(fixed);
   });
   return out;

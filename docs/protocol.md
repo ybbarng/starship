@@ -112,7 +112,7 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
 
 - `desk: null`은 책상이 아직 없다는 뜻이다. 404도 같게 본다.
 - `problems`가 있으면 서버는 마지막으로 맞았던 책상을 `desk`에 그대로 준다(없으면 `null`).
-- Starship은 받은 `desk`를 다시 검사한다(2026-11-03부터 틀린 항목만 뺀다). 겉(`desk` 이름·`updatedAt`·배열인지)이 틀릴 때만 `desk: null`로 바꾼다. `waiting`·`doing`·`answers`는 항목마다 보고, 틀린 항목(decide 선택지 2개 미만, check 항목 0개, http(s)가 아닌 주소 등)과 id가 겹친 뒤쪽 항목만 뺀다. 그 까닭을 `"waiting[2] (id pick): ..."` 꼴로 본부가 보낸 `problems` 뒤에 더한다. 자세한 것은 [`desk.md`](desk.md).
+- Starship은 받은 `desk`를 다시 검사한다(2026-11-03부터 틀린 항목만 뺀다). 겉(`desk` 이름·`updatedAt`·배열인지)이 틀릴 때만 `desk: null`로 바꾼다. `waiting`·`doing`·`answers`는 항목마다 보고, 틀린 항목(decide 선택지 2개 미만, check 항목 0개, http(s)가 아닌 주소 등)과 id가 겹친 뒤쪽 항목만 뺀다(`answers`는 답한 때가 이른 쪽을 뺀다). 그 까닭을 `"waiting[2] (id pick): ..."` 꼴로 본부가 보낸 `problems` 뒤에 더한다. 자세한 것은 [`desk.md`](desk.md).
 - **답은 Task로 보낸다.** 서버는 기다림 하나하나를 스냅샷의 Task로도 내보내고, 그 id를 `desk:<crewId>:<waitId>`로 둔다. 선실 카드는 그 Task에 `answer`를 보낸다. 고를 것(`choices`)은 decide가 선택지 `label`들, approve가 `["승인","보류"]`, check가 `["확인함","고칠 것 있음"]`이고, answer는 글로만 답한다. 할 일의 `source`는 기다림의 `topic`이 `code-review`면 `{ kind: "review" }`, 아니면 `{ kind: "session" }`이다(`deskSource`). 코드 리뷰면 기다림의 첫 http(s) 주소(`items[].url`, 없으면 `options[].url`)를 할 일의 `url`로 내고, 다른 기다림은 `url`을 내지 않는다(`deskUrl`). 할 일의 `since`는 기다림의 `since`를 `parseWhen`으로 읽은 값이다(없으면 지금). 출처가 `review`인 책상 할 일로는 교신을 만들지 않는다. 고른 것에 글을 덧붙이면 `"고칠 것 있음 — 버튼 색이 흐려요"`처럼 ` — `로 잇는다(규칙은 `desk.md` "답하기"). 답을 받은 서버는 그 기다림을 책상과 할 일에서 뺀다.
 
 ### `GET {base}/v1/usage/limits` → `UsageLimits`
