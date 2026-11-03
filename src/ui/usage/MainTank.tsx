@@ -2,8 +2,9 @@
 
 // 연료실 계통도 맨 왼쪽의 주 연료통(T-0, 주간 연료)과 주 연료통 → 업무·개인·기타 탱크 배관. 설계: docs/usage.md "주간 연료".
 // 계통도(FuelRoom.tsx)와 같은 SVG 안에 그려서 그 defs(fr-metal 등)를 함께 쓴다.
-// - 주 연료통: 탱크 셋과 같은 금속 원통, 키가 조금 더 크다. 들여다보는 창에는 남은 연료만 한 가지 색으로 찬다.
-// - 배관: 굵기·흐르는 점의 밝기가 그 영역이 나눠 쓴 몫(splitUsed, "7일" 추정 비용 비율로 나눈 근사)을 따른다.
+// - 주 연료통: 탱크 셋과 같은 금속 원통을 세운 것, 누운 탱크 세 줄과 키를 맞춘다. 들여다보는 창에는 남은 연료만 한 가지 색으로 찬다.
+// - 배관: 통 옆벽의 창 아래쪽(연료가 남는 쪽)에서 나가 누운 탱크 왼쪽 마개로 들어간다.
+//   굵기·흐르는 점의 밝기가 그 영역이 나눠 쓴 몫(splitUsed, "7일" 추정 비용 비율로 나눈 근사)을 따른다.
 // - 이름판: "주간 47% 남음 · 리셋 수 02:00(6시간 뒤)", 5시간 한도가 있으면 둘째 줄.
 // 한도 값이 없으면(본부 없음·404) useWeeklyFeed가 null이라 계통도는 탱크부터 시작한다.
 import type { CSSProperties } from "react";
@@ -26,11 +27,14 @@ import { FUEL_COLOR, resetLine, useShownLimits } from "./WeeklyFuel";
 /** 남은 연료 색: 영역 색과 겹치지 않는 옅은 호박색 */
 export const MAIN_FUEL = "#ffe2a0";
 
-/** 주 연료통이 있을 때 탱크·엔진 계통도를 오른쪽·아래로 미는 거리(SVG 단위) */
-export const MAIN_SHIFT = { x: 210, y: 96 };
+/** 주 연료통이 있을 때 탱크·엔진 계통도를 오른쪽으로 미는 거리(SVG 단위). 급유관은 옆으로 나가 위로 밀 필요가 없다 */
+export const MAIN_SHIFT = { x: 230, y: 0 };
 
-/** 주 연료통 자리(계통도 전체 좌표). 탱크(96×248)보다 조금 넓고 키가 크다 */
-export const MAIN = { x: 70, y: 124, w: 124, h: 272 };
+/**
+ * 주 연료통 자리(계통도 전체 좌표). 누운 탱크 세 줄(가운데 높이 116·234·352, FuelRoom.tsx ROW_Y)과 높이를 맞춰 세운다.
+ * 들여다보는 창의 바닥(352)이 맨 아래 줄 높이와 같아 그 줄로 가는 급유관은 곧게 나간다.
+ */
+export const MAIN = { x: 70, y: 82, w: 124, h: 300 };
 const GLASS = {
   x: MAIN.x + MAIN.w / 2 - 15,
   y: MAIN.y + 30,
@@ -108,31 +112,53 @@ function feedWidth(share: number | undefined): number {
   return 8 + 10 * (share ?? 0);
 }
 
-/** 탱크 i로 가는 배관이 지나는 높이: 먼 탱크일수록 위로(서로 엇갈리지 않게) */
-function feedLevel(i: number, topY: number): number {
-  return topY - 40 - 20 * i;
+/** 주 연료통 오른쪽 벽 */
+const WALL = MAIN.x + MAIN.w;
+
+/**
+ * 탱크 i로 가는 급유관이 주 연료통에서 나가는 높이: 들여다보는 창의 아래쪽(연료가 남는 쪽).
+ * 위 줄 탱크(i=0)일수록 조금 위에서 나간다(맨 아래 줄은 창 바닥과 같은 높이).
+ */
+function outletY(i: number): number {
+  return GLASS.y + GLASS.h - 22 * (AREAS.length - 1 - i);
 }
 
-/** 주 연료통 뚜껑에서 배관이 나가는 x: 가까운 탱크(i=0)일수록 오른쪽 */
-function outletX(i: number): number {
-  return MAIN.x + MAIN.w / 2 + 28 - 28 * i;
+/** 급유관이 탱크 줄 높이까지 오르는 세로 길: 위 줄 탱크일수록 주 연료통 가까이(서로 엇갈리지 않게) */
+function riserX(i: number): number {
+  return WALL + 28 + 34 * i;
 }
 
+/** 나가는 높이와 탱크 줄 높이가 같아 곧게 가는 배관인지 */
+function straight(i: number, to: { y: number }): boolean {
+  return Math.abs(outletY(i) - to.y) < 1;
+}
+
+/** 주 연료통 옆벽(창 아래쪽) → 세로 길 → 탱크 왼쪽 마개. to는 탱크 왼쪽 끝 가운데 */
 export function feedPath(i: number, to: { x: number; y: number }): string {
-  const ly = feedLevel(i, to.y);
-  return `M ${outletX(i)} ${MAIN.y + 10} V ${ly} H ${to.x} V ${to.y + 4}`;
+  const oy = outletY(i);
+  const start = WALL - 6;
+  if (straight(i, to)) return `M ${start} ${oy} H ${to.x + 4}`;
+  return `M ${start} ${oy} H ${riserX(i)} V ${to.y} H ${to.x + 4}`;
 }
 
-/** 배관 말풍선 자리(탱크 위로 내려가는 세로 토막) */
+/** 배관 말풍선 자리: 꺾이는 배관은 세로 길, 곧은 배관은 그 가로 토막 */
 export function feedZone(
   i: number,
   to: { x: number; y: number },
 ): { x: number; y: number; w: number; h: number } {
-  const ly = feedLevel(i, to.y);
-  return { x: to.x - 14, y: ly - 12, w: 28, h: to.y - ly + 4 };
+  const oy = outletY(i);
+  if (straight(i, to))
+    return { x: WALL + 2, y: oy - 11, w: to.x - WALL - 4, h: 22 };
+  const top = Math.min(oy, to.y);
+  return {
+    x: riserX(i) - 12,
+    y: top - 12,
+    w: 24,
+    h: Math.abs(oy - to.y) + 22,
+  };
 }
 
-/** 주 연료통 → 탱크 배관 셋. to는 탱크마다 뚜껑 가운데(계통도 전체 좌표) */
+/** 주 연료통 → 탱크 배관 셋. to는 탱크마다 왼쪽 마개 가운데(계통도 전체 좌표) */
 export function FeedPipes({
   feed,
   to,
@@ -148,7 +174,7 @@ export function FeedPipes({
         const w = feedWidth(share);
         const flowing = feed.main && share !== undefined && share > 0;
         const c = FUEL_COLOR[a];
-        const ly = feedLevel(i, to[a].y);
+        const oy = outletY(i);
         return (
           <g key={a} data-weekly-feed={a}>
             <path
@@ -190,20 +216,20 @@ export function FeedPipes({
                 }
               />
             )}
-            {/* 플랜지: 꺾이는 곳과 탱크 위 */}
+            {/* 플랜지: 주 연료통 출구와 탱크 마개 앞 */}
             <rect
-              x={outletX(i) - 8}
-              y={ly + 12}
-              width="16"
-              height="4"
+              x={WALL + 4}
+              y={oy - 8}
+              width="4"
+              height="16"
               fill="#6b7a92"
               fillOpacity="0.8"
             />
             <rect
-              x={to[a].x - 8}
-              y={to[a].y - 16}
-              width="16"
-              height="4"
+              x={to[a].x - 12}
+              y={to[a].y - 8}
+              width="4"
+              height="16"
               fill="#6b7a92"
               fillOpacity="0.8"
             />

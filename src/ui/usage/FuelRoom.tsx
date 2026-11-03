@@ -2,9 +2,9 @@
 
 // 연료실: 오늘 쓴 연료(출력 토큰)를 기관 계통도로 그린다. 설계: docs/usage.md "연료실".
 // 위: 청사진 유리 위 계통도. 왼쪽부터 주 연료통(T-0, 주간 한도 남은 양, MainTank.tsx) → 배관(나눠 쓴 몫만큼 굵게) →
-//     금속 원통 탱크 셋(업무·개인·기타, 들여다보는 창에 오늘 연소 몫만큼 연료),
-//     밸브·플랜지가 달린 배관(최근 15분 연소가 셀수록 연료 점이 빨리 흐른다), 연소실과 종 모양 노즐의 엔진 셋
-//     (그 영역의 지금 속도만큼 배기 불꽃이 길다).
+//     누운 금속 원통 탱크 셋(업무·개인·기타 한 줄씩, 가로 들여다보는 창에 오늘 연소 몫만큼 왼쪽부터 연료),
+//     같은 줄의 짧은 곧은 배관(밸브·플랜지, 최근 15분 연소가 셀수록 연료 점이 빨리 흐른다),
+//     연소실과 종 모양 노즐의 엔진(그 영역의 지금 속도만큼 배기 불꽃이 길다).
 // 아래: 계기판. 아날로그 속도계 넷(전체·업무·개인·기타, 로그 눈금), 호박색 숫자판(오늘 연소·연료비),
 //       판에 끼워 둔 연료 기록 노트(누르면 자세한 도표 /usage). 맨 아래는 시간별 속도 기록지.
 // 이름·부품마다 마우스를 올리면 실제 뜻이 보인다(조종석과 같은 빠른 말풍선).
@@ -121,31 +121,40 @@ function Room({ data }: { data: UsageResponse }) {
 
 /* ───────────── 계통도 ───────────── */
 
-const VB_W = 1100;
-const VB_H = 400;
+const VB_W = 950;
+const VB_H = 460;
 
-/** 탱크 i(왼쪽부터 업무·개인·기타)의 자리 */
-const TANK = (i: number) => ({ x: 70 + i * 150, y: 52, w: 96, h: 248 });
-/** 엔진 줄의 높이(위에서부터). 탱크 i는 엔진 ENGINE_OF[i]로 간다(배관이 서로 엇갈리지 않게) */
-const ENGINE_Y = [110, 210, 310];
-const ENGINE_OF = [2, 1, 0];
-/** 탱크 i의 배관: 아래로 내려가 가로 길(LANE)을 달리고, 세로 길(RISER)로 엔진 높이까지 오른다 */
-const LANE = [380, 358, 336];
-const RISER = [700, 670, 640];
-const ENGINE_X = 760;
+/**
+ * 줄 i(위부터 업무·개인·기타)의 가운데 높이. 탱크와 엔진이 한 줄에 선다.
+ * 맨 위는 좁은 화면에서 판이 작아져도 왼쪽 위 머리글("FUEL SYSTEM")에 닿지 않게 비운다.
+ */
+const ROW_Y = [116, 234, 352];
+/** 누운 탱크 i의 자리(지름 60). 이름판은 그 아래 */
+const TANK = (i: number) => {
+  const cy = ROW_Y[i] ?? 116;
+  return { x: 70, y: cy - 30, w: 280, h: 60, cy };
+};
+/** 탱크 가운데에서 그 아래 이름판 위쪽 끝까지 */
+const PLATE_DY = 38;
+const ENGINE_X = 600;
 
+/** 탱크 오른쪽 마개 → 같은 줄 엔진으로 곧게 */
 function pipePath(i: number): string {
   const t = TANK(i);
-  const cx = t.x + t.w / 2;
-  const y = ENGINE_Y[ENGINE_OF[i] ?? 0] ?? 110;
-  const lane = LANE[i] ?? 360;
-  const riser = RISER[i] ?? 680;
-  return `M ${cx} ${t.y + t.h} V ${lane} H ${riser} V ${y} H ${ENGINE_X}`;
+  return `M ${t.x + t.w - 4} ${t.cy} H ${ENGINE_X}`;
 }
 
-/** 계통도 판 크기와 탱크·엔진 무리를 미는 거리. 주 연료통이 있으면 왼쪽·위에 자리를 낸다 */
+/**
+ * 주 연료통이 없을 때 탱크·엔진 무리를 양옆으로 비우는 거리. 판이 너무 좁으면 화면에서 키가 커져서
+ * 예전 판(1100 폭)과 비슷한 비율로 맞추고 무리를 가운데에 둔다.
+ */
+const NO_FEED_PAD = 75;
+
+/** 계통도 판 크기와 탱크·엔진 무리를 미는 거리. 주 연료통이 있으면 왼쪽에 자리를 낸다 */
 function layoutOf(feed: WeeklyFeed | null) {
-  const s = feed ? MAIN_SHIFT : { x: 0, y: 0 };
+  if (!feed)
+    return { ox: NO_FEED_PAD, oy: 0, w: VB_W + 2 * NO_FEED_PAD, h: VB_H };
+  const s = MAIN_SHIFT;
   return { ox: s.x, oy: s.y, w: VB_W + s.x, h: VB_H + s.y };
 }
 
@@ -154,11 +163,11 @@ function Schematic({ data }: { data: UsageResponse }) {
   const { ox, oy, w: vbW, h: vbH } = layoutOf(feed);
   const total = data.total.output || 1;
   const maxBurn = Math.max(1, ...AREAS.map((a) => data.burn.perMin[a]));
-  /** 탱크마다 뚜껑 가운데(계통도 전체 좌표): 주 연료통 배관이 내려앉는 곳 */
-  const tankTop = Object.fromEntries(
+  /** 탱크마다 왼쪽 마개 가운데(계통도 전체 좌표): 주 연료통 배관이 들어가는 곳 */
+  const tankInlet = Object.fromEntries(
     AREAS.map((a, i) => {
       const t = TANK(i);
-      return [a, { x: ox + t.x + t.w / 2, y: oy + t.y }];
+      return [a, { x: ox + t.x, y: oy + t.cy }];
     }),
   ) as Record<Area, { x: number; y: number }>;
   const zone = (z: { x: number; y: number; w: number; h: number }) => ({
@@ -188,7 +197,7 @@ function Schematic({ data }: { data: UsageResponse }) {
         >
           <SchematicDefs />
           <Blueprint w={vbW} h={vbH} ox={ox} />
-          {feed && <FeedPipes feed={feed} to={tankTop} />}
+          {feed && <FeedPipes feed={feed} to={tankInlet} />}
           {feed && <MainTank feed={feed} />}
           <g transform={`translate(${ox} ${oy})`}>
             <Machinery
@@ -206,7 +215,7 @@ function Schematic({ data }: { data: UsageResponse }) {
             {AREAS.map((a, i) => (
               <Zone
                 key={a}
-                {...zone(feedZone(i, tankTop[a]))}
+                {...zone(feedZone(i, tankInlet[a]))}
                 text={
                   feed.main && feed.split
                     ? `${AREA_LABEL[a]} 급유관 = 주 연료통에서 ${AREA_LABEL[a]} 탱크로.\n이번 주 쓴 ${pctText(feed.main.usedPct).used} 중 ${AREA_LABEL[a]} 몫 ${Math.round(feed.split.parts[a])}%(근사). 배관이 굵고 점이 밝을수록 많이 나눠 썼어요.`
@@ -218,15 +227,16 @@ function Schematic({ data }: { data: UsageResponse }) {
         )}
         {AREAS.map((a, i) => {
           const t = TANK(i);
-          const y = ENGINE_Y[ENGINE_OF[i] ?? 0] ?? 110;
+          const y = t.cy;
           return (
             <div key={a}>
               <Zone
                 {...zone({
-                  x: ox + t.x - 8,
-                  y: oy + t.y - 10,
-                  w: t.w + 16,
-                  h: t.h + (feed ? 58 : 46),
+                  x: ox + t.x - 6,
+                  y: oy + t.y - 4,
+                  w: t.w + 12,
+                  // 탱크 위 4 + 탱크 반 + 이름판까지 + 이름판(두 줄 30, 셋 43). 줄 사이(118)를 넘지 않는다
+                  h: 4 + t.h / 2 + PLATE_DY + (feed ? 43 : 30),
                 })}
                 align={i === 0 && !feed ? "start" : "center"}
                 text={`${AREA_LABEL[a]} 탱크(${TAG[a]}) = ${AREA_LABEL[a]} 프로젝트 세션이 오늘 쓴 연료(출력 토큰).\n${tokens(data.areas[a].output)} · 연료비 추정 ${usd(data.areas[a].cost)}\n오늘 ${Math.round((data.areas[a].output / total) * 100)}% = 오늘 세 영역이 태운 연료 중 ${AREA_LABEL[a]} 몫${
@@ -237,9 +247,9 @@ function Schematic({ data }: { data: UsageResponse }) {
               />
               <Zone
                 {...zone({
-                  x: ox + (RISER[i] ?? 680),
+                  x: ox + t.x + t.w + 6,
                   y: oy + y - 14,
-                  w: ENGINE_X - (RISER[i] ?? 680),
+                  w: ENGINE_X - (t.x + t.w + 6),
                   h: 28,
                 })}
                 text={`${AREA_LABEL[a]} 연료관 = 탱크에서 엔진으로 가는 연료. 점이 빨리 흐를수록 최근 ${data.burn.windowMin}분에 많이 썼어요.`}
@@ -257,7 +267,7 @@ function Schematic({ data }: { data: UsageResponse }) {
   );
 }
 
-/** 탱크 셋 → 배관 → 엔진 셋(탱크 계통 자체 좌표) */
+/** 탱크 셋 → 배관 → 엔진 셋, 영역마다 한 줄(탱크 계통 자체 좌표) */
 function Machinery({
   data,
   total,
@@ -295,7 +305,7 @@ function Machinery({
       {AREAS.map((a, i) => (
         <Engine
           key={a}
-          y={ENGINE_Y[ENGINE_OF[i] ?? 0] ?? 110}
+          y={TANK(i).cy}
           area={a}
           perMin={data.burn.perMin[a]}
           // 불꽃 세기는 계기판 바늘과 같은 절대 눈금(가장 센 엔진 대비가 아니다)
@@ -359,6 +369,14 @@ function SchematicDefs() {
         <stop offset="0.6" stopColor="#3a4558" />
         <stop offset="1" stopColor="#161c27" />
       </linearGradient>
+      {/* 누운 원통: 같은 금속을 세로로(가운데 위쪽이 밝다) */}
+      <linearGradient id="fr-metal-v" x1="0" x2="0" y1="0" y2="1">
+        <stop offset="0" stopColor="#1c2330" />
+        <stop offset="0.18" stopColor="#3a4558" />
+        <stop offset="0.42" stopColor="#5a687f" />
+        <stop offset="0.6" stopColor="#3a4558" />
+        <stop offset="1" stopColor="#161c27" />
+      </linearGradient>
       <linearGradient id="fr-cap" x1="0" x2="0" y1="0" y2="1">
         <stop offset="0" stopColor="#6b7a92" />
         <stop offset="1" stopColor="#2a3342" />
@@ -375,6 +393,11 @@ function SchematicDefs() {
         <stop offset="1" stopColor="#241d17" />
       </linearGradient>
       <linearGradient id="fr-glass" x1="0" x2="1" y1="0" y2="0">
+        <stop offset="0" stopColor="#05080d" />
+        <stop offset="0.5" stopColor="#0d1420" />
+        <stop offset="1" stopColor="#05080d" />
+      </linearGradient>
+      <linearGradient id="fr-glass-v" x1="0" x2="0" y1="0" y2="1">
         <stop offset="0" stopColor="#05080d" />
         <stop offset="0.5" stopColor="#0d1420" />
         <stop offset="1" stopColor="#05080d" />
@@ -460,7 +483,7 @@ function Blueprint({ w, h, ox }: { w: number; h: number; ox: number }) {
         strokeOpacity="0.12"
         strokeDasharray="2 6"
       />
-      {[250, 520, 760].map((x) => (
+      {[380, 600].map((x) => (
         <line
           key={x}
           x1={ox + x}
@@ -502,64 +525,59 @@ function Tank({
 }) {
   const t = TANK(i);
   const c = COLOR[area];
-  // 들여다보는 창(사이트 글라스): 탱크 가운데 세로 홈
-  const gx = t.x + t.w / 2 - 9;
-  const gy = t.y + 28;
-  const gh = t.h - 56;
+  const r = t.h / 2;
+  // 들여다보는 창(사이트 글라스): 몸통 가운데 가로 홈. 연료는 왼쪽(급유관이 들어오는 쪽)부터 찬다
+  const gx = t.x + 34;
+  const gw = t.w - 68;
+  const gy = t.cy - 7;
+  const gh = 14;
   const level = Math.max(0.02, Math.min(1, share));
-  const ly = gy + gh * (1 - level);
+  const lx = gx + gw * level;
+  const plateY = t.cy + PLATE_DY;
+  const cx = t.x + t.w / 2;
   return (
     <g data-tank={area}>
-      {/* 받침 */}
-      <rect
-        x={t.x + 10}
-        y={t.y + t.h - 2}
-        width={t.w - 20}
-        height="10"
-        rx="2"
-        fill="#11161f"
-        stroke="#ffffff"
-        strokeOpacity="0.08"
-      />
+      {/* 받침 둘 */}
+      {[0.22, 0.78].map((f) => (
+        <rect
+          key={f}
+          x={t.x + t.w * f - 14}
+          y={t.y + t.h - 4}
+          width="28"
+          height="8"
+          rx="2"
+          fill="#11161f"
+          stroke="#ffffff"
+          strokeOpacity="0.08"
+        />
+      ))}
       {/* 몸통 */}
       <rect
-        x={t.x}
-        y={t.y + 10}
-        width={t.w}
-        height={t.h - 20}
-        fill="url(#fr-metal)"
+        x={t.x + 10}
+        y={t.y}
+        width={t.w - 20}
+        height={t.h}
+        fill="url(#fr-metal-v)"
       />
-      {/* 위·아래 뚜껑 */}
-      <ellipse
-        cx={t.x + t.w / 2}
-        cy={t.y + 10}
-        rx={t.w / 2}
-        ry="11"
-        fill="url(#fr-cap)"
-      />
-      <ellipse
-        cx={t.x + t.w / 2}
-        cy={t.y + t.h - 10}
-        rx={t.w / 2}
-        ry="11"
-        fill="#1a212c"
-      />
+      {/* 오른쪽·왼쪽 마개(왼쪽이 보이는 쪽) */}
+      <ellipse cx={t.x + t.w - 10} cy={t.cy} rx="10" ry={r} fill="#1a212c" />
+      <ellipse cx={t.x + 10} cy={t.cy} rx="10" ry={r} fill="url(#fr-cap)" />
       {/* 이음 띠와 리벳 */}
       {[0.3, 0.7].map((f) => (
         <g key={f}>
           <rect
-            x={t.x}
-            y={t.y + t.h * f - 3}
-            width={t.w}
-            height="6"
+            x={t.x + t.w * f - 3}
+            y={t.y}
+            width="6"
+            height={t.h}
             fill="#000"
             fillOpacity="0.28"
           />
-          {[0.12, 0.88].map((r) => (
+          {[0.14, 0.86].map((q) => (
             <circle
-              key={r}
-              cx={t.x + t.w * r}
-              cy={t.y + t.h * f}
+              key={q}
+              cx={t.x + t.w * f}
+              cy={t.y + t.h * q}
               r="1.8"
               fill="#8a97ad"
               fillOpacity="0.7"
@@ -567,54 +585,73 @@ function Tank({
           ))}
         </g>
       ))}
+      {/* 몸통에 칠한 번호 */}
+      <text
+        x={t.x + 26}
+        y={t.y + 15}
+        fontFamily="ui-monospace, monospace"
+        fontSize="9"
+        fontWeight="700"
+        fill="#e8edf7"
+        fillOpacity="0.35"
+      >
+        {TAG[area]}
+      </text>
       {/* 사이트 글라스 */}
       <rect
         x={gx - 3}
         y={gy - 3}
-        width="24"
+        width={gw + 6}
         height={gh + 6}
         rx="5"
         fill="#0b0f16"
         stroke="#8a97ad"
         strokeOpacity="0.45"
       />
-      <rect x={gx} y={gy} width="18" height={gh} rx="3" fill="url(#fr-glass)" />
       <rect
         x={gx}
-        y={ly}
-        width="18"
-        height={gy + gh - ly}
+        y={gy}
+        width={gw}
+        height={gh}
+        rx="3"
+        fill="url(#fr-glass-v)"
+      />
+      <rect
+        x={gx}
+        y={gy}
+        width={lx - gx}
+        height={gh}
         rx="3"
         fill={c}
         fillOpacity="0.85"
         style={{ filter: `drop-shadow(0 0 6px ${c})` }}
       />
       <line
-        x1={gx}
-        x2={gx + 18}
-        y1={ly}
-        y2={ly}
+        x1={lx}
+        x2={lx}
+        y1={gy}
+        y2={gy + gh}
         stroke="#fff"
         strokeOpacity="0.8"
         strokeWidth="1"
       />
-      {/* 눈금 */}
+      {/* 눈금(창 아래) */}
       {[0.25, 0.5, 0.75].map((f) => (
         <line
           key={f}
-          x1={gx + 20}
-          x2={gx + 27}
-          y1={gy + gh * (1 - f)}
-          y2={gy + gh * (1 - f)}
+          x1={gx + gw * f}
+          x2={gx + gw * f}
+          y1={gy + gh + 4}
+          y2={gy + gh + 10}
           stroke="#cfd8e8"
           strokeOpacity="0.45"
         />
       ))}
-      {/* 이름판. "18.9만 · 오늘 55%"가 들어가게 탱크보다 조금 넓다(탱크 사이 54 안) */}
+      {/* 이름판: 탱크 아래 가운데 */}
       <rect
-        x={t.x - 8}
-        y={t.y + t.h + 12}
-        width={t.w + 16}
+        x={cx - 70}
+        y={plateY}
+        width="140"
         height={weeklyPart === undefined ? 30 : 43}
         rx="2"
         fill="#0d1118"
@@ -622,8 +659,8 @@ function Tank({
         strokeOpacity="0.1"
       />
       <text
-        x={t.x + t.w / 2}
-        y={t.y + t.h + 24}
+        x={cx}
+        y={plateY + 12}
         textAnchor="middle"
         fontSize="10"
         fontWeight="600"
@@ -632,8 +669,8 @@ function Tank({
         {TAG[area]} · {AREA_LABEL[area]}
       </text>
       <text
-        x={t.x + t.w / 2}
-        y={t.y + t.h + 37}
+        x={cx}
+        y={plateY + 25}
         textAnchor="middle"
         fontFamily="ui-monospace, monospace"
         fontSize="10"
@@ -645,8 +682,8 @@ function Tank({
       {weeklyPart !== undefined && (
         <text
           data-weekly-part={area}
-          x={t.x + t.w / 2}
-          y={t.y + t.h + 50}
+          x={cx}
+          y={plateY + 38}
           textAnchor="middle"
           fontFamily="ui-monospace, monospace"
           fontSize="9"
@@ -676,8 +713,8 @@ function PipeRun({
   // 연료 점이 한 칸(20) 가는 데 걸리는 시간: 셀수록 짧게, 안 쓰면 멈춤
   const secs = perMin > 0 ? Math.max(0.35, 2.4 - 2 * flow) : 0;
   const t = TANK(i);
-  const lane = LANE[i] ?? 360;
-  const riser = RISER[i] ?? 680;
+  const from = t.x + t.w;
+  const y = t.cy;
   return (
     <g data-pipe={area}>
       <path
@@ -718,8 +755,8 @@ function PipeRun({
           }
         />
       )}
-      {/* 밸브(나비 모양): 탱크 아래 이름판에 가리지 않게 가로 배관 위, 탱크 바로 오른쪽 */}
-      <g transform={`translate(${t.x + t.w / 2 + 34} ${lane})`}>
+      {/* 밸브(나비 모양): 탱크 마개 조금 오른쪽 */}
+      <g transform={`translate(${from + 56} ${y})`}>
         <path
           d="M -8 -6 L 8 6 L 8 -6 L -8 6 Z"
           fill="#2a3240"
@@ -735,25 +772,18 @@ function PipeRun({
           fillOpacity="0.6"
         />
       </g>
-      {[riser - 20, (riser + ENGINE_X) / 2].map((fx) => (
+      {/* 플랜지: 탱크 마개 앞, 가운데, 엔진 앞 */}
+      {[from + 14, (from + ENGINE_X) / 2 + 30, ENGINE_X - 20].map((fx) => (
         <rect
           key={fx}
           x={fx - 2}
-          y={(ENGINE_Y[ENGINE_OF[i] ?? 0] ?? 110) - 8}
+          y={y - 8}
           width="4"
           height="16"
           fill="#6b7a92"
           fillOpacity="0.8"
         />
       ))}
-      <rect
-        x={(t.x + t.w / 2 + riser) / 2 - 2}
-        y={lane - 8}
-        width="4"
-        height="16"
-        fill="#6b7a92"
-        fillOpacity="0.8"
-      />
     </g>
   );
 }
