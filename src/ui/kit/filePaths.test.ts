@@ -5,9 +5,9 @@ describe("findPaths: 글 속 파일 경로 찾기", () => {
   it("세부 글에 적힌 절대 경로를 찾는다(뒤에 붙은 조사는 빼고)", () => {
     expect(
       findPaths(
-        "어제 드리프트 점검 결과는 /Users/me/.local/state/secretary/runs/drift/2026-10-30.md를 보세요.",
+        "어제 드리프트 점검 결과는 /Users/me/.local/state/almanac/runs/drift/2026-10-30.md를 보세요.",
       ),
-    ).toEqual(["/Users/me/.local/state/secretary/runs/drift/2026-10-30.md"]);
+    ).toEqual(["/Users/me/.local/state/almanac/runs/drift/2026-10-30.md"]);
   });
 
   it("여러 개면 나온 순서대로, 같은 것은 한 번만", () => {
@@ -33,11 +33,11 @@ describe("findPaths: 글 속 파일 경로 찾기", () => {
   it("~/로 적은 홈 경로도 잡는다(세션들이 이렇게 적는다)", () => {
     expect(
       findPaths(
-        "시안: ~/personal/projects/game/review/gate-phone.png, ~/personal/projects/game/review/letter-phone.png",
+        "시안: ~/personal/projects/harbor/review/gate-phone.png, ~/personal/projects/harbor/review/letter-phone.png",
       ),
     ).toEqual([
-      "~/personal/projects/game/review/gate-phone.png",
-      "~/personal/projects/game/review/letter-phone.png",
+      "~/personal/projects/harbor/review/gate-phone.png",
+      "~/personal/projects/harbor/review/letter-phone.png",
     ]);
   });
 

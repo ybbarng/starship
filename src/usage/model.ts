@@ -456,7 +456,7 @@ export function buildReport(
 
   const list = [...projects.values()].sort((a, b) => b.output - a.output);
   for (const p of list) p.sessions.sort((a, b) => b.output - a.output);
-  // 작업 폴더 이름만 같은 프로젝트(…/mighty와 …/mighty/mighty)는 부모 폴더를 붙여 나눈다.
+  // 작업 폴더 이름만 같은 프로젝트(…/comet과 …/comet/comet)는 부모 폴더를 붙여 나눈다.
   const byName = new Map<string, number>();
   for (const p of list) byName.set(p.name, (byName.get(p.name) ?? 0) + 1);
   for (const p of list)

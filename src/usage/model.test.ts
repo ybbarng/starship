@@ -371,14 +371,14 @@ describe("묶기", () => {
         now,
         rules,
         paths: {
-          "-a": `${HOME}/personal/projects/game`,
-          "-b": `${HOME}/personal/projects/game/game`,
+          "-a": `${HOME}/personal/projects/harbor`,
+          "-b": `${HOME}/personal/projects/harbor/harbor`,
         },
       },
     );
     expect(r.projects.map((p) => p.name)).toEqual([
-      "game/game",
-      "projects/game",
+      "harbor/harbor",
+      "projects/harbor",
     ]);
   });
 

@@ -11,7 +11,7 @@ export const HOP_LABEL: Record<string, string> = {
 
 /** 칸마다 실제 뜻. 화면에서 칸에 마우스를 올리면 보인다. */
 export const HOP_MEANING: Record<string, string> = {
-  ship: "이 맥북 (측정이 돌고 있는지)",
+  ship: "이 컴퓨터 (측정이 돌고 있는지)",
   wifi: "Wi-Fi 연결 (값은 Wi-Fi 이름)",
   gateway: "집·사무실 공유기 (핑 손실)",
   internet: "인터넷 (바깥까지 핑 손실)",
@@ -152,7 +152,7 @@ export function linkProblems(link: Link): string[] {
 /** "회선 불안"·"끊김" 글에 마우스를 올리면 보일 글: 어느 칸이 왜 그런지 모음과 원인 한 줄. */
 export function verdictDetail(link: Link): string {
   const lines = [
-    "관제 링크 = 이 맥북의 회선(Wi-Fi → 공유기 → 인터넷 → DNS)을 20초마다 잰 결과",
+    "관제 링크 = 이 컴퓨터의 회선(Wi-Fi → 공유기 → 인터넷 → DNS)을 20초마다 잰 결과",
     ...linkProblems(link).map((l) => `· ${l}`),
   ];
   if (link.cause) lines.push(`원인: ${link.cause}`);

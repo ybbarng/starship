@@ -131,7 +131,7 @@ describe("순수 판단", () => {
     expect(hasHiddenPart("/r/a/.env", "/r")).toBe(true);
   });
   it("세션 작업 사본(.claude/worktrees/<이름>/) 안의 파일만 숨김 예외", () => {
-    const wt = "/r/game/.claude/worktrees/agent-a1b2";
+    const wt = "/r/harbor/.claude/worktrees/agent-a1b2";
     expect(hasHiddenPart(`${wt}/README.md`, "/r")).toBe(false);
     expect(hasHiddenPart(`${wt}/docs/shot.png`, "/r")).toBe(false);
     // 사본 안의 숨김 조각은 계속 막는다
@@ -139,11 +139,11 @@ describe("순수 판단", () => {
     expect(hasHiddenPart(`${wt}/.git/config`, "/r")).toBe(true);
     expect(hasHiddenPart(`${wt}/a/.ssh/id.txt`, "/r")).toBe(true);
     // .claude의 다른 곳, worktrees 바로 아래 파일, 숨김 이름의 사본은 막는다
-    expect(hasHiddenPart("/r/game/.claude/settings.json", "/r")).toBe(true);
-    expect(hasHiddenPart("/r/game/.claude/worktrees/x.md", "/r")).toBe(true);
-    expect(hasHiddenPart("/r/game/.claude/worktrees/.hidden/a.md", "/r")).toBe(
-      true,
-    );
+    expect(hasHiddenPart("/r/harbor/.claude/settings.json", "/r")).toBe(true);
+    expect(hasHiddenPart("/r/harbor/.claude/worktrees/x.md", "/r")).toBe(true);
+    expect(
+      hasHiddenPart("/r/harbor/.claude/worktrees/.hidden/a.md", "/r"),
+    ).toBe(true);
   });
   it("checkInput은 상대 경로·..·NUL을 거절한다", () => {
     expect(checkInput("/a/b.png")).toBeNull();

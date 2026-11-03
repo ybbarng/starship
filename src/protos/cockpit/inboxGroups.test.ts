@@ -329,10 +329,10 @@ describe("repick: 고른 것이 사라지면 이웃으로", () => {
   const prev = [
     r("blog", "pr-12"),
     r("web-shop", "pr-40"),
-    r("game", "pr-7"),
+    r("harbor", "pr-7"),
     "web-shop",
     "blog",
-    "game",
+    "harbor",
     LOOSE_KEY,
   ];
 
@@ -343,7 +343,7 @@ describe("repick: 고른 것이 사라지면 이웃으로", () => {
 
   it("승무원 묶음을 다 처리하면 같은 자리(뒤에 있던 묶음)로", () => {
     const next = prev.filter((k) => k !== "blog");
-    expect(repick(prev, next, "blog")).toBe("game");
+    expect(repick(prev, next, "blog")).toBe("harbor");
   });
 
   it("맨 끝 묶음이 사라지면 앞 묶음으로", () => {
@@ -353,17 +353,17 @@ describe("repick: 고른 것이 사라지면 이웃으로", () => {
   it("리뷰 줄을 처리하면 리뷰 칸의 다음 줄로", () => {
     const gone = r("web-shop", "pr-40");
     const next = prev.filter((k) => k !== gone);
-    expect(repick(prev, next, gone)).toBe(r("game", "pr-7"));
+    expect(repick(prev, next, gone)).toBe(r("harbor", "pr-7"));
   });
 
   it("리뷰 칸 마지막 줄을 처리하면 첫 승무원 묶음으로(앞 리뷰로 되돌아가지 않는다)", () => {
-    const gone = r("game", "pr-7");
+    const gone = r("harbor", "pr-7");
     const next = prev.filter((k) => k !== gone);
     expect(repick(prev, next, gone)).toBe("web-shop");
   });
 
   it("지난 순서에도 없던 열쇠(결재 없는 승무원)는 첫 묶음으로 바꿔 옛 열쇠를 남기지 않는다", () => {
-    expect(repick(prev, prev, "secretary")).toBe("web-shop");
+    expect(repick(prev, prev, "almanac")).toBe("web-shop");
   });
 
   it("묶음이 다 사라지면 null", () => {
