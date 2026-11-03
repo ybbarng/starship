@@ -9,6 +9,7 @@ import { Tip } from "@/ui/kit/Tip";
 import { AREA_LABEL, type Area } from "@/usage/model";
 import { SPEED_FULL, speedRatio } from "./FuelRoom";
 import { tokens, usd } from "./UsagePage";
+import { useFuelLimitLines } from "./WeeklyFuel";
 
 const AREAS: Area[] = ["work", "personal", "other"];
 const COLOR: Record<Area, string> = {
@@ -22,11 +23,13 @@ export function FuelGauge() {
   const total = data?.burn.total ?? 0;
   const r = speedRatio(total);
   const angle = -120 + r * 240;
+  const limits = useFuelLimitLines();
   const tip = data
     ? `연료·속도 = 토큰 사용량을 연료로 본 계기.\n지금 속도: 최근 ${data.burn.windowMin}분 분당 ${tokens(Math.round(total))} 토큰(로그 눈금, 끝 ${tokens(SPEED_FULL)})\n오늘 연소 ${tokens(data.total.output)} · 연료비 추정 ${usd(data.total.cost)}\n누르면 연료실로 가요`
     : "연료·속도 = 토큰 사용량을 연료로 본 계기. 누르면 연료실로 가요";
+  const fullTip = limits.tip ? `${tip}\n\n${limits.tip}` : tip;
   return (
-    <Tip text={tip} side="top" align="end" className="w-full">
+    <Tip text={fullTip} side="top" align="end" className="w-full">
       <Link
         href="/fuel"
         data-fuel-gauge
@@ -93,6 +96,16 @@ export function FuelGauge() {
               </span>
             );
           })}
+          {limits.lines.map((l) => (
+            <span
+              key={l.id}
+              data-fuel-limit={l.id}
+              className={`truncate font-mono text-[9.5px] leading-tight ${limits.stale ? "opacity-50" : ""}`}
+              style={{ color: l.color }}
+            >
+              {l.text}
+            </span>
+          ))}
         </span>
       </Link>
     </Tip>

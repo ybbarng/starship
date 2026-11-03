@@ -14,6 +14,7 @@ import cockpit from "@/protos/cockpit/cockpit.module.css";
 import { Tip } from "@/ui/kit/Tip";
 import { AREA_LABEL, type Area, type UsageResponse } from "@/usage/model";
 import { tokens, usd } from "./UsagePage";
+import { WeeklyTank } from "./WeeklyTank";
 
 const AREAS: Area[] = ["work", "personal", "other"];
 
@@ -84,6 +85,7 @@ export function FuelRoom() {
 function Room({ data }: { data: UsageResponse }) {
   return (
     <div className="mx-auto flex max-w-[1220px] flex-col gap-4 px-4 py-4">
+      <WeeklyTank />
       <Schematic data={data} />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_230px]">
         <Instruments data={data} />

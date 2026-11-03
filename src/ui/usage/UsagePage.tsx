@@ -16,6 +16,7 @@ import {
   type UsageRange,
   type UsageResponse,
 } from "@/usage/model";
+import { WeeklyFuelBand } from "./WeeklyFuel";
 
 const AREA_COLOR: Record<Area, string> = {
   work: "#6aa8ff",
@@ -186,6 +187,7 @@ function Body({ data }: { data: UsageResponse }) {
 
   return (
     <div className="mx-auto flex max-w-[1180px] flex-col gap-5 px-4 py-5">
+      <WeeklyFuelBand />
       <section
         className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4"
         data-usage-areas
