@@ -105,6 +105,39 @@ describe("crewTaskCount: 읽음으로 숨긴 답해 둔 것은 세지 않는다"
     expect(crewTaskCount(desk, [reply])).toBe(2);
   });
 
+  it("결재(decisionsByCrew) + 읽지 않은 답: 미뤘거나 아직 Task가 없는 기다림은 세지 않는다", () => {
+    const since = Date.parse("2026-11-03T09:30:00+09:00");
+    const deskTask = (waitId: string): Task => ({
+      ...reply,
+      id: deskTaskId("web-shop", waitId),
+      kind: "question",
+      title: `${waitId} 정하기`,
+      since,
+      actions: ["answer", "snooze"],
+    });
+    const outside: Task = {
+      ...reply,
+      id: "gh:pr:41",
+      kind: "review",
+      source: { kind: "review", service: "GitHub" },
+      title: "PR #41 리뷰",
+      since,
+      actions: ["focus", "dismiss"],
+    };
+    // 기다림 셋: w1은 Task가 있고, w2는 미뤄서 Task가 빠졌고, w3는 아직 Task가 안 왔다
+    const three: Desk = {
+      ...desk,
+      waiting: ["w1", "w2", "w3"].map((id) => ({
+        id,
+        type: "answer" as const,
+        title: `${id} 정하기`,
+      })),
+    };
+    expect(
+      crewTaskCount(three, [deskTask("w1"), outside, reply], "web-shop"),
+    ).toBe(2 + 2);
+  });
+
   it("다른 승무원에서 숨긴 같은 id는 건드리지 않는다", () => {
     useSent.getState().setRead(readKey("blog", "a1"), true);
     expect(crewTaskCount(desk, [reply], "web-shop")).toBe(2);

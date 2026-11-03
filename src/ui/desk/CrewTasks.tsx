@@ -7,7 +7,11 @@ import { isReadHidden } from "@/data/sent";
 import type { Desk } from "@/protocol/desk";
 import type { Task } from "@/protocol/v1";
 import { Paper, ReplyNote } from "@/protos/cockpit/Inbox";
-import { isNews, lastReplies } from "@/protos/cockpit/inboxGroups";
+import {
+  decisionsByCrew,
+  isNews,
+  lastReplies,
+} from "@/protos/cockpit/inboxGroups";
 import { AnswerList } from "./Answers";
 import { DeskPanel } from "./DeskPanel";
 
@@ -17,22 +21,21 @@ function fromDesk(t: Task): boolean {
 }
 
 /**
- * 할 일 판 배지: 책상 기다림 + 책상 밖 일 + 답해 둔 것. 답해 둔 것은 읽음을 눌러 숨긴 것은 빼고 센다
- * (본부가 책상에서 빼기 전까지 배지만 하나 많았다, 2026-11-03). crewId를 안 주면 할 일에서 찾는다.
+ * 할 일 판 배지: 이 승무원의 결재(decisionsByCrew, 조종석 결재함 "결재 n"과 같은 수) + 읽지 않은 답해 둔 것.
+ * 책상 기다림은 `desk:` Task로 결재에 들어 있으니 desk.waiting을 따로 세지 않는다. 그래서 미룬 기다림·
+ * 아직 Task가 오지 않은 기다림은 결재가 아니라 세지 않는다(2026-11-03, 전에는 desk.waiting.length를 세어
+ * 조종석보다 많았다). 답해 둔 것은 읽음을 눌러 숨긴 것은 빼고 센다. 정의: docs/crew-views.md "건수".
  */
 export function crewTaskCount(
   desk: Desk | null,
-  tasks: Task[],
+  tasks: readonly Task[],
   crewId: string | undefined = tasks.find((t) => t.crewId)?.crewId,
 ): number {
   const answers = (desk?.answers ?? []).filter(
     (a) => !isReadHidden(a.id, crewId),
   );
-  return (
-    (desk?.waiting.length ?? 0) +
-    tasks.filter((t) => !isNews(t) && !fromDesk(t)).length +
-    answers.length
-  );
+  const decisions = crewId ? (decisionsByCrew(tasks).get(crewId) ?? []) : [];
+  return decisions.length + answers.length;
 }
 
 export function CrewTasks({

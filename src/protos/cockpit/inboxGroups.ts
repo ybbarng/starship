@@ -32,8 +32,9 @@ export function isNews(t: Task): boolean {
 }
 
 /**
- * 결재 수: 소식(isNews)을 뺀 할 일 수. 조종석 결재함·선내 함교·갑판 기다림·Dock 배지가 모두 이 수를 쓴다
- * (docs/crew-views.md "건수는 어디서나 결재만 센다"). 책상 기다림도 `desk:` Task로 들어 있으니 따로 더하지 않는다.
+ * 결재 수: 소식(isNews)을 뺀 할 일 수. 결재를 세는 곳은 모두 이것(승무원별은 decisionsByCrew)으로 센다:
+ * 조종석 결재함 "결재 n"·선내 함교·갑판 기다림은 결재만, 선실 "할 일" 배지·Dock 배지는 결재 + 읽지 않은 답해 둔 것
+ * (docs/crew-views.md "건수"). 책상 기다림도 `desk:` Task로 들어 있으니 따로 더하지 않는다.
  */
 export function decisionCount(tasks: readonly Task[]): number {
   let n = 0;
