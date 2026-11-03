@@ -29,9 +29,14 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
   "crew": [/* Crew */],
   "gauges": [/* Gauge */],
   "link": { /* Link, 선택 */ },
-  "notice": "데모 데이터"          // 선택. 화면 구석에 작게 적는다
+  "notice": "데모 데이터",         // 선택. 화면 구석에 작게 적는다
+  "problems": ["..."]              // 선택. 형식 검사에 걸린 것(아래)
 }
 ```
+
+- **틀린 항목은 그것만 뺀다(2026-11-03).** Starship은 `protocol`·`generatedAt`만 엄격하게 본다. `tasks`·`hails`·`crew`·`gauges`는 항목마다 따로 검사해, 틀린 항목(모르는 enum 값, http(s)가 아닌 주소, 빠진 필드 등)만 빼고 나머지는 그대로 보인다. 뺀 까닭은 `"tasks[3] (id t-9): kind: ..."` 꼴로 `problems`에 모은다. 본부가 `problems`를 보내면 그 뒤에 덧붙인다. 그래서 본부는 Starship보다 먼저 enum 값을 더해도 화면 전체가 죽지 않는다(그 항목만 안 보인다). `link`는 전부터 틀리면 그것만 뺐다.
+- **같은 id가 겹치면 하나로 합친다(2026-11-03, `src/server/dedupe.ts`).** 승무원은 id마다 하나(처음 나온 자리에), 둘 중 꺼지지 않은 쪽(`status`가 `off`가 아닌 쪽), 둘 다 같으면 뒤에 온 쪽을 남긴다. 할 일은 id마다 처음 것만 남긴다. 겹침은 본부 쪽 잘못이니 본부에서 고치는 것이 맞고, 화면은 같은 서류가 두 장 생기지 않게 막기만 한다.
+- Starship은 본부에 4초까지 기다린다(동작은 10초). 넘기면 스냅숏·지도·책상은 502, 동작은 `{ "ok": false, "note": "본부에 닿지 못했어요" }`다. 여러 탭이 동시에 물어도 스냅숏·책상은 진행 중인 요청을 함께 쓰고 1.5초 안이면 다시 쓴다(동작을 보낸 뒤에는 새로 묻는다).
 
 ### `POST {base}/v1/actions` ← `ActionRequest` → `ActionResult`
 
@@ -52,7 +57,8 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
 ```
 
 - `note`는 화면에 잠깐 띄울 한 줄이다. 사람이 읽을 말로 쓴다.
-- `openUrl`이 있으면 Starship이 새 탭으로 연다(원래 서비스에서 답해야 할 때).
+- `openUrl`이 있으면 Starship이 새 탭으로 연다(원래 서비스에서 답해야 할 때). http(s)만 받고, 다른 주소면 그 칸만 버린다.
+- 길이 상한: `id`·`crewId`·`region`은 200자, `answer`는 4000자. Starship은 64KB가 넘는 요청 본문을 413으로 거절한다. 넘는 요청은 본부까지 가지 않는다.
 - `target: "sign"`은 `owner: me`인 열린 갈림길에 답한다. 서버는 그 승무원 세션에 "지도 갈림길 「제목」(구역 region): 답으로 정했어요"처럼 전하고, `map.json`은 세션이 고친다(`status: decided`, `decided`). 화면도 서버도 지도 파일을 직접 쓰지 않는다. 세션에 전할 수 없으면 `ok: false`와 까닭을 `note`에 준다.
 
 ### `GET {base}/v1/crew/{id}/map` → `CrewMapResponse`
@@ -145,7 +151,7 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
 | `brief` | 요약·오늘·다음·위험 |
 | `actions` | `focus` 그 창으로 가기 · `brief` 브리핑 다시 만들기 |
 | `map` | 선택. 지도 요약 `{ progress, regions, found, forksForMe, stale }`. 진행률(0..1), 버림을 뺀 구역 수, 그 가운데 발견 구역 수, 내가 정할 열린 갈림길 수, 지도가 오래됐나. 계산 규칙은 `src/protocol/map.ts`의 `summarizeMap` |
-| `desk` | 선택. 책상 요약 `{ waiting, doing }`. 나를 기다리는 것 수, 지금 하는 일 수. 조종석 승무원 옆에 기다림 수가 보인다 |
+| `desk` | 선택. 책상 요약 `{ waiting, doing, answers? }`. 나를 기다리는 것 수, 지금 하는 일 수, 답해 둔 것(아직 안 읽은 답) 수(없으면 생략하거나 0). 조종석 승무원 옆에 기다림 수가 보인다 |
 
 ### Gauge — 계기판 등
 
