@@ -76,6 +76,8 @@ function componentsFor(current: string): Components {
       if (href?.startsWith("#")) return <a href={href}>{children}</a>;
       if (href && WEB.test(href))
         return <ExternalLink href={href}>{children}</ExternalLink>;
+      // 상대 경로와, 확장자가 있는 절대·홈 경로(`/Users/…/x.md`, `~/notes/y.md#절`)를 같은 탭 링크로.
+      // 허용 폴더 검사는 서버가 하니 여기서 넓혀도 우회가 생기지 않는다(2026-11-03)
       const to = href ? resolveMdLink(current, href) : null;
       if (to) {
         const hash = to.hash ? `#${encodeURIComponent(to.hash)}` : "";

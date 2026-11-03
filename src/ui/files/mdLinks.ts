@@ -3,35 +3,50 @@
 
 const SCHEME = /^[a-z][a-z0-9+.-]*:/i;
 
+/** 마지막 조각에 확장자가 있는지(`x.md`, `a.png`). `.env`처럼 점으로 시작만 하는 것은 아니다 */
+const HAS_EXT = /[^/.][^/]*\.[^/.]+$/;
+
 /**
- * md 속 상대 경로 링크(`map.md`, `./a/b.md#절`, `../x.md`)를 지금 파일의 폴더 기준으로 풀어
+ * md 속 링크(`map.md`, `./a/b.md#절`, `../x.md`)를 지금 파일의 폴더 기준으로 풀어
  * 절대 경로(또는 `~/` 경로)와 `#` 뒤 조각으로 나눈다.
- * 풀 수 없으면 null: 주소 scheme이 있거나, `/`·`~`로 시작하거나(상대 경로가 아님),
- * 경로가 비었거나, `..`이 맨 위 폴더를 넘거나, 지금 파일이 절대·홈 경로가 아닐 때.
+ * 절대·홈 경로(`/Users/…/x.md`, `~/notes/y.md#절`)는 확장자가 있을 때만 그대로 받는다(2026-11-03).
+ * 확장자를 보는 것은 `/about` 같은 사이트 안 주소와 가르려는 것이다. 검사는 서버가 그대로 한다.
+ * 풀 수 없으면 null: 주소 scheme이 있거나, `//`·`~user`로 시작하거나, 절대·홈 경로에 확장자가 없거나,
+ * 경로가 비었거나, `..`이 맨 위 폴더를 넘거나, 상대 경로인데 지금 파일이 절대·홈 경로가 아닐 때.
  * `?` 뒤는 버린다. `%20` 같은 글은 풀어 둔다(못 풀면 적힌 그대로).
  */
 export function resolveMdLink(
   current: string,
   href: string,
 ): { path: string; hash?: string } | null {
-  if (!href || SCHEME.test(href) || /^[/~#]/.test(href)) return null;
+  if (!href || SCHEME.test(href) || href.startsWith("#")) return null;
   const at = href.indexOf("#");
-  const rawPath = (at < 0 ? href : href.slice(0, at)).split("?")[0] ?? "";
   const rawHash = at < 0 ? "" : href.slice(at + 1);
+  let rawPath = (at < 0 ? href : href.slice(0, at)).split("?")[0] ?? "";
   if (!rawPath) return null;
 
   let prefix: string;
-  let rest: string;
-  if (current.startsWith("~/")) {
-    prefix = "~/";
-    rest = current.slice(2);
-  } else if (current.startsWith("/")) {
-    prefix = "/";
-    rest = current.slice(1);
-  } else return null;
-
-  // 지금 파일 이름을 떼어 폴더만 남긴다
-  const dir = rest.split("/").filter(Boolean).slice(0, -1);
+  let dir: string[];
+  const absolute = rawPath.startsWith("/") || rawPath.startsWith("~/");
+  if (absolute) {
+    // `//host/…`는 다른 사이트로 가는 주소라 받지 않는다
+    if (rawPath.startsWith("//") || !HAS_EXT.test(decode(rawPath))) return null;
+    prefix = rawPath.startsWith("~/") ? "~/" : "/";
+    rawPath = rawPath.slice(prefix.length);
+    dir = [];
+  } else {
+    if (rawPath.startsWith("~")) return null;
+    let rest: string;
+    if (current.startsWith("~/")) {
+      prefix = "~/";
+      rest = current.slice(2);
+    } else if (current.startsWith("/")) {
+      prefix = "/";
+      rest = current.slice(1);
+    } else return null;
+    // 지금 파일 이름을 떼어 폴더만 남긴다
+    dir = rest.split("/").filter(Boolean).slice(0, -1);
+  }
   for (const part of decode(rawPath).split("/")) {
     if (part === "" || part === ".") continue;
     if (part === "..") {

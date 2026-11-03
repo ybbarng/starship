@@ -48,12 +48,39 @@ describe("resolveMdLink", () => {
     expect(resolveMdLink("/b.md", "..")).toBeNull();
   });
 
-  it("상대 경로가 아니면 null", () => {
+  it("절대·홈 경로는 확장자가 있으면 그대로 받는다(지금 파일과 상관없이)", () => {
+    expect(
+      resolveMdLink(here, "/Users/me/work/public/demo-files/coupon-sheet.png"),
+    ).toEqual({ path: "/Users/me/work/public/demo-files/coupon-sheet.png" });
+    expect(resolveMdLink(here, "~/notes/y.md#다음-할-일")).toEqual({
+      path: "~/notes/y.md",
+      hash: "다음-할-일",
+    });
+    expect(resolveMdLink("docs/a.md", "~/notes/y.md")).toEqual({
+      path: "~/notes/y.md",
+    });
+    expect(resolveMdLink(here, "/Users/me/a/../b/./c.md")).toEqual({
+      path: "/Users/me/b/c.md",
+    });
+  });
+
+  it("절대·홈 경로라도 확장자가 없거나 위를 넘거나 다른 사이트면 null", () => {
+    for (const href of [
+      "/etc/passwd",
+      "/about",
+      "~/notes/",
+      "/Users/me/.env",
+      "//evil.example.com/x.md",
+      "~other/x.md",
+      "/../x.md",
+    ])
+      expect(resolveMdLink(here, href)).toBeNull();
+  });
+
+  it("주소이거나 비었으면 null", () => {
     for (const href of [
       "",
       "#절",
-      "/etc/passwd",
-      "~/x.md",
       "https://example.com/a.md",
       "mailto:a@example.com",
       "javascript:alert(1)",

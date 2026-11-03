@@ -43,7 +43,7 @@
 | 실행 파일은 열지 않는다 | 열기는 `OPEN_EXTS`(문서·이미지·영상·소리) 확장자만. 보통 파일만(`.app`·폴더 거절), 실행 권한 비트가 붙은 파일도 거절 |
 | 셸을 거치지 않는다 | `execFile("/usr/bin/open", ["--", 경로])` |
 | md 보기 화면도 같은 검사를 받는다(2026-11-03) | `/files/view`는 서버에서 파일을 읽지 않는다(주소의 경로로 문서 제목만 정한다). 화면이 브라우저에서 `/api/files`를 fetch하므로 `Sec-Fetch-Site: same-origin`·허용 폴더·숨김 검사가 그대로 걸린다. 거절되면 서버가 준 까닭 글을 그대로 보인다 |
-| md 속 HTML·스크립트는 그리지 않는다 | `react-markdown`에 `rehype-raw`를 붙이지 않아 HTML은 글자로만 나온다(`<script>`·`<img onerror>`도 글자). 위험한 주소(`javascript:` 등)는 기본 `urlTransform`이 빈 값으로 바꾸고, 바깥 링크는 http(s)·mailto만 새 탭(`noopener noreferrer`)으로 연다. 상대 경로 링크는 글로만 풀어(아래 "md 보기 화면") 같은 탭의 `/files/view`·`/api/files`로 보내고, 허용 폴더·숨김·종류 검사는 서버가 그대로 한다. 풀 수 없는 경로(`/`·`~`로 시작, 맨 위를 넘는 `..`)는 링크로 두지 않는다 |
+| md 속 HTML·스크립트는 그리지 않는다 | `react-markdown`에 `rehype-raw`를 붙이지 않아 HTML은 글자로만 나온다(`<script>`·`<img onerror>`도 글자). 위험한 주소(`javascript:` 등)는 기본 `urlTransform`이 빈 값으로 바꾸고, 바깥 링크는 http(s)·mailto만 새 탭(`noopener noreferrer`)으로 연다. 상대 경로 링크는 글로만 풀어(아래 "md 보기 화면") 같은 탭의 `/files/view`·`/api/files`로 보내고, 허용 폴더·숨김·종류 검사는 서버가 그대로 한다. 절대·홈 경로(`/Users/…/x.md`, `~/notes/y.md#절`)는 확장자가 있을 때만 같은 방식으로 링크로 둔다(2026-11-03, `/about` 같은 주소와 가르려고). 풀 수 없는 경로(확장자 없는 `/`·`~/` 경로, `//`·`~user`로 시작, 맨 위를 넘는 `..`)는 링크로 두지 않는다 |
 | md 속 그림이 검사를 우회하지 않는다 | 그림은 불러오지 않고 `[그림: 대체 글]`로 둔다(http(s)면 그 주소로 가는 링크). 로컬 경로 그림을 `<img>`로 부르면 같은 출처 요청이라 다른 파일을 끌어 쓸 수 있고, 바깥 주소면 파일을 연 사실이 밖으로 나간다 |
 | 글 속 경로에도 단추를 단다(2026-11-03) | 책상 선택지·확인 항목에 `path`가 없으면 label·look·note에서, 기다림 세부에서도 `findPaths`로 경로를 찾는다. `path`가 있으면 그것만. 같은 경로는 한 번만 붙인다(`src/ui/desk/waitFiles.ts`, 시험 `waitFiles.test.ts`). 찾은 경로도 서버가 똑같이 검사한다 |
 
