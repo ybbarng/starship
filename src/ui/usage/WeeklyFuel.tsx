@@ -1,7 +1,7 @@
 "use client";
 
 // 주간 연료: 계정 사용 한도(본부 값)를 연료통 위에 보인다. 설계: docs/usage.md "주간 연료".
-// - WeeklyFuelBand: 연료 기록 노트(/usage) 위쪽의 큰 띠(연료실은 WeeklyTank.tsx의 주 연료통). 쓴 부분을 업무·개인·기타 몫으로 나눠 칠한다.
+// - WeeklyFuelBand: 연료 기록 노트(/usage) 위쪽의 큰 띠(연료실은 MainTank.tsx의 주 연료통, 계통도 안). 쓴 부분을 업무·개인·기타 몫으로 나눠 칠한다.
 // - useFuelLimitLines: 조종석 연료 계기의 짧은 줄과 말풍선 글.
 // 본부가 없거나(ok:false) 아직 모르면 아무것도 그리지 않는다.
 import { useUsage } from "@/data/hooks";

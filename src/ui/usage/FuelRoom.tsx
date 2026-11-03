@@ -1,7 +1,8 @@
 "use client";
 
 // 연료실: 오늘 쓴 연료(출력 토큰)를 기관 계통도로 그린다. 설계: docs/usage.md "연료실".
-// 위: 청사진 유리 위 계통도. 금속 원통 탱크 셋(업무·개인·기타, 들여다보는 창에 오늘 연소 몫만큼 연료),
+// 위: 청사진 유리 위 계통도. 왼쪽부터 주 연료통(T-0, 주간 한도 남은 양, MainTank.tsx) → 배관(나눠 쓴 몫만큼 굵게) →
+//     금속 원통 탱크 셋(업무·개인·기타, 들여다보는 창에 오늘 연소 몫만큼 연료),
 //     밸브·플랜지가 달린 배관(최근 15분 연소가 셀수록 연료 점이 빨리 흐른다), 연소실과 종 모양 노즐의 엔진 셋
 //     (그 영역의 지금 속도만큼 배기 불꽃이 길다).
 // 아래: 계기판. 아날로그 속도계 넷(전체·업무·개인·기타, 로그 눈금), 호박색 숫자판(오늘 연소·연료비),
@@ -12,9 +13,20 @@ import type { CSSProperties } from "react";
 import { useUsage } from "@/data/hooks";
 import cockpit from "@/protos/cockpit/cockpit.module.css";
 import { Tip } from "@/ui/kit/Tip";
+import { pctText } from "@/usage/limits";
 import { AREA_LABEL, type Area, type UsageResponse } from "@/usage/model";
+import {
+  FeedPipes,
+  feedZone,
+  MAIN_FUEL,
+  MAIN_SHIFT,
+  MAIN_ZONE,
+  MainTank,
+  mainTankTip,
+  useWeeklyFeed,
+  type WeeklyFeed,
+} from "./MainTank";
 import { tokens, usd } from "./UsagePage";
-import { WeeklyTank } from "./WeeklyTank";
 
 const AREAS: Area[] = ["work", "personal", "other"];
 
@@ -85,7 +97,6 @@ export function FuelRoom() {
 function Room({ data }: { data: UsageResponse }) {
   return (
     <div className="mx-auto flex max-w-[1220px] flex-col gap-4 px-4 py-4">
-      <WeeklyTank />
       <Schematic data={data} />
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_230px]">
         <Instruments data={data} />
@@ -120,12 +131,33 @@ function pipePath(i: number): string {
   return `M ${cx} ${t.y + t.h} V ${lane} H ${riser} V ${y} H ${ENGINE_X}`;
 }
 
+/** 계통도 판 크기와 탱크·엔진 무리를 미는 거리. 주 연료통이 있으면 왼쪽·위에 자리를 낸다 */
+function layoutOf(feed: WeeklyFeed | null) {
+  const s = feed ? MAIN_SHIFT : { x: 0, y: 0 };
+  return { ox: s.x, oy: s.y, w: VB_W + s.x, h: VB_H + s.y };
+}
+
 function Schematic({ data }: { data: UsageResponse }) {
+  const feed = useWeeklyFeed();
+  const { ox, oy, w: vbW, h: vbH } = layoutOf(feed);
   const total = data.total.output || 1;
   const maxBurn = Math.max(1, ...AREAS.map((a) => data.burn.perMin[a]));
+  /** 탱크마다 뚜껑 가운데(계통도 전체 좌표): 주 연료통 배관이 내려앉는 곳 */
+  const tankTop = Object.fromEntries(
+    AREAS.map((a, i) => {
+      const t = TANK(i);
+      return [a, { x: ox + t.x + t.w / 2, y: oy + t.y }];
+    }),
+  ) as Record<Area, { x: number; y: number }>;
+  const zone = (z: { x: number; y: number; w: number; h: number }) => ({
+    ...z,
+    vbW,
+    vbH,
+  });
   return (
     <section
       data-fuel-flow
+      data-weekly={feed ? (feed.main ? "on" : "reset") : "off"}
       className={`relative overflow-hidden rounded-xl border border-white/10 ${cockpit.screen}`}
     >
       <div className="pointer-events-none absolute top-2.5 left-4 z-10 font-mono text-[10px] tracking-[0.25em] text-[#7ce0ff]/55">
@@ -133,68 +165,75 @@ function Schematic({ data }: { data: UsageResponse }) {
       </div>
       <div className="relative">
         <svg
-          viewBox={`0 0 ${VB_W} ${VB_H}`}
+          viewBox={`0 0 ${vbW} ${vbH}`}
           className="block w-full"
           role="img"
-          aria-label="연료 계통도: 탱크 셋에서 배관을 지나 엔진 셋으로"
+          aria-label={
+            feed
+              ? "연료 계통도: 주 연료통에서 탱크 셋으로 나눠 담고, 배관을 지나 엔진 셋으로"
+              : "연료 계통도: 탱크 셋에서 배관을 지나 엔진 셋으로"
+          }
         >
           <SchematicDefs />
-          <Blueprint />
-          {AREAS.map((a, i) => (
-            <PipeRun
-              key={a}
-              i={i}
-              area={a}
-              perMin={data.burn.perMin[a]}
-              flow={data.burn.perMin[a] / maxBurn}
+          <Blueprint w={vbW} h={vbH} ox={ox} />
+          {feed && <FeedPipes feed={feed} to={tankTop} />}
+          {feed && <MainTank feed={feed} />}
+          <g transform={`translate(${ox} ${oy})`}>
+            <Machinery
+              data={data}
+              total={total}
+              maxBurn={maxBurn}
+              feed={feed}
             />
-          ))}
-          {AREAS.map((a, i) => (
-            <Tank
-              key={a}
-              i={i}
-              area={a}
-              share={data.areas[a].output / total}
-              today={data.areas[a].output}
-            />
-          ))}
-          {AREAS.map((a, i) => (
-            <Engine
-              key={a}
-              y={ENGINE_Y[ENGINE_OF[i] ?? 0] ?? 110}
-              area={a}
-              perMin={data.burn.perMin[a]}
-              // 불꽃 세기는 계기판 바늘과 같은 절대 눈금(가장 센 엔진 대비가 아니다)
-              thrust={speedRatio(data.burn.perMin[a])}
-            />
-          ))}
+          </g>
         </svg>
         {/* 말풍선 자리(SVG 위에 겹친 투명 단추) */}
+        {feed && (
+          <>
+            <Zone {...zone(MAIN_ZONE)} align="start" text={mainTankTip(feed)} />
+            {AREAS.map((a, i) => (
+              <Zone
+                key={a}
+                {...zone(feedZone(i, tankTop[a]))}
+                text={
+                  feed.main && feed.split
+                    ? `${AREA_LABEL[a]} 급유관 = 주 연료통에서 ${AREA_LABEL[a]} 탱크로.\n이번 주 쓴 ${pctText(feed.main.usedPct).used} 중 ${AREA_LABEL[a]} 몫 ${Math.round(feed.split.parts[a])}%(근사). 배관이 굵고 점이 밝을수록 많이 나눠 썼어요.`
+                    : `${AREA_LABEL[a]} 급유관 = 주 연료통에서 ${AREA_LABEL[a]} 탱크로. 몫을 아직 셈하지 못했어요.`
+                }
+              />
+            ))}
+          </>
+        )}
         {AREAS.map((a, i) => {
           const t = TANK(i);
           const y = ENGINE_Y[ENGINE_OF[i] ?? 0] ?? 110;
           return (
             <div key={a}>
               <Zone
-                x={t.x - 8}
-                y={t.y - 10}
-                w={t.w + 16}
-                h={t.h + 46}
-                align={i === 0 ? "start" : "center"}
-                text={`${AREA_LABEL[a]} 탱크(${TAG[a]}) = ${AREA_LABEL[a]} 프로젝트 세션이 오늘 쓴 연료(출력 토큰).\n오늘 ${tokens(data.areas[a].output)} · 오늘 연소의 ${Math.round((data.areas[a].output / total) * 100)}% · 연료비 추정 ${usd(data.areas[a].cost)}`}
+                {...zone({
+                  x: ox + t.x - 8,
+                  y: oy + t.y - 10,
+                  w: t.w + 16,
+                  h: t.h + (feed ? 58 : 46),
+                })}
+                align={i === 0 && !feed ? "start" : "center"}
+                text={`${AREA_LABEL[a]} 탱크(${TAG[a]}) = ${AREA_LABEL[a]} 프로젝트 세션이 오늘 쓴 연료(출력 토큰).\n오늘 ${tokens(data.areas[a].output)} · 오늘 연소의 ${Math.round((data.areas[a].output / total) * 100)}% · 연료비 추정 ${usd(data.areas[a].cost)}${
+                  feed?.split
+                    ? `\n주간 몫 ${Math.round(feed.split.parts[a])}% = 주 연료통(주간 한도)에서 이번 주 나눠 쓴 몫(근사)`
+                    : ""
+                }`}
               />
               <Zone
-                x={RISER[i] ?? 680}
-                y={y - 14}
-                w={ENGINE_X - (RISER[i] ?? 680)}
-                h={28}
+                {...zone({
+                  x: ox + (RISER[i] ?? 680),
+                  y: oy + y - 14,
+                  w: ENGINE_X - (RISER[i] ?? 680),
+                  h: 28,
+                })}
                 text={`${AREA_LABEL[a]} 연료관 = 탱크에서 엔진으로 가는 연료. 점이 빨리 흐를수록 최근 ${data.burn.windowMin}분에 많이 썼어요.`}
               />
               <Zone
-                x={ENGINE_X}
-                y={y - 46}
-                w={300}
-                h={92}
+                {...zone({ x: ox + ENGINE_X, y: oy + y - 46, w: 300, h: 92 })}
                 align="end"
                 text={`${AREA_LABEL[a]} 엔진 = 지금 ${AREA_LABEL[a]} 쪽 속도.\n최근 ${data.burn.windowMin}분 동안 분당 ${tokens(Math.round(data.burn.perMin[a]))} 토큰을 태웠어요. 배기 불꽃이 길수록 빨라요.`}
               />
@@ -206,12 +245,63 @@ function Schematic({ data }: { data: UsageResponse }) {
   );
 }
 
+/** 탱크 셋 → 배관 → 엔진 셋(탱크 계통 자체 좌표) */
+function Machinery({
+  data,
+  total,
+  maxBurn,
+  feed,
+}: {
+  data: UsageResponse;
+  total: number;
+  maxBurn: number;
+  feed: WeeklyFeed | null;
+}) {
+  return (
+    <>
+      {AREAS.map((a, i) => (
+        <PipeRun
+          key={a}
+          i={i}
+          area={a}
+          perMin={data.burn.perMin[a]}
+          flow={data.burn.perMin[a] / maxBurn}
+        />
+      ))}
+      {AREAS.map((a, i) => (
+        <Tank
+          key={a}
+          i={i}
+          area={a}
+          share={data.areas[a].output / total}
+          today={data.areas[a].output}
+          weeklyPart={
+            feed ? (feed.split ? feed.split.parts[a] : null) : undefined
+          }
+        />
+      ))}
+      {AREAS.map((a, i) => (
+        <Engine
+          key={a}
+          y={ENGINE_Y[ENGINE_OF[i] ?? 0] ?? 110}
+          area={a}
+          perMin={data.burn.perMin[a]}
+          // 불꽃 세기는 계기판 바늘과 같은 절대 눈금(가장 센 엔진 대비가 아니다)
+          thrust={speedRatio(data.burn.perMin[a])}
+        />
+      ))}
+    </>
+  );
+}
+
 /** SVG 좌표를 %로 바꿔 겹치는 말풍선 자리 */
 function Zone({
   x,
   y,
   w,
   h,
+  vbW,
+  vbH,
   text,
   align = "center",
 }: {
@@ -219,6 +309,9 @@ function Zone({
   y: number;
   w: number;
   h: number;
+  /** 계통도 판 크기(SVG viewBox) */
+  vbW: number;
+  vbH: number;
   text: string;
   align?: "start" | "center" | "end";
 }) {
@@ -226,10 +319,10 @@ function Zone({
     <div
       className="absolute"
       style={{
-        left: `${(x / VB_W) * 100}%`,
-        top: `${(y / VB_H) * 100}%`,
-        width: `${(w / VB_W) * 100}%`,
-        height: `${(h / VB_H) * 100}%`,
+        left: `${(x / vbW) * 100}%`,
+        top: `${(y / vbH) * 100}%`,
+        width: `${(w / vbW) * 100}%`,
+        height: `${(h / vbH) * 100}%`,
       }}
     >
       <Tip text={text} align={align} className="h-full w-full">
@@ -340,15 +433,15 @@ function SchematicDefs() {
 }
 
 /** 청사진 바탕: 모눈과 선체 윤곽 */
-function Blueprint() {
+function Blueprint({ w, h, ox }: { w: number; h: number; ox: number }) {
   return (
     <g aria-hidden>
-      <rect width={VB_W} height={VB_H} fill="url(#fr-grid)" />
+      <rect width={w} height={h} fill="url(#fr-grid)" />
       <rect
         x="24"
         y="30"
-        width="1052"
-        height="356"
+        width={w - 48}
+        height={h - 44}
         rx="34"
         fill="none"
         stroke="#7ce0ff"
@@ -358,17 +451,17 @@ function Blueprint() {
       {[250, 520, 760].map((x) => (
         <line
           key={x}
-          x1={x}
+          x1={ox + x}
           y1="34"
-          x2={x}
-          y2="382"
+          x2={ox + x}
+          y2={h - 18}
           stroke="#7ce0ff"
           strokeOpacity="0.05"
         />
       ))}
       <text
-        x="1060"
-        y="378"
+        x={w - 40}
+        y={h - 22}
         textAnchor="end"
         fontFamily="ui-monospace, monospace"
         fontSize="9"
@@ -386,11 +479,14 @@ function Tank({
   area,
   share,
   today,
+  weeklyPart,
 }: {
   i: number;
   area: Area;
   share: number;
   today: number;
+  /** 주 연료통에서 나눠 쓴 몫(%). 주 연료통이 없으면 undefined(이름판 둘째 줄까지), 몫을 모르면 null */
+  weeklyPart?: number | null;
 }) {
   const t = TANK(i);
   const c = COLOR[area];
@@ -507,7 +603,7 @@ function Tank({
         x={t.x + 6}
         y={t.y + t.h + 12}
         width={t.w - 12}
-        height="30"
+        height={weeklyPart === undefined ? 30 : 43}
         rx="2"
         fill="#0d1118"
         stroke="#ffffff"
@@ -534,6 +630,20 @@ function Tank({
       >
         {tokens(today)} · {Math.round(share * 100)}%
       </text>
+      {weeklyPart !== undefined && (
+        <text
+          data-weekly-part={area}
+          x={t.x + t.w / 2}
+          y={t.y + t.h + 50}
+          textAnchor="middle"
+          fontFamily="ui-monospace, monospace"
+          fontSize="9"
+          fill={MAIN_FUEL}
+          fillOpacity="0.7"
+        >
+          주간 몫 {weeklyPart === null ? "-" : `${Math.round(weeklyPart)}%`}
+        </text>
+      )}
     </g>
   );
 }
