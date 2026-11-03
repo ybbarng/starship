@@ -43,6 +43,61 @@ function idOf(v: unknown): string {
   return "";
 }
 
+/** 빠진 항목을 가리키는 머리말: "tasks[3] (id t1)". id가 없으면 번호만. */
+export function itemLabel(label: string, index: number, v: unknown): string {
+  return `${label}[${index}]${idOf(v)}`;
+}
+
+/** zod가 잡은 문제들을 "kind: …; url: …" 한 줄로. */
+export function issuesText(error: z.ZodError): string {
+  return error.issues
+    .map((iss) => `${iss.path.join(".") || "(항목)"}: ${iss.message}`)
+    .join("; ");
+}
+
+/**
+ * 항목마다 스키마로 읽고, 틀린 항목만 뺀다(까닭은 problems에 "label[i] (id x): …"로 더한다).
+ * keyOf가 있으면 같은 열쇠(보통 id)가 앞에 이미 있는 뒤쪽 항목도 뺀다.
+ * fix는 스키마를 통과한 항목을 한 번 더 손볼 때 쓴다: 고친 항목을 돌려주거나, 뺄 까닭 글(string)을 돌려준다.
+ * 손보며 남길 말은 note로 적는다. 책상·지도가 함께 쓴다.
+ */
+export function parseEach<T extends z.ZodType>(
+  raw: unknown[],
+  schema: T,
+  label: string,
+  problems: string[],
+  opts: {
+    keyOf?: (v: z.output<T>) => string | undefined;
+    fix?: (v: z.output<T>, note: (why: string) => void) => z.output<T> | string;
+  } = {},
+): z.output<T>[] {
+  const out: z.output<T>[] = [];
+  const seen = new Set<string>();
+  raw.forEach((v, i) => {
+    const at = itemLabel(label, i, v);
+    const r = schema.safeParse(v);
+    if (!r.success) {
+      problems.push(`${at}: ${issuesText(r.error)}`);
+      return;
+    }
+    const key = opts.keyOf?.(r.data);
+    if (key !== undefined && seen.has(key)) {
+      problems.push(`${at}: id가 앞 항목과 겹쳐 뺐어요`);
+      return;
+    }
+    const fixed = opts.fix
+      ? opts.fix(r.data, (why) => problems.push(`${at}: ${why}`))
+      : r.data;
+    if (typeof fixed === "string") {
+      problems.push(`${at}: ${fixed}`);
+      return;
+    }
+    if (key !== undefined) seen.add(key);
+    out.push(fixed);
+  });
+  return out;
+}
+
 /**
  * 배열은 받되 항목마다 따로 검사해, 틀린 항목만 빼고 나머지는 남긴다.
  * 본부가 enum 값 하나만 더해도(새 TaskKind 등) 화면 전체가 죽지 않게 한다.
@@ -58,10 +113,7 @@ export function lenientArray<T extends z.ZodType>(item: T, label: string) {
         items.push(r.data);
         return;
       }
-      const why = r.error.issues
-        .map((iss) => `${iss.path.join(".") || "(항목)"}: ${iss.message}`)
-        .join("; ");
-      problems.push(`${label}[${i}]${idOf(v)}: ${why}`);
+      problems.push(`${itemLabel(label, i, v)}: ${issuesText(r.error)}`);
     });
     return { items, problems };
   });

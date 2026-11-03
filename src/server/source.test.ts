@@ -215,6 +215,42 @@ describe("원격 모드: 책상", () => {
     expect(r.desk?.waiting[0]?.items?.[0]?.path).toBe("~/Desktop/pay.png");
   });
 
+  it("기다림 하나가 틀리면 그것만 빠지고, 본부 problems 뒤에 까닭이 붙는다", async () => {
+    hq(() =>
+      json({
+        desk: {
+          ...desk,
+          waiting: [
+            ...desk.waiting,
+            { id: "pick", type: "decide", title: "선택지 없는 고르기" },
+          ],
+          doing: [{ title: "시험 돌리는 중" }],
+        },
+        problems: ["본부: 책상 파일을 늦게 읽었어요"],
+      }),
+    );
+    const r = await getCrewDesk("web-shop");
+    expect(r.desk?.waiting.map((w) => w.id)).toEqual(["shot"]);
+    expect(r.desk?.doing).toHaveLength(1);
+    expect(r.problems).toEqual([
+      "본부: 책상 파일을 늦게 읽었어요",
+      expect.stringMatching(/^waiting\[1\] \(id pick\): options/),
+    ]);
+  });
+
+  it("맞는 책상이면 problems를 두지 않는다", async () => {
+    hq(() => json({ desk }));
+    const r = await getCrewDesk("web-shop");
+    expect(r).not.toHaveProperty("problems");
+  });
+
+  it("겉이 틀리면 desk: null과 problems", async () => {
+    hq(() => json({ desk: { ...desk, desk: "starship-desk/9" } }));
+    const r = await getCrewDesk("web-shop");
+    expect(r.desk).toBeNull();
+    expect(r.problems?.[0]).toMatch(/^desk:/);
+  });
+
   it("404면 책상이 없는 것, 500이면 실패", async () => {
     hq(() => json({}, 404));
     await expect(getCrewDesk("web-shop")).resolves.toEqual({ desk: null });

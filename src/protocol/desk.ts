@@ -2,7 +2,7 @@
 // 이 파일이 스키마의 원본이다. 비서도 같은 규칙으로 읽으니 여기 함수는 모두 순수 함수로 둔다.
 // 자세한 설명은 docs/desk.md.
 import { z } from "zod";
-import { WebUrl, When } from "./common";
+import { parseEach, WebUrl, When } from "./common";
 
 export const DESK_FORMAT = "starship-desk/1" as const;
 
@@ -128,7 +128,10 @@ export type Desk = z.infer<typeof Desk>;
 
 /* ───────────── 검사 ───────────── */
 
-/** 스키마로 잡지 못하는 짜임 검사: waiting id 중복, 한 기다림 안 선택지 id 중복, 답해 둔 것 id 중복. */
+/**
+ * 스키마로 잡지 못하는 짜임 검사: waiting id 중복, 한 기다림 안 선택지 id 중복, 답해 둔 것 id 중복.
+ * parseDesk는 겹친 뒤쪽을 빼서 이 검사를 늘 통과하는 책상을 돌려준다. 책상을 직접 만드는 쪽(데모·본부)이 스스로 살필 때 쓴다.
+ */
 export function checkDesk(desk: Desk): string[] {
   const problems: string[] = [];
   const ids = new Set<string>();
@@ -150,26 +153,78 @@ export function checkDesk(desk: Desk): string[] {
   return problems;
 }
 
+/**
+ * 책상을 읽은 결과. ok면 desk는 쓸 수 있는 책상이고, problems에는 틀려서 뺀 항목이 한 줄씩 남는다(없으면 빈 배열).
+ * 겉(desk 이름·updatedAt·배열 자체)이 틀릴 때만 ok가 false이고 desk가 null이다.
+ */
 export type DeskParse =
-  | { ok: true; desk: Desk; problems: [] }
+  | { ok: true; desk: Desk; problems: string[] }
   | { ok: false; desk: null; problems: string[] };
 
-/** 책상 내용(이미 JSON.parse한 값)을 읽어 형식과 짜임을 함께 검사한다. */
+/** 책상의 겉. 항목은 아직 보지 않는다. */
+const DeskShell = z.object({
+  desk: z.literal(DESK_FORMAT),
+  updatedAt: When,
+  waiting: z.array(z.unknown()),
+  doing: z.array(z.unknown()),
+  answers: z.array(z.unknown()).optional(),
+});
+
+/** 한 기다림 안에서 겹친 선택지 id는 뒤쪽만 뺀다. 그래서 decide 선택지가 2개 미만이 되면 기다림째 뺀다. */
+function fixOptions(w: Waiting, note: (why: string) => void): Waiting | string {
+  if (!w.options) return w;
+  const ids = new Set<string>();
+  const options = w.options.filter((o) => {
+    if (!ids.has(o.id)) {
+      ids.add(o.id);
+      return true;
+    }
+    note(`선택지 id "${o.id}"가 겹쳐 뒤쪽을 뺐어요`);
+    return false;
+  });
+  if (w.type === "decide" && options.length < 2)
+    return "겹친 선택지를 빼니 decide 선택지가 2개보다 적어 뺐어요";
+  return { ...w, options };
+}
+
+/**
+ * 책상 내용(이미 JSON.parse한 값)을 읽는다. 겉이 틀리면 책상 전체를 거절하고,
+ * waiting·doing·answers는 항목마다 따로 검사해 틀린 항목만 뺀다(2026-11-03, 스냅숏과 같은 규칙).
+ * 뺀 까닭은 "waiting[2] (id x): …" 꼴로 problems에 적는다. 겹친 id는 앞쪽을 남기고 뒤쪽만 뺀다.
+ * 돌려준 책상은 checkDesk를 늘 통과한다.
+ */
 export function parseDesk(raw: unknown): DeskParse {
-  const parsed = Desk.safeParse(raw);
-  if (!parsed.success) {
+  const shell = DeskShell.safeParse(raw);
+  if (!shell.success) {
     return {
       ok: false,
       desk: null,
-      problems: parsed.error.issues.map(
+      problems: shell.error.issues.map(
         (i) => `${i.path.join(".") || "(맨 위)"}: ${i.message}`,
       ),
     };
   }
-  const problems = checkDesk(parsed.data);
-  return problems.length > 0
-    ? { ok: false, desk: null, problems }
-    : { ok: true, desk: parsed.data, problems: [] };
+  const s = shell.data;
+  const problems: string[] = [];
+  const waiting = parseEach(s.waiting, Waiting, "waiting", problems, {
+    keyOf: (w) => w.id,
+    fix: fixOptions,
+  });
+  const doing = parseEach(s.doing, Doing, "doing", problems);
+  const answers =
+    s.answers &&
+    parseEach(s.answers, Answered, "answers", problems, { keyOf: (a) => a.id });
+  return {
+    ok: true,
+    desk: {
+      desk: s.desk,
+      updatedAt: s.updatedAt,
+      waiting,
+      doing,
+      ...(answers ? { answers } : {}),
+    },
+    problems,
+  };
 }
 
 /* ───────────── 할 일과 이어 주기 ───────────── */

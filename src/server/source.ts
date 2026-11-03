@@ -106,7 +106,8 @@ export async function getSnapshot(
 
 /**
  * 승무원 하나의 지도. 서버 연결 모드는 {base}/v1/crew/{id}/map 을 그대로 중계한다.
- * 지도 형식이 이 화면이 아는 것과 다르면 응답 전체를 버리지 않고 map: null과 problems로 바꾼다.
+ * 지도의 겉이 이 화면이 아는 것과 다르면 응답 전체를 버리지 않고 map: null과 problems로 바꾼다.
+ * 구역·링크·표지 하나가 틀리면 그것만 빼거나 맨 위로 올리고 나머지는 보인다.
  */
 export async function getCrewMap(
   crewId: string,
@@ -138,14 +139,20 @@ export async function getCrewMap(
   if (!res.ok) throw new Error(`map ${res.status}`);
   const body = MapEnvelope.parse(await res.json());
   if (body.map === null) return { ...body, map: null };
+  // 틀린 구역·링크만 빼거나 맨 위로 올린 지도를 쓰고, 그 까닭은 본부 problems 뒤에 붙인다(src/protocol/map.ts parseMap)
   const parsed = parseMap(body.map);
-  return parsed.ok
-    ? { ...body, map: parsed.map }
-    : {
-        ...body,
-        map: null,
-        problems: [...(body.problems ?? []), ...parsed.problems],
-      };
+  return withProblems({ ...body, map: parsed.map }, body.problems, parsed);
+}
+
+/** 본부가 보낸 problems 뒤에 Starship이 다시 검사하며 찾은 것을 붙인다. 둘 다 없으면 problems를 두지 않는다. */
+function withProblems<T extends { problems?: string[] }>(
+  res: T,
+  fromHq: string[] | undefined,
+  parsed: { problems: string[] },
+): T {
+  const all = [...(fromHq ?? []), ...parsed.problems];
+  const { problems: _drop, ...rest } = res;
+  return (all.length ? { ...rest, problems: all } : rest) as T;
 }
 
 /**
@@ -227,14 +234,13 @@ export async function getCrewDesk(
     if (!res.ok) throw new Error(`desk ${res.status}`);
     const body = DeskEnvelope.parse(await res.json());
     if (body.desk === null) return { ...body, desk: null };
+    // 틀린 기다림·하는 일·답만 빼고 나머지는 보인다(src/protocol/desk.ts parseDesk). 겉이 틀릴 때만 desk: null
     const parsed = parseDesk(body.desk);
-    return parsed.ok
-      ? { ...body, desk: dedupeDesk(parsed.desk) }
-      : {
-          ...body,
-          desk: null,
-          problems: [...(body.problems ?? []), ...parsed.problems],
-        };
+    return withProblems(
+      { ...body, desk: parsed.ok ? dedupeDesk(parsed.desk) : null },
+      body.problems,
+      parsed,
+    );
   });
 }
 
