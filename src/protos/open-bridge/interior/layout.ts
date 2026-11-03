@@ -1,5 +1,5 @@
 // 모듈(업무·거주) 안 자리 계산. 모든 값은 설계 좌표.
-// - 나를 기다리는 선원: 자리에서 일어나 사다리(=내가 내려오는 길) 쪽에 서서 손짓한다. 자리 두 칸을 쓴다.
+// - 결재가 있는 선원: 자리에서 일어나 사다리(=내가 내려오는 길) 쪽에 서서 손짓한다. 자리 두 칸을 쓴다.
 // - 일하는 선원: 자기 책상. 자리 비움: 빈 책상. 쉬는 선원: 휴게석·침상으로.
 // - 사다리에 가까울수록 급하다: 기다림 → 일함 → 빈 자리 순으로 사다리에서 바깥쪽으로 채운다.
 // - 자리가 모자라면 칸을 줄이고, 그래도 모자라면 빈 자리부터 "+n"으로 접는다.
@@ -77,13 +77,33 @@ function pack(entries: Entry[], wings: Wing[], unit: number) {
   return { placed, overflow };
 }
 
-export function layoutModule(crew: Crew[], wings: Wing[]): ModuleLayout {
+/**
+ * 모듈 한 층의 자리. 일어서서 손짓하는 선원은 결재가 1건 이상인 선원(`calls`: 승무원 id → 가장 오래된 결재 시각)이다.
+ * 상태가 "나를 기다림"이어도 기다리는 것이 마지막 답변(소식)뿐이면 손짓하지 않고 자기 책상에 앉아 있는다
+ * (docs/crew-views.md "건수는 어디서나 결재만 센다", 2026-11-03).
+ */
+export function layoutModule(
+  crew: Crew[],
+  wings: Wing[],
+  calls: ReadonlyMap<string, number>,
+): ModuleLayout {
+  const calling = (c: Crew) => calls.has(c.id);
   const need = crew
-    .filter((c) => c.status === "needs-you")
-    .sort((a, b) => (a.since ?? 0) - (b.since ?? 0));
-  const work = crew.filter((c) => c.status === "working").sort(byName);
-  const off = crew.filter((c) => c.status === "off").sort(byName);
-  const rest = crew.filter((c) => c.status === "idle").sort(byName);
+    .filter(calling)
+    .sort((a, b) => (calls.get(a.id) ?? 0) - (calls.get(b.id) ?? 0));
+  // 소식만 남은 "나를 기다림" 선원은 일하는 선원처럼 자기 책상 한 칸에 둔다
+  const work = crew
+    .filter(
+      (c) =>
+        !calling(c) && (c.status === "working" || c.status === "needs-you"),
+    )
+    .sort(byName);
+  const off = crew
+    .filter((c) => !calling(c) && c.status === "off")
+    .sort(byName);
+  const rest = crew
+    .filter((c) => !calling(c) && c.status === "idle")
+    .sort(byName);
 
   const crewEntries = (list: Crew[], span: 1 | 2): Entry[] =>
     list.map((c) => ({ type: "crew", crew: c, span }));

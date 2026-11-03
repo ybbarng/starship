@@ -7,6 +7,7 @@ import { useEffect, useRef } from "react";
 import type { Gauge } from "@/protocol/v1";
 import { ago } from "@/ui/kit";
 import type { Berth } from "./berths";
+import { tagFont } from "./Figures";
 import { DECKS, FIXTURES, SLAB } from "./geometry";
 import { SHIP, Ship } from "./ships";
 
@@ -25,12 +26,15 @@ export function DockDeck({
   clock,
   openId,
   onHatch,
+  onMore,
 }: {
   berths: Berth[];
   gauges: Gauge[];
   clock: number;
   openId: string | null;
   onHatch: (id: string) => void;
+  /** 포트에 못 붙은 배까지 교신 전체 목록을 연다 */
+  onMore: () => void;
 }) {
   const d = DECKS.engine;
   const f = d.floor;
@@ -59,13 +63,14 @@ export function DockDeck({
           <div key={`port-${i + 1}`}>
             {/* 포트 번호(바닥 판) */}
             <div
-              className="pointer-events-none absolute text-center font-mono text-[9px] leading-[11px] font-bold"
+              className="pointer-events-none absolute text-center font-mono leading-[11px] font-bold"
               style={{
                 left: cx - 30,
                 width: 60,
                 top: f + 1,
                 height: SLAB - 1,
                 color: b ? c : "#5a6478",
+                fontSize: tagFont(9),
               }}
             >
               포트 {i + 1}
@@ -135,12 +140,17 @@ export function DockDeck({
         );
       })}
       {waiting > 0 && (
-        <div
-          className="absolute rounded bg-black/70 px-1.5 text-[9.5px] leading-[15px] font-semibold text-[#ffd84a]"
-          style={{ left: x0 - 4, top: d.top + 2 }}
+        // 갑판 4 이름표와 겹치지 않게 베이 오른쪽 끝(사다리 옆) 위에 둔다. 누르면 교신 전체 목록
+        <button
+          type="button"
+          data-bay-more
+          onClick={onMore}
+          title={`베이 밖에서 ${waiting}척이 기다려요 · 눌러서 교신 전체 보기`}
+          className="absolute -translate-x-full rounded bg-black/70 px-1.5 leading-[14px] font-semibold text-[#ffd84a] ring-1 ring-[#ffd84a]/40 hover:bg-black/90 hover:ring-[#ffd84a]"
+          style={{ left: x1 - 4, top: d.top + 1, fontSize: tagFont(9.5) }}
         >
-          베이 밖 대기 +{waiting}척
-        </div>
+          베이 밖 +{waiting}척 ▸
+        </button>
       )}
 
       {/* 기관 계기판 */}

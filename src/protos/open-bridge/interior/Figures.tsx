@@ -1,8 +1,9 @@
 "use client";
 
 // 모듈 안의 선원들. 자리(책상)는 누르는 단추, 선원 그림은 그 위에 얹혀 상태가 바뀌면 걸어서 옮긴다.
-// 일함 = 책상에 앉아 작업 / 나를 기다림 = 일어나 사다리 쪽에 서서 손짓 + 머리 위 첫 줄 /
-// 쉼 = 휴게석·침상에서 잠 / 자리 비움 = 빈 책상.
+// 일함 = 책상에 앉아 작업 / 결재가 있음 = 일어나 사다리 쪽에 서서 손짓 + 머리 위 첫 결재 /
+// 쉼 = 휴게석·침상에서 잠 / 자리 비움 = 빈 책상. 기다리는 것이 마지막 답변(소식)뿐이면 책상 옆에 서 있기만 한다.
+// 숫자 딱지·손짓·말풍선은 모두 결재(소식 뺀 할 일, decisionsByCrew)로 센다(docs/crew-views.md).
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import type { Crew, Task } from "@/protocol/v1";
 import { Animal, animalFor, type Pose } from "@/ui/crew";
@@ -31,13 +32,26 @@ type Spot = {
   pose: Pose;
   flip?: boolean;
   furniture?: boolean;
+  /** 가장 오래된 결재가 온 때(손짓하는 선원만) */
+  since?: number;
 };
 
-/** 나를 기다린 지 30분이면 가장 급하게(슬쩍 돌아봄 → 몸 기울여 손짓). */
-function urgencyOf(crew: Crew): number {
-  if (crew.status !== "needs-you" || !crew.since) return 0.6;
-  const minutes = (Date.now() - crew.since) / 60_000;
+/** 결재가 온 지 30분이면 가장 급하게(슬쩍 돌아봄 → 몸 기울여 손짓). */
+function urgencyOf(since: number | undefined): number {
+  if (!since) return 0.6;
+  const minutes = (Date.now() - since) / 60_000;
   return Math.max(0.15, Math.min(1, minutes / 30));
+}
+
+/** 자리 등 색: 결재가 있으면 "나를 기다림", 소식뿐인 "나를 기다림"은 쉼 색으로 */
+function lightOf(crew: Crew, calling: boolean): Crew["status"] {
+  if (calling) return "needs-you";
+  return crew.status === "needs-you" ? "idle" : crew.status;
+}
+
+/** 이름표 글자: 장면이 줄어도 화면에서 8px 밑으로 내려가지 않게 한다(--ib-s = Interior의 장면 배율) */
+export function tagFont(px: number): string {
+  return `max(${px}px, calc(8px / var(--ib-s, 1)))`;
 }
 
 /** 선원 그림 하나. 자리가 바뀌면 옛 자리에서 걸어온다. 누름은 아래 자리 단추가 받는다. */
@@ -87,7 +101,7 @@ function Walker({ spot }: { spot: Spot }) {
           context={spot.crew.context}
           size={size}
           furniture={walking ? false : spot.furniture}
-          urgency={urgencyOf(spot.crew)}
+          urgency={urgencyOf(spot.since)}
           label={`${spot.crew.name}, ${CREW_STATUS_LABEL[spot.crew.status]}`}
         />
       </div>
@@ -101,18 +115,28 @@ function NameTag({
   x1,
   floor,
   children,
+  title,
   tone,
 }: {
   x0: number;
   x1: number;
   floor: number;
   children: ReactNode;
+  title: string;
   tone?: "warn" | "dim";
 }) {
   return (
     <div
-      className={`absolute truncate text-center font-mono text-[9px] leading-[11px] ${tone === "warn" ? "font-bold text-[#ffd84a]" : tone === "dim" ? "text-white/35" : "text-white/80"}`}
-      style={{ left: x0, width: x1 - x0, top: floor + 1, height: SLAB - 1 }}
+      title={title}
+      data-nametag
+      className={`absolute truncate text-center font-mono leading-[11px] ${tone === "warn" ? "font-bold text-[#ffd84a]" : tone === "dim" ? "text-white/35" : "text-white/80"}`}
+      style={{
+        left: x0,
+        width: x1 - x0,
+        top: floor + 1,
+        height: SLAB - 1,
+        fontSize: tagFont(9),
+      }}
     >
       {children}
     </div>
@@ -169,7 +193,7 @@ function Bubble({
 export function ModuleCrew({
   deck,
   layout,
-  tasksByCrew,
+  decisions,
   clock,
   selectedId,
   onSelect,
@@ -177,7 +201,8 @@ export function ModuleCrew({
 }: {
   deck: Deck;
   layout: ModuleLayout;
-  tasksByCrew: Map<string, Task[]>;
+  /** 승무원별 결재(decisionsByCrew) */
+  decisions: ReadonlyMap<string, Task[]>;
   clock: number;
   selectedId: string | null;
   onSelect: (id: string) => void;
@@ -188,7 +213,18 @@ export function ModuleCrew({
   const headTop = f - size * 1.25 * 0.78;
   const spots: Spot[] = [];
   for (const d of desks) {
-    if (d.crew.status === "working") {
+    if (d.standX !== undefined) {
+      const list = decisions.get(d.crew.id) ?? [];
+      spots.push({
+        crew: d.crew,
+        x: d.standX,
+        y: f,
+        size,
+        pose: "wave",
+        flip: d.facing < 0,
+        since: list.length ? Math.min(...list.map((t) => t.since)) : undefined,
+      });
+    } else if (d.crew.status === "working") {
       spots.push({
         crew: d.crew,
         x: d.deskX,
@@ -197,13 +233,14 @@ export function ModuleCrew({
         pose: "work",
         furniture: true,
       });
-    } else if (d.standX !== undefined) {
+    } else if (d.crew.status === "needs-you") {
+      // 소식(마지막 답변)만 남은 선원: 손짓하지 않고 책상 옆에 서 있기만
       spots.push({
         crew: d.crew,
-        x: d.standX,
+        x: d.deskX,
         y: f,
         size,
-        pose: "wave",
+        pose: "stand",
         flip: d.facing < 0,
       });
     }
@@ -216,8 +253,9 @@ export function ModuleCrew({
       {/* 자리(책상) 단추 */}
       {desks.map((d) => {
         const sel = d.crew.id === selectedId;
-        const waiting = d.crew.status === "needs-you";
-        const count = tasksByCrew.get(d.crew.id)?.length ?? 0;
+        const count = decisions.get(d.crew.id)?.length ?? 0;
+        const waiting = count > 0;
+        const light = STATUS_LIGHT[lightOf(d.crew, waiting)];
         return (
           <button
             key={d.key}
@@ -244,17 +282,19 @@ export function ModuleCrew({
               className={`absolute top-1 h-1.5 w-1.5 rounded-full ${waiting ? "ib-blink" : ""}`}
               style={{
                 left: d.deskX - d.x0 - 4,
-                background: STATUS_LIGHT[d.crew.status],
+                background: light,
                 boxShadow:
                   d.crew.status === "working" || waiting
-                    ? `0 0 6px ${STATUS_LIGHT[d.crew.status]}`
+                    ? `0 0 6px ${light}`
                     : undefined,
               }}
             />
             {count > 0 && (
               <span
-                className="absolute top-0 rounded-full bg-[#ffd84a] px-1 text-[9px] leading-[13px] font-bold text-black"
-                style={{ left: d.deskX - d.x0 + 6 }}
+                data-count={count}
+                title={`결재 ${count}건`}
+                className="absolute top-0 rounded-full bg-[#ffd84a] px-1 leading-[13px] font-bold text-black"
+                style={{ left: d.deskX - d.x0 + 6, fontSize: tagFont(9) }}
               >
                 {count}
               </span>
@@ -288,8 +328,9 @@ export function ModuleCrew({
           x0={d.x0}
           x1={d.x1}
           floor={f}
+          title={d.crew.name}
           tone={
-            d.crew.status === "needs-you"
+            decisions.has(d.crew.id)
               ? "warn"
               : d.crew.status === "off"
                 ? "dim"
@@ -349,8 +390,15 @@ export function ModuleCrew({
       {restSpots.tags.map((t) => (
         <div
           key={t.key}
-          className="pointer-events-none absolute truncate text-center font-mono text-[8px] leading-[10px] text-white/55"
-          style={{ left: t.x - t.w / 2, width: t.w, top: t.y }}
+          title={t.text}
+          data-nametag
+          className="absolute truncate text-center font-mono leading-[10px] text-white/55"
+          style={{
+            left: t.x - t.w / 2,
+            width: t.w,
+            top: t.y,
+            fontSize: tagFont(8.5),
+          }}
         >
           {t.text}
         </div>
@@ -378,7 +426,8 @@ export function ModuleCrew({
       {desks
         .filter((d) => d.standX !== undefined)
         .map((d) => {
-          const t = tasksByCrew.get(d.crew.id)?.[0];
+          // 결재함과 같은 첫 결재, 기다린 시간도 그 결재의 것
+          const t = decisions.get(d.crew.id)?.[0];
           return (
             <Bubble
               key={`b-${d.key}`}
@@ -388,7 +437,7 @@ export function ModuleCrew({
               bottom={headTop - 4}
               tailX={d.standX ?? d.deskX}
               text={t?.title ?? d.crew.activity ?? "불러요"}
-              wait={d.crew.since ? elapsed(d.crew.since, clock) : ""}
+              wait={t ? elapsed(t.since, clock) : ""}
               onOpen={() => onSelect(d.crew.id)}
             />
           );
@@ -408,8 +457,9 @@ function restLayout(deck: Deck, rest: Crew[]) {
   let moreAt = { x: 0, y: 0 };
   if (deck.id === "work") {
     const { x0, x1 } = FIXTURES.lounge;
-    const n = 3;
-    const w = (x1 - x0 - 40) / n;
+    // 소파 자리 둘: 셋이면 이름표 폭이 35px쯤이라 이름이 "billin…"처럼 잘렸다(2026-11-03). 넘치면 "+n 쉼"
+    const n = 2;
+    const w = (x1 - x0 - 30) / n;
     slots = Array.from({ length: n }, (_, i) => ({
       x: x0 + 10 + w * (i + 0.5),
       y: f - 18,
@@ -428,6 +478,7 @@ function restLayout(deck: Deck, rest: Crew[]) {
       { x: col(0), y: f - 68, size: 38, tagY: f - 62 },
       { x: col(1), y: f - 68, size: 38, tagY: f - 62 },
     ];
+    tagW = colW - 4;
     moreAt = { x: x1 - 52, y: deck.top + 4 };
   }
   const shown = rest.slice(0, slots.length);

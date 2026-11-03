@@ -2,6 +2,7 @@
 
 // 갑판 1 함교·통신실의 글과 단추. 왼쪽 = 내 자리(조종석 축소판, 여기서 조종석으로 돌아간다),
 // 오른쪽 = 통신 콘솔(실제 교신 지연·지구까지 거리, 들어온 교신 줄 → 누르면 도킹 베이 해치가 열린다).
+// 시계·거리는 선내가 보일 때(active)만 돈다. 조종석에서는 선내가 display:none으로 숨어도 마운트돼 있어서다.
 import type { Task } from "@/protocol/v1";
 import { formatDistance, formatLightTime } from "@/sky/telemetry";
 import { useKoreaTime, useTelemetry } from "@/sky/useTelemetry";
@@ -12,7 +13,27 @@ import { selecting } from "./Figures";
 import { DECKS, LADDER } from "./geometry";
 import { SHIP } from "./ships";
 
+/** 통신 콘솔에 보이는 교신 줄 수. 넘치면 머리의 "전체 n ▸"로 목록을 연다 */
+const COMMS_ROWS = 3;
+
+/** 한국 시각(1초마다). 선내가 보일 때만 마운트한다 */
+function KoreaClock() {
+  const { time } = useKoreaTime();
+  return <>{time}</>;
+}
+
+/** 지구까지 거리·지연(초당 2번). 선내가 보일 때만 마운트한다 */
+function EarthLink() {
+  const tm = useTelemetry(2);
+  return (
+    <>
+      지구 {formatDistance(tm.earthKm)} · 지연 {formatLightTime(tm.earthKm)}
+    </>
+  );
+}
+
 export function BridgeDeck({
+  active,
   now,
   mine,
   hailCount,
@@ -20,21 +41,25 @@ export function BridgeDeck({
   clock,
   onCockpit,
   onHatch,
+  onMore,
 }: {
+  /** 선내가 보일 때만 true. false면 시계·거리를 멈춘다 */
+  active: boolean;
+  /** 맨 앞 결재(소식 뺀 것) */
   now: Task | undefined;
-  /** 내 차례(할 일 전부) 수 */
+  /** 내 차례 = 결재 수(decisionCount). 조종석 결재함과 같다 */
   mine: number;
   hailCount: number;
   berths: Berth[];
   clock: number;
   onCockpit: () => void;
   onHatch: (id: string) => void;
+  /** 교신 전체 목록 */
+  onMore: () => void;
 }) {
   const d = DECKS.bridge;
   const f = d.floor;
   const dest = useDestination();
-  const tm = useTelemetry(2);
-  const { time } = useKoreaTime();
   const consoleX = d.x0 + 18;
   const commsX = LADDER.x + LADDER.w + 26;
   const commsW = d.x1 - 70 - commsX;
@@ -51,9 +76,11 @@ export function BridgeDeck({
             <span>
               창밖 · <b className="text-white">{dest.ko}</b>
             </span>
-            <span className="font-mono text-white/60">{time}</span>
+            <span className="font-mono text-white/60">
+              {active ? <KoreaClock /> : null}
+            </span>
           </div>
-          <div className="text-white/85">
+          <div className="text-white/85" data-bridge-mine={mine}>
             내 차례 <b className="text-[#ffd84a]">{mine}</b> · 교신{" "}
             <b className="text-[#b896ff]">{hailCount}</b>
           </div>
@@ -89,10 +116,21 @@ export function BridgeDeck({
         }}
       >
         <div className="flex justify-between gap-2 border-b border-white/10 px-1.5 text-[9px] leading-[14px] text-[#cbb6ff]">
-          <span>통신 · 도킹 {berths.length}척</span>
+          <span className="shrink-0">
+            통신 · 도킹 {berths.length}척
+            {berths.length > COMMS_ROWS && (
+              <button
+                type="button"
+                data-comms-more
+                onClick={onMore}
+                className="ml-1 rounded px-1 font-semibold text-[#ffd84a] hover:bg-white/10"
+              >
+                전체 {berths.length} ▸
+              </button>
+            )}
+          </span>
           <span className="truncate text-white/55">
-            지구 {formatDistance(tm.earthKm)} · 지연{" "}
-            {formatLightTime(tm.earthKm)}
+            {active ? <EarthLink /> : null}
           </span>
         </div>
         {berths.length === 0 ? (
@@ -101,7 +139,7 @@ export function BridgeDeck({
           </div>
         ) : (
           <ul className="px-0.5 pt-0.5">
-            {berths.slice(0, 3).map((b) => (
+            {berths.slice(0, COMMS_ROWS).map((b) => (
               <li key={b.id}>
                 {/* biome-ignore lint/a11y/useKeyWithClickEvents: 도킹 베이 포트 단추가 같은 일을 키보드로 받는다 */}
                 {/* biome-ignore lint/a11y/noStaticElementInteractions: 글을 끌어 고를 수 있게 단추로 감싸지 않는다 */}

@@ -1,7 +1,9 @@
 "use client";
 
-// 선원이나 자리를 누르면 열리는 옆 서랍: 브리핑, 할 일 체크(체크 = 치우기), 창으로 가기·브리핑 다시.
-// 접힌 자리("+n")를 누르면 그 선원 목록이 먼저 나온다. 글은 모두 끌어서 고를 수 있다.
+// 선원이나 자리를 누르면 열리는 옆 서랍: 결재 목록(처리는 조종석 결재함에서), 브리핑, 창으로 가기·브리핑 다시.
+// 접힌 자리("+n")를 누르면 그 선원 목록이, "베이 밖 대기"·통신 콘솔 "더 보기"를 누르면 교신 전체 목록이 먼저 나온다.
+// 처리 단추는 결재함과 선실 "할 일"에만 둔다(docs/crew-views.md). 여기서는 각 결재에 "결재함에서 열기"만 두고,
+// 책상 밖 일 중 치울 수 있는 것(dismiss)만 체크로 치운다. 글은 모두 끌어서 고를 수 있다.
 import { useState } from "react";
 import { useAct } from "@/data/hooks";
 import type { Crew, Task } from "@/protocol/v1";
@@ -15,10 +17,14 @@ import {
   KIND_LABEL,
   sourceLabel,
 } from "@/ui/kit";
+import type { Berth } from "./berths";
+import { PORTS } from "./Dock";
+import { SHIP } from "./ships";
 
 export type DrawerState =
   | { type: "crew"; id: string }
-  | { type: "group"; title: string; ids: string[] };
+  | { type: "group"; title: string; ids: string[] }
+  | { type: "hails" };
 
 const STATUS_DOT: Record<Crew["status"], string> = {
   working: "#5ee08a",
@@ -27,33 +33,54 @@ const STATUS_DOT: Record<Crew["status"], string> = {
   off: "#3a4256",
 };
 
+const NO_TASKS: Task[] = [];
+
 export function Drawer({
   state,
   crewById,
-  tasksByCrew,
+  decisions,
+  berths,
   clock,
   onSelect,
+  onHatch,
+  onInbox,
   onClose,
 }: {
   state: DrawerState;
   crewById: Map<string, Crew>;
-  tasksByCrew: Map<string, Task[]>;
+  /** 승무원별 결재(decisionsByCrew) */
+  decisions: ReadonlyMap<string, Task[]>;
+  berths: Berth[];
   clock: number;
   onSelect: (id: string) => void;
+  onHatch: (id: string) => void;
+  /** 조종석으로 올라가 결재함에서 이 승무원 묶음을 연다 */
+  onInbox: (crewId: string) => void;
   onClose: () => void;
 }) {
   const crew = state.type === "crew" ? crewById.get(state.id) : undefined;
+  const list = crew ? (decisions.get(crew.id) ?? NO_TASKS) : NO_TASKS;
   return (
     <aside
-      aria-label={crew ? `${crew.name} 자리` : "선원 목록"}
+      aria-label={
+        crew
+          ? `${crew.name} 자리`
+          : state.type === "hails"
+            ? "교신 목록"
+            : "선원 목록"
+      }
       className="ib-drawer absolute top-2 right-2 bottom-2 z-30 flex w-[372px] flex-col overflow-hidden rounded-xl border border-white/15 bg-[#0b1020]/95 text-white shadow-[0_12px_40px_rgba(0,0,0,0.6)] backdrop-blur"
     >
       <div className="flex items-start justify-between gap-2 border-b border-white/10 px-4 pt-3 pb-2.5">
         {crew ? (
-          <CrewHeader crew={crew} clock={clock} />
+          <CrewHeader crew={crew} decisions={list} clock={clock} />
         ) : (
           <div className="text-[15px] font-semibold">
-            {state.type === "group" ? state.title : "선원"}
+            {state.type === "group"
+              ? state.title
+              : state.type === "hails"
+                ? `교신 ${berths.length}척`
+                : "선원"}
           </div>
         )}
         <button
@@ -72,14 +99,18 @@ export function Drawer({
         {crew ? (
           <CrewBody
             crew={crew}
-            tasks={tasksByCrew.get(crew.id) ?? []}
+            decisions={list}
             clock={clock}
+            onInbox={() => onInbox(crew.id)}
           />
+        ) : state.type === "hails" ? (
+          <HailList berths={berths} clock={clock} onHatch={onHatch} />
         ) : state.type === "group" ? (
           <ul className="space-y-1">
             {state.ids.map((id) => {
               const c = crewById.get(id);
               if (!c) return null;
+              const n = decisions.get(id)?.length ?? 0;
               return (
                 <li key={id}>
                   <button
@@ -93,7 +124,7 @@ export function Drawer({
                     />
                     <span className="font-medium">{c.name}</span>
                     <span className="ml-auto text-xs text-white/50">
-                      {CREW_STATUS_LABEL[c.status]}
+                      {n > 0 ? `결재 ${n}` : CREW_STATUS_LABEL[c.status]}
                     </span>
                   </button>
                 </li>
@@ -108,12 +139,76 @@ export function Drawer({
   );
 }
 
-function CrewHeader({ crew, clock }: { crew: Crew; clock: number }) {
+/** 교신 전체: 포트에 붙은 셋 다음 베이 밖에서 기다리는 배까지. 누르면 해치가 열린다 */
+function HailList({
+  berths,
+  clock,
+  onHatch,
+}: {
+  berths: Berth[];
+  clock: number;
+  onHatch: (id: string) => void;
+}) {
+  if (!berths.length)
+    return <p className="text-sm text-white/50">들어온 교신이 없어요.</p>;
+  return (
+    <ul className="space-y-1.5">
+      {berths.map((b, i) => (
+        <li key={b.id}>
+          <button
+            type="button"
+            data-hail-row={b.id}
+            onClick={() => onHatch(b.id)}
+            className="flex w-full items-start gap-2 rounded-md border border-white/10 bg-white/[0.03] px-2.5 py-2 text-left text-sm hover:bg-white/10"
+          >
+            <span
+              className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
+              style={{ background: SHIP[b.kind].color }}
+            />
+            <span className="min-w-0 flex-1">
+              <span className="block text-[11px] text-white/50">
+                {i < PORTS ? `포트 ${i + 1}` : "베이 밖"} · {b.source} ·{" "}
+                {ago(b.since, clock)}
+              </span>
+              <b style={{ color: CONTEXT_COLOR[b.context] }}>{b.from}</b>
+              <span className="ml-1 text-white/80">{b.line}</span>
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function CrewHeader({
+  crew,
+  decisions,
+  clock,
+}: {
+  crew: Crew;
+  decisions: Task[];
+  clock: number;
+}) {
+  const calling = decisions.length > 0;
+  // 기다린 시간은 결재함과 같게 가장 오래된 결재의 것. 결재가 없으면 상태가 바뀐 때(소식뿐인 "나를 기다림"은 적지 않는다)
+  const oldest = calling
+    ? Math.min(...decisions.map((t) => t.since))
+    : undefined;
+  const status: Crew["status"] = calling
+    ? "needs-you"
+    : crew.status === "needs-you"
+      ? "idle"
+      : crew.status;
+  const tail = oldest
+    ? ` · 결재 ${decisions.length}건 · 가장 오래 ${elapsed(oldest, clock)}`
+    : crew.since && status === crew.status
+      ? ` · ${elapsed(crew.since, clock)}`
+      : "";
   return (
     <div className="flex min-w-0 items-center gap-3">
       <Animal
         kind={animalFor(crew.id)}
-        pose={poseFor(crew.status)}
+        pose={poseFor(status)}
         context={crew.context}
         size={52}
         furniture={false}
@@ -128,13 +223,13 @@ function CrewHeader({ crew, clock }: { crew: Crew; clock: number }) {
             {CONTEXT_LABEL[crew.context]}
           </span>
         </div>
-        <div className="mt-0.5 text-sm text-white/65">
+        <div className="mt-0.5 text-sm text-white/65" data-drawer-wait>
           <span
-            className={`mr-1 inline-block h-2 w-2 rounded-full align-middle ${crew.status === "needs-you" ? "ib-blink" : ""}`}
-            style={{ background: STATUS_DOT[crew.status] }}
+            className={`mr-1 inline-block h-2 w-2 rounded-full align-middle ${calling ? "ib-blink" : ""}`}
+            style={{ background: STATUS_DOT[status] }}
           />
-          {CREW_STATUS_LABEL[crew.status]}
-          {crew.since ? ` · ${elapsed(crew.since, clock)}` : ""}
+          {CREW_STATUS_LABEL[status]}
+          {tail}
         </div>
         {crew.activity && (
           <div className="text-[13px] text-white/55">{crew.activity}</div>
@@ -146,27 +241,46 @@ function CrewHeader({ crew, clock }: { crew: Crew; clock: number }) {
 
 function CrewBody({
   crew,
-  tasks,
+  decisions,
   clock,
+  onInbox,
 }: {
   crew: Crew;
-  tasks: Task[];
+  decisions: Task[];
   clock: number;
+  onInbox: () => void;
 }) {
   const act = useAct();
   const brief = crew.brief;
+  const answers = crew.desk?.answers ?? 0;
   return (
     <div className="space-y-4 text-sm">
       <section>
         <h3 className="mb-1.5 text-xs font-semibold tracking-widest text-white/45">
-          할 일 체크 · 체크하면 치운다
+          결재 {decisions.length} · 처리는 조종석 결재함에서
         </h3>
-        {tasks.length === 0 ? (
-          <p className="text-white/50">이 선원이 기다리는 일은 없어요.</p>
+        {answers > 0 && (
+          <button
+            type="button"
+            data-inbox-answers
+            onClick={onInbox}
+            className="mb-1.5 flex w-full items-center justify-between rounded-md border border-[#7ce0ff]/30 bg-[#7ce0ff]/10 px-2.5 py-1.5 text-left text-[13px] text-[#bfefff] hover:bg-[#7ce0ff]/20"
+          >
+            <span>답해 둔 것 {answers}</span>
+            <span className="text-[12px]">결재함에서 열기 ↑</span>
+          </button>
+        )}
+        {decisions.length === 0 ? (
+          <p className="text-white/50">이 선원이 기다리는 결재는 없어요.</p>
         ) : (
           <ul className="space-y-1.5">
-            {tasks.map((t) => (
-              <CheckItem key={t.id} task={t} clock={clock} />
+            {decisions.map((t) => (
+              <DecisionItem
+                key={t.id}
+                task={t}
+                clock={clock}
+                onInbox={onInbox}
+              />
             ))}
           </ul>
         )}
@@ -241,25 +355,43 @@ function BriefList({
   );
 }
 
-/** 체크 칸만 누르는 곳이다. 글은 label로 감싸지 않아 끌어서 고를 수 있다. */
-function CheckItem({ task, clock }: { task: Task; clock: number }) {
+/**
+ * 결재 한 줄. "결재함에서 열기"로 조종석 결재함의 그 승무원 묶음을 연다.
+ * 치울 수 있는 일(dismiss)만 체크 칸이 있고, 본부가 거절하거나 닿지 못하면 체크를 되돌린다.
+ * 체크 칸만 누르는 곳이다. 글은 label로 감싸지 않아 끌어서 고를 수 있다.
+ */
+function DecisionItem({
+  task,
+  clock,
+  onInbox,
+}: {
+  task: Task;
+  clock: number;
+  onInbox: () => void;
+}) {
   const act = useAct();
   const [done, setDone] = useState(false);
   const canDismiss = task.actions.includes("dismiss");
   return (
-    <li className="flex items-start gap-2 rounded-md border border-white/10 bg-black/25 px-2.5 py-2">
-      <input
-        type="checkbox"
-        aria-label={`치우기: ${task.title}`}
-        data-check={task.id}
-        disabled={!canDismiss || done}
-        checked={done}
-        onChange={() => {
-          setDone(true);
-          act.task(task, "dismiss");
-        }}
-        className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[#5ee08a]"
-      />
+    <li
+      data-decision={task.id}
+      className="flex items-start gap-2 rounded-md border border-white/10 bg-black/25 px-2.5 py-2"
+    >
+      {canDismiss && (
+        <input
+          type="checkbox"
+          aria-label={`치우기: ${task.title}`}
+          data-check={task.id}
+          disabled={done}
+          checked={done}
+          onChange={async () => {
+            setDone(true);
+            const r = await act.task(task, "dismiss");
+            if (!r.ok) setDone(false);
+          }}
+          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[#5ee08a]"
+        />
+      )}
       <div
         className={`min-w-0 flex-1 ${done ? "text-white/35 line-through" : ""}`}
       >
@@ -271,20 +403,21 @@ function CheckItem({ task, clock }: { task: Task; clock: number }) {
           {task.title}
         </div>
         {task.detail && !done && (
-          <div className="mt-0.5 text-[12px] whitespace-pre-wrap text-white/55">
+          <div className="mt-0.5 line-clamp-4 text-[12px] whitespace-pre-wrap text-white/55">
             {task.detail}
           </div>
         )}
+        {!done && (
+          <button
+            type="button"
+            data-open-inbox={task.id}
+            onClick={onInbox}
+            className="mt-1 rounded border border-[#7ce0ff]/40 px-1.5 py-0.5 text-[11px] font-semibold text-[#bfefff] hover:bg-[#7ce0ff]/15"
+          >
+            결재함에서 열기 ↑
+          </button>
+        )}
       </div>
-      {task.actions.includes("focus") && !done && (
-        <button
-          type="button"
-          onClick={() => act.task(task, "focus")}
-          className="shrink-0 rounded px-1.5 py-0.5 text-[11px] text-[#9cc8ff] hover:bg-white/10"
-        >
-          창으로
-        </button>
-      )}
     </li>
   );
 }
