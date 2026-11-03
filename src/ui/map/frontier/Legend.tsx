@@ -31,19 +31,10 @@ const poly = (s = S) =>
     .map((v) => `${v.x.toFixed(1)},${v.y.toFixed(1)}`)
     .join(" ");
 
-/** 지도와 같은 무늬 정의(공사 흙·안개 먼지) */
+/** 지도와 같은 무늬 정의(안개 먼지) */
 function Defs() {
   return (
     <defs>
-      <pattern
-        id={`soil${UID}`}
-        width="4.5"
-        height="4.5"
-        patternUnits="userSpaceOnUse"
-        patternTransform="rotate(28)"
-      >
-        <rect width="4.5" height="1.2" fill="#3a2414" />
-      </pattern>
       <pattern
         id={`dust${UID}`}
         width="7"
@@ -86,7 +77,11 @@ function Tile({
 
 const LANDS: { st: RegionStatus; name: string; say: string }[] = [
   { st: "fog", name: "안개", say: "아직 손대지 않은 일. 윤곽만 알아요" },
-  { st: "building", name: "공사중", say: "지금 하고 있는 일(굴착기)" },
+  {
+    st: "building",
+    name: "공사중",
+    say: "지금 하고 있는 일(파헤친 밝은 흙·굴착기, 큰 땅엔 크레인)",
+  },
   { st: "done", name: "완공", say: "끝난 일(불 켜진 돔)" },
   { st: "blocked", name: "막힘", say: "무언가에 막혀 멈춘 일(붉은 울타리)" },
   { st: "dropped", name: "버림", say: "하지 않기로 한 일. 기본은 숨겨요" },

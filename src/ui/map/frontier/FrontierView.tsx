@@ -56,6 +56,7 @@ import {
   zoomAt,
   zoomRange,
 } from "./camera";
+import { CRANE_CELLS, cellSeed, dugOf, rigCount, spread } from "./decor";
 import styles from "./frontier.module.css";
 import { FrontierLegend } from "./Legend";
 import { planetFor } from "./planet";
@@ -103,7 +104,8 @@ export const TERRITORY_COLORS = [
 /** 상태별 땅 바탕 */
 export const GROUND: Record<RegionStatus, string> = {
   fog: "#454c5e",
-  building: "#6a4627",
+  // 밝은 파헤친 흙: 막힘(어두운 붉은 갈색)·완공(초록)·안개(회색)와 밝기부터 다르다
+  building: "#9a7444",
   done: "#2e7350",
   blocked: "#5e2329",
   dropped: "#262a33",
@@ -1501,24 +1503,13 @@ function Scene({
           <stop offset="0%" stopColor={planet.air} stopOpacity="0.32" />
           <stop offset="100%" stopColor={planet.air} stopOpacity="0" />
         </linearGradient>
-        <pattern
-          id={`soil${uid}`}
-          width={Math.max(4, s * 0.28)}
-          height={Math.max(4, s * 0.28)}
-          patternUnits="userSpaceOnUse"
-          patternTransform="rotate(28)"
-        >
-          <rect
-            width={Math.max(4, s * 0.28)}
-            height={Math.max(1.2, s * 0.07)}
-            fill="#3a2414"
-          />
-        </pattern>
+        {/* 먼지 무늬는 땅을 따라 움직인다(화면에 붙어 땅 위로 미끄러지지 않게) */}
         <pattern
           id={`dust${uid}`}
           width="7"
           height="7"
           patternUnits="userSpaceOnUse"
+          patternTransform={`translate(${ox.toFixed(1)} ${oy.toFixed(1)})`}
         >
           <circle cx="1.5" cy="1.5" r="0.9" fill="#d8dce8" opacity="0.35" />
           <circle cx="5" cy="4.6" r="0.7" fill="#d8dce8" opacity="0.25" />
@@ -1668,7 +1659,14 @@ function Scene({
                         s={ds}
                       />
                     ))}
-                  <CellDecor st={st} p={p} s={s} ds={ds} uid={uid} />
+                  <CellDecor
+                    st={st}
+                    p={p}
+                    s={s}
+                    ds={ds}
+                    uid={uid}
+                    seed={cellSeed(c.q, c.r)}
+                  />
                   {fresh && (
                     <polygon
                       points={poly(p, 0.7)}
@@ -1770,13 +1768,29 @@ function Scene({
             (l) => visible(l.region.id) && statusOf(l.region) === "building",
           )
           .map((l) => {
+            // 3칸마다 장비 하나를 승무원·내 깃발이 없는 칸에 고르게. 큰 땅은 첫 장비가 크레인
             const sp = spots.get(l.region.id);
-            const slots = sp?.slots.slice(0, l.cells.length) ?? [];
-            const p =
-              slots.find(
-                (x) => x !== hereCenter && !flagSpots.some((f) => f.p === x),
-              ) ?? sp?.slots[l.cells.length];
-            return p ? <Rig key={l.region.id} x={p.x} y={p.y} s={ds} /> : null;
+            const free = (sp?.slots.slice(0, l.cells.length) ?? []).filter(
+              (x) => x !== hereCenter && !flagSpots.some((f) => f.p === x),
+            );
+            const fallback = sp?.slots[l.cells.length];
+            const at = spread(
+              free.length ? free : fallback ? [fallback] : [],
+              rigCount(l.cells.length),
+            );
+            const crane = l.cells.length >= CRANE_CELLS;
+            return (
+              <g key={l.region.id} data-rigs={at.length}>
+                {at.map((p, i) =>
+                  crane && i === 0 ? (
+                    <Crane key="crane" x={p.x} y={p.y} s={ds} />
+                  ) : (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: 고르게 고른 칸 차례
+                    <Rig key={i} x={p.x} y={p.y} s={ds} />
+                  ),
+                )}
+              </g>
+            );
           })}
       </g>
 
@@ -2124,6 +2138,7 @@ export function CellDecor({
   s,
   ds,
   uid,
+  seed = 0,
 }: {
   st: RegionStatus;
   p: P;
@@ -2131,6 +2146,8 @@ export function CellDecor({
   /** 장식 크기(칸이 커져도 상한이 있다) */
   ds: number;
   uid: string;
+  /** 칸 좌표로 정한 씨앗(decor.ts cellSeed). 공사 칸의 고랑·흙더미·말뚝이 칸마다 다르다 */
+  seed?: number;
 }) {
   const pts = corners(p.x, p.y, s)
     .map((v) => `${v.x.toFixed(1)},${v.y.toFixed(1)}`)
@@ -2157,10 +2174,7 @@ export function CellDecor({
         </g>
       </g>
     );
-  if (st === "building")
-    return (
-      <polygon points={pts} fill={`url(#soil${uid})`} pointerEvents="none" />
-    );
+  if (st === "building") return <Dug p={p} s={s} seed={seed} />;
   if (st === "done") return <Dome x={p.x} y={p.y} s={ds} />;
   if (st === "dropped")
     return (
@@ -2212,6 +2226,103 @@ function Dome({ x, y, s }: { x: number; y: number; s: number }) {
         fill="#fff4b5"
         opacity="0.8"
       />
+    </g>
+  );
+}
+
+/**
+ * 공사 칸: 파헤친 흙에 짧은 고랑 2~3개(수평에 가깝게, 칸 좌표로 그려 땅을 따라 움직인다),
+ * 칸에 따라 흙더미와 주황 깃발 말뚝. 사선 줄무늬는 "주의·금지"로 읽혀 쓰지 않는다(2026-11-03 검토)
+ */
+function Dug({ p, s, seed }: { p: P; s: number; seed: number }) {
+  const d = dugOf(seed);
+  const rows = d.furrows === 3 ? [-0.38, 0, 0.38] : [-0.2, 0.22];
+  const groove = Math.max(0.8, s * 0.075);
+  const fine = s >= 10;
+  return (
+    <g pointerEvents="none" data-dug>
+      <g
+        transform={`rotate(${d.tilt} ${p.x.toFixed(1)} ${p.y.toFixed(1)})`}
+        fill="none"
+        strokeLinecap="round"
+      >
+        {rows.map((ry, i) => {
+          const x0 = p.x + s * (-0.42 + (i % 2) * 0.12);
+          const x1 = x0 + s * 0.58;
+          const y = p.y + s * ry;
+          const mid = `${((x0 + x1) / 2).toFixed(1)} ${(y - s * 0.07).toFixed(1)}`;
+          return (
+            <g key={ry}>
+              <path
+                d={`M${x0.toFixed(1)} ${(y - groove * 0.9).toFixed(1)}Q${mid} ${x1.toFixed(1)} ${(y - groove * 0.9).toFixed(1)}`}
+                stroke="#d2ad78"
+                strokeWidth={groove * 0.6}
+                opacity="0.7"
+              />
+              <path
+                d={`M${x0.toFixed(1)} ${y.toFixed(1)}Q${mid} ${x1.toFixed(1)} ${y.toFixed(1)}`}
+                stroke="#5b3e1f"
+                strokeWidth={groove}
+              />
+            </g>
+          );
+        })}
+      </g>
+      {fine && d.mound && (
+        <path
+          d={`M${p.x + s * 0.18} ${p.y + s * 0.5}Q${p.x + s * 0.4} ${p.y + s * 0.18} ${p.x + s * 0.62} ${p.y + s * 0.5}Z`}
+          fill="#7c5631"
+          stroke="#c99d63"
+          strokeWidth={Math.max(0.6, s * 0.03)}
+        />
+      )}
+      {fine && d.stake && (
+        <g>
+          <line
+            x1={p.x - s * 0.5}
+            y1={p.y + s * 0.42}
+            x2={p.x - s * 0.5}
+            y2={p.y - s * 0.02}
+            stroke="#f1e3c8"
+            strokeWidth={Math.max(0.9, s * 0.04)}
+          />
+          <path
+            d={`M${p.x - s * 0.5} ${p.y - s * 0.02}L${p.x - s * 0.28} ${p.y + s * 0.06}L${p.x - s * 0.5} ${p.y + s * 0.14}Z`}
+            fill="#ff8a1f"
+          />
+        </g>
+      )}
+    </g>
+  );
+}
+
+/** 큰 공사 땅의 크레인: 격자 기둥과 팔, 매달린 짐 */
+export function Crane({ x, y, s }: { x: number; y: number; s: number }) {
+  const u = s / 20;
+  const lattice = [-3, -9, -15, -21, -27]
+    .map((t) => `M-1.6 ${t}L1.6 ${t - 3}L-1.6 ${t - 6}`)
+    .join("");
+  return (
+    <g
+      data-crane
+      transform={`translate(${x} ${y + 6 * u}) scale(${u})`}
+      fill="none"
+      strokeLinecap="round"
+    >
+      <rect x="-5" y="-1" width="10" height="3" rx="1" fill="#1f1a14" />
+      <path d="M-1.6 -1V-33M1.6 -1V-33" stroke="#f2b13a" strokeWidth="1.4" />
+      <path d={lattice} stroke="#f2b13a" strokeWidth="0.7" />
+      <path
+        d="M-7 -33H17M0 -38L17 -33M0 -38L-7 -33"
+        stroke="#f2b13a"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <rect x="-8" y="-35" width="4" height="4" fill="#8a5a1c" />
+      <g className={styles.sway}>
+        <path d="M13 -33V-22" stroke="#e6e0d0" strokeWidth="0.6" />
+        <rect x="10.5" y="-22" width="5" height="3.5" fill="#c9862c" />
+      </g>
     </g>
   );
 }
