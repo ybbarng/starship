@@ -1,10 +1,11 @@
 // 데모 책상: 지어낸 세션들이 나를 기다리는 것과 지금 하는 일.
-// web-shop은 네 종류(decide·check·approve·answer)가 다 있고 지도도 있다. orbit-notes는 지도 없이 책상만 있다.
+// web-shop은 네 종류(decide·check·approve·answer)와 코드 리뷰(topic code-review)가 다 있고 지도도 있다. orbit-notes는 지도 없이 책상만 있다.
 // 기다림 하나하나는 스냅샷의 Task로도 나간다(id desk:<crewId>:<waitId>). 답하면 책상에서도 빠진다.
 import {
   answerKey,
   type Desk,
   deskChoices,
+  deskSource,
   deskTaskId,
   type Waiting,
 } from "@/protocol/desk";
@@ -99,6 +100,24 @@ export function buildDemoDesks(now = Date.now()): Record<string, Desk> {
           after: "고칠 것이 없으면 연출을 그대로 굳혀요",
         },
         {
+          // AI 리뷰 세션이 "사람이 보는 게 좋다"고 올린 코드 리뷰. 반나절 넘게 기다려 결재함 리뷰 칸이 경고 색이 된다.
+          id: "pr-231",
+          type: "check",
+          topic: "code-review",
+          title: "shop#231 결제 재시도 고침 — 사람 리뷰 필요",
+          detail:
+            "AI 리뷰로는 재시도 상한과 중복 결제 막기가 맞는지 판단하기 어려워요. 결제 대행사 응답 표와 함께 봐 주세요.",
+          since: iso(now, 13 * 60),
+          items: [
+            {
+              label: "shop#231 결제 재시도 고침",
+              url: "https://github.com/example/shop/pull/231",
+              look: "같은 주문이 두 번 결제될 길이 없나",
+            },
+          ],
+          after: "고칠 것이 없으면 승인 리뷰를 남기고 머지를 맡겨요",
+        },
+        {
           id: "prod-push",
           type: "approve",
           title: "마음에 들면 운영에 올리기",
@@ -165,7 +184,10 @@ const KIND: Record<Waiting["type"], TaskKind> = {
   answer: "question",
 };
 
-/** 책상의 기다림을 Task로 내보낸다. 비서가 하는 일과 같은 모양. */
+/**
+ * 책상의 기다림을 Task로 내보낸다. 비서가 하는 일과 같은 모양.
+ * 출처는 deskSource: 코드 리뷰(topic "code-review")면 review라서 결재함 "코드 리뷰" 칸에 모인다.
+ */
 export function deskTasks(
   crewId: string,
   desk: Desk,
@@ -175,7 +197,7 @@ export function deskTasks(
   return desk.waiting.map((w) => ({
     id: deskTaskId(crewId, w.id),
     kind: KIND[w.type],
-    source: { kind: "session" },
+    source: deskSource(w),
     context,
     title: w.title,
     detail: w.detail,

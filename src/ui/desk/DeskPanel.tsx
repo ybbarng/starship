@@ -152,6 +152,15 @@ function WaitCard({
           <span className="font-semibold" style={{ color }}>
             {WAIT_LABEL[wait.type]}
           </span>
+          {wait.topic === "code-review" && (
+            <span
+              data-wait-topic={wait.topic}
+              className="rounded bg-[#b9a2ff]/15 px-1.5 py-px font-semibold text-[#cdbdff]"
+              title="코드 리뷰예요. 조종석 결재함 맨 위 코드 리뷰 칸에도 모여요"
+            >
+              코드 리뷰
+            </span>
+          )}
           {wait.blocks && (
             <span
               data-wait-blocks
