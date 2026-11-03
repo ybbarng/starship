@@ -355,6 +355,30 @@ export const overlaps = (a: Rect, b: Rect, pad = 0) =>
   a.y < b.y + b.h + pad &&
   b.y < a.y + a.h + pad;
 
+/**
+ * 잠깐 뜨는 글(완공 폭죽의 "완공!" 등)을 이름표와 겹치지 않는 높이로 비킨다.
+ * 위로 step씩 tries번까지 먼저(땅 위 하늘 쪽으로), 그래도 없으면 아래로. 화면(bounds) 밖으로는 나가지 않는다.
+ * 자리가 없으면 위로 가장 멀리 비킨 자리(그래도 이름표 위가 낫다), 처음부터 비어 있으면 그대로.
+ */
+export function dodgeY(
+  r: Rect,
+  taken: readonly Rect[],
+  bounds: Rect,
+  step = r.h + 2,
+  tries = 6,
+): number {
+  const free = (y: number) =>
+    y >= bounds.y &&
+    y + r.h <= bounds.y + bounds.h &&
+    !taken.some((t) => overlaps({ ...r, y }, t, 1));
+  if (free(r.y)) return r.y;
+  for (let k = 1; k <= tries; k++)
+    if (free(r.y - k * step)) return r.y - k * step;
+  for (let k = 1; k <= tries; k++)
+    if (free(r.y + k * step)) return r.y + k * step;
+  return Math.max(bounds.y, r.y - tries * step);
+}
+
 /** 글자 폭 어림: 한글·전각은 글자 크기만큼, 나머지는 0.6배 */
 export function textWidth(text: string, fontSize: number): number {
   let w = 0;

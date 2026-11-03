@@ -28,7 +28,14 @@ import { Animal, animalFor, poseFor } from "@/ui/crew";
 import { REGION_STATUS_LABEL } from "@/ui/map/labels";
 import type { MapViewProps } from "@/ui/map/MapView";
 import { ForkAnswer } from "../ForkAnswer";
-import { PARTY_MS, Party, WALK_MS, WaitBubble, Walker } from "./alive";
+import {
+  PARTY_MS,
+  Party,
+  partyTextY,
+  WALK_MS,
+  WaitBubble,
+  Walker,
+} from "./alive";
 import {
   type Box,
   boxOf,
@@ -77,6 +84,7 @@ import {
   add,
   clip,
   corners,
+  dodgeY,
   EDGE_DIRS,
   type Hex,
   hexKey,
@@ -1909,11 +1917,28 @@ function Scene({
       )}
 
       {/* 완공 폭죽 */}
+      {/* "완공!" 글은 지역·구역 이름표를 덮지 않게 위(없으면 아래)로 비킨다 */}
       {parties.map((pt) => {
         const c = centerOf(pt.id);
-        return c ? (
-          <Party key={`${pt.id}-${pt.t0}`} x={c.x} y={c.y} s={s} />
-        ) : null;
+        if (!c) return null;
+        const tw = textWidth("완공!", 13) + 8;
+        // 글은 떠오르며 위아래로 10px쯤 움직인다. 그만큼 넉넉히 잡는다
+        const box = {
+          x: c.x - tw / 2,
+          y: partyTextY(c.y, s) - 23,
+          w: tw,
+          h: 30,
+        };
+        const y = dodgeY(box, [...terrLabels, ...placedAll], bounds);
+        return (
+          <Party
+            key={`${pt.id}-${pt.t0}`}
+            x={c.x}
+            y={c.y}
+            s={s}
+            textY={partyTextY(c.y, s) + (y - box.y)}
+          />
+        );
       })}
 
       {/* 걸어오는 승무원(걷는 동안은 제자리 동물 대신) */}
