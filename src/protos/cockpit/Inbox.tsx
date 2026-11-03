@@ -386,6 +386,12 @@ export function InboxSheet({
               ))}
               {reply && <ReplyNote key={reply.id} task={reply} now={now} />}
             </ul>
+            <p
+              data-inbox-keys
+              className="shrink-0 border-t border-white/[0.05] px-4 py-1 font-mono text-[10px] text-white/30"
+            >
+              J/K 서류 · [ ] 묶음 · 1–9 선택지 · S 1시간 뒤 · G 창밖 감상
+            </p>
           </>
         ) : (
           <EmptySheet />
@@ -622,6 +628,8 @@ export function Paper({
             key={b.key}
             type="button"
             data-action={b.action}
+            // 1~9 키가 누를 선택지(inboxFocus.ts runInboxKey)
+            data-choice={b.choice !== undefined ? "" : undefined}
             onClick={b.onClick}
             className={`${KEY_SMALL} ${
               b.action === "answer" && b.choice

@@ -34,6 +34,7 @@ import { CrewPeek } from "./CrewPeek";
 import styles from "./cockpit.module.css";
 import { GazeLayer } from "./Gaze";
 import { GlassFrame, type GlassShape } from "./Glass";
+import { inboxKey, runInboxKey } from "./inboxFocus";
 import { isNews } from "./inboxGroups";
 import { GaugeList, TaskList } from "./Lists";
 import { Dashboard, type ListKind } from "./Panel";
@@ -143,12 +144,13 @@ export function CockpitGaze() {
     hail.open(target);
   };
 
-  // 단축키: G = 감상하기, Esc = 열린 것부터 닫고 마지막엔 조종석으로
+  // 단축키: G = 감상하기, Esc = 열린 것부터 닫고 마지막엔 조종석으로.
+  // 조종석에서는 결재함 키도(J/K 서류, [ ] 묶음, 1~9 선택지, S 1시간 뒤. inboxFocus.ts inboxKey)
   useEffect(() => {
     if (stage !== 0) return;
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement | null;
-      if (el?.closest("input, textarea, [contenteditable]")) return;
+      if (el?.closest("input, textarea, select, [contenteditable]")) return;
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       if (document.querySelector('[role="dialog"]')) return;
       if (e.key === "Escape") {
@@ -157,6 +159,9 @@ export function CockpitGaze() {
       } else if ((e.key === "g" || e.key === "G" || e.key === "ㅎ") && !gaze) {
         e.preventDefault();
         enterGaze();
+      } else if (!gaze) {
+        const cmd = inboxKey(e.key);
+        if (cmd && runInboxKey(cmd)) e.preventDefault();
       }
     };
     window.addEventListener("keydown", onKey);
