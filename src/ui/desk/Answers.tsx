@@ -5,6 +5,7 @@
 // 형식: src/protocol/desk.ts Answered, 뜻: docs/desk.md "답해 둔 것".
 import { useState } from "react";
 import { useAct } from "@/data/hooks";
+import { readKey, useSent } from "@/data/sent";
 import type { Answered } from "@/protocol/desk";
 import { FileButtons } from "@/ui/kit/FileButtons";
 import { findPaths } from "@/ui/kit/filePaths";
@@ -20,10 +21,12 @@ export function AnswerList({
   now: number;
 }) {
   const act = useAct();
-  // 읽음을 누르면 서버 답을 기다리지 않고 바로 접는다
-  const [read, setRead] = useState<Set<string>>(new Set());
+  // 읽음을 누르면 서버 답을 기다리지 않고 바로 접는다. 숨긴 것은 src/data/sent.ts에 두어
+  // 선실 "할 일" 배지(crewTaskCount)도 같은 수를 센다(2026-11-03)
+  const read = useSent((s) => s.read);
+  const setRead = useSent((s) => s.setRead);
   const shown = answers
-    .filter((a) => !read.has(a.id))
+    .filter((a) => !read[readKey(crewId, a.id)])
     .sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
   if (!shown.length) return null;
   return (
@@ -38,16 +41,12 @@ export function AnswerList({
             answer={a}
             now={now}
             onRead={async () => {
-              setRead((s) => new Set(s).add(a.id));
+              const key = readKey(crewId, a.id);
+              setRead(key, true);
               // 본부가 읽음을 받지 못했으면 다시 펼친다(안 그러면 서버엔 남았는데 화면에서만 영영 숨는다).
               // 카드는 접히면 사라지니 결과는 남아 있는 목록 쪽에서 받는다.
               const result = await act.answerRead(crewId, a.id);
-              if (result.ok) return;
-              setRead((s) => {
-                const next = new Set(s);
-                next.delete(a.id);
-                return next;
-              });
+              if (!result.ok) setRead(key, false);
             }}
           />
         ))}

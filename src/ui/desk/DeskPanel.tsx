@@ -2,8 +2,9 @@
 
 // 선실 오른쪽 판의 책상: 세션이 나를 기다리는 것(카드)과 지금 하는 일. 설계: docs/desk.md.
 // 답은 책상이 아니라 같은 기다림의 Task(id desk:<crewId>:<waitId>)에 answer로 보낸다.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAct } from "@/data/hooks";
+import { deskSentKey, useSent } from "@/data/sent";
 import {
   type Desk,
   deskAnswer,
@@ -44,6 +45,14 @@ export function DeskPanel({
 }) {
   const byId = new Map(tasks.map((t) => [t.id, t]));
   const updated = Date.parse(desk.updatedAt);
+  // 세션이 책상에서 그 기다림을 빼면 "보냈어요" 표시도 지운다(src/data/sent.ts)
+  const prune = useSent((s) => s.prune);
+  const waitKeys = desk.waiting
+    .map((w) => deskSentKey(deskTaskId(crewId, w.id)))
+    .join("\n");
+  useEffect(() => {
+    prune(deskTaskId(crewId, ""), new Set(waitKeys.split("\n")));
+  }, [crewId, waitKeys, prune]);
   return (
     <div data-desk className="flex flex-col gap-3 text-[13px]">
       <div className="flex items-baseline justify-between">
@@ -58,6 +67,7 @@ export function DeskPanel({
         desk.waiting.map((w) => (
           <WaitCard
             key={w.id}
+            sentKey={deskSentKey(deskTaskId(crewId, w.id))}
             wait={w}
             task={byId.get(deskTaskId(crewId, w.id))}
             now={now}
@@ -105,10 +115,13 @@ export function DeskPanel({
 }
 
 function WaitCard({
+  sentKey,
   wait,
   task,
   now,
 }: {
+  /** 보낸 답 저장소의 열쇠(그 기다림의 Task id). 답하면 Task가 먼저 사라져도 이것으로 찾는다 */
+  sentKey: string;
   wait: Waiting;
   task?: Task;
   now: number;
@@ -119,10 +132,17 @@ function WaitCard({
   // path가 없으면 글 속 경로에도 보기·열기를 붙인다(2026-11-03). 고르는 규칙: waitFiles.ts
   const files = waitFiles(wait);
   const canAnswer = task?.actions.includes("answer") ?? false;
-  const send = (choice?: string) => {
+  // 본부가 답을 받으면 할 일(Task)은 바로 지워지지만 책상 기다림은 세션이 고쳐야 빠진다.
+  // 그 사이 "아직 답할 수 없어요"가 잘못 뜨지 않게, 보낸 답을 남겨 두고 보여 준다(2026-11-03)
+  const sent = useSent((s) => s.sent[sentKey]);
+  const mark = useSent((s) => s.mark);
+  const send = async (choice?: string) => {
     const answer = deskAnswer(choice, text);
     if (!task || !answer) return;
-    act.task(task, "answer", answer);
+    const result = await act.task(task, "answer", answer);
+    // 못 받았으면 쓴 글을 그대로 두어 다시 보낼 수 있게
+    if (!result.ok) return;
+    mark(sentKey, answer);
     setText("");
   };
   const choiceButton = (label: string, primary = false) => (
@@ -130,7 +150,7 @@ function WaitCard({
       key={label}
       type="button"
       disabled={!canAnswer || act.pending}
-      onClick={() => send(label)}
+      onClick={() => void send(label)}
       className={`rounded px-2.5 py-1 text-[12px] font-semibold disabled:opacity-40 ${
         primary
           ? "bg-white/90 text-hull-950 hover:bg-white"
@@ -251,7 +271,11 @@ function WaitCard({
           </ol>
         )}
 
-        {canAnswer ? (
+        {sent !== undefined ? (
+          <p data-wait-sent className="text-[12px] text-[#bff3d2]">
+            “{sent}” 보냈어요 · 세션이 고치면 사라져요
+          </p>
+        ) : canAnswer ? (
           <div className="flex flex-col gap-1.5">
             <textarea
               value={text}
@@ -275,7 +299,7 @@ function WaitCard({
                 <button
                   type="button"
                   disabled={!text.trim() || act.pending}
-                  onClick={() => send()}
+                  onClick={() => void send()}
                   className="rounded bg-white/90 px-2.5 py-1 text-[12px] font-semibold text-hull-950 hover:bg-white disabled:opacity-40"
                 >
                   보내기
