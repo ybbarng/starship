@@ -80,6 +80,7 @@ function ReviewLaneBox({
   return (
     <div
       data-review-lane
+      data-scroll-inside
       data-review-late={late ? lane.late : undefined}
       className={`shrink-0 rounded-md border px-1 pt-1 pb-1 ${
         late
