@@ -2,14 +2,17 @@ import { describe, expect, it } from "vitest";
 import type { Crew, Task } from "@/protocol/v1";
 import {
   inboxGroups,
+  inboxOrder,
   LOOSE_KEY,
   lastReplies,
   pickGroup,
   pickReview,
   REVIEW_LATE_MS,
   REVIEW_PREFIX,
+  repick,
   reviewLane,
   STALE_MS,
+  stepKey,
 } from "./inboxGroups";
 
 const NOW = Date.parse("2026-11-02T11:00:00+09:00");
@@ -296,5 +299,83 @@ describe("reviewLane: 결재함 맨 위 코드 리뷰 칸", () => {
         pickReview(lane, `${REVIEW_PREFIX}gone`, byId, NOW),
       ).toBeUndefined();
     });
+  });
+});
+
+describe("repick: 고른 것이 사라지면 이웃으로", () => {
+  // 실제 열쇠 모양: 리뷰 줄은 review:<Task id>, 승무원 묶음은 승무원 id
+  const r = (crewId: string, wait: string) =>
+    `${REVIEW_PREFIX}desk:${crewId}:${wait}`;
+  const prev = [
+    r("blog", "pr-12"),
+    r("web-shop", "pr-40"),
+    r("game", "pr-7"),
+    "web-shop",
+    "blog",
+    "game",
+    LOOSE_KEY,
+  ];
+
+  it("고른 것이 그대로 있거나 고르지 않았으면 바꾸지 않는다", () => {
+    expect(repick(prev, prev, "blog")).toBe("blog");
+    expect(repick(prev, prev, null)).toBeNull();
+  });
+
+  it("승무원 묶음을 다 처리하면 같은 자리(뒤에 있던 묶음)로", () => {
+    const next = prev.filter((k) => k !== "blog");
+    expect(repick(prev, next, "blog")).toBe("game");
+  });
+
+  it("맨 끝 묶음이 사라지면 앞 묶음으로", () => {
+    expect(repick(["web-shop", "blog"], ["web-shop"], "blog")).toBe("web-shop");
+  });
+
+  it("리뷰 줄을 처리하면 리뷰 칸의 다음 줄로", () => {
+    const gone = r("web-shop", "pr-40");
+    const next = prev.filter((k) => k !== gone);
+    expect(repick(prev, next, gone)).toBe(r("game", "pr-7"));
+  });
+
+  it("리뷰 칸 마지막 줄을 처리하면 첫 승무원 묶음으로(앞 리뷰로 되돌아가지 않는다)", () => {
+    const gone = r("game", "pr-7");
+    const next = prev.filter((k) => k !== gone);
+    expect(repick(prev, next, gone)).toBe("web-shop");
+  });
+
+  it("지난 순서에도 없던 열쇠(결재 없는 승무원)는 첫 묶음으로 바꿔 옛 열쇠를 남기지 않는다", () => {
+    expect(repick(prev, prev, "secretary")).toBe("web-shop");
+  });
+
+  it("묶음이 다 사라지면 null", () => {
+    expect(repick(["blog"], [], "blog")).toBeNull();
+  });
+
+  it("리뷰 줄만 남으면 그 리뷰 줄로", () => {
+    const left = r("blog", "pr-12");
+    expect(repick(["blog", left], [left], "blog")).toBe(left);
+  });
+});
+
+describe("inboxOrder·stepKey: [ ] 키 순서", () => {
+  it("리뷰 칸 줄 다음 승무원 묶음", () => {
+    const review = task("pr-12", "blog", 3, {
+      kind: "review",
+      source: { kind: "review", service: "GitHub" },
+    });
+    const ask = task("q1", "web-shop", 1);
+    const order = inboxOrder(
+      reviewLane([review, ask], NOW),
+      inboxGroups([review, ask], new Map<string, Crew>(), NOW),
+    );
+    expect(order).toEqual([`${REVIEW_PREFIX}${review.id}`, "blog", "web-shop"]);
+  });
+
+  it("끝에서는 멈추고, 지금 것이 없으면 맨 앞", () => {
+    const o = ["web-shop", "blog", LOOSE_KEY];
+    expect(stepKey(o, "blog", 1)).toBe(LOOSE_KEY);
+    expect(stepKey(o, LOOSE_KEY, 1)).toBe(LOOSE_KEY);
+    expect(stepKey(o, "web-shop", -1)).toBe("web-shop");
+    expect(stepKey(o, undefined, 1)).toBe("web-shop");
+    expect(stepKey([], "blog", 1)).toBeUndefined();
   });
 });

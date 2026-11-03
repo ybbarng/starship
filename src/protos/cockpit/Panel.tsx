@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import type { Crew, CrewStatus, Hail, Link, Task } from "@/protocol/v1";
 import { formatSpeed } from "@/sky/telemetry";
 import { useTelemetry } from "@/sky/useTelemetry";
@@ -19,11 +19,13 @@ import { agoShort, HQ_CLOCK_MS, hqConnected } from "./hqLink";
 import { InboxIndex, InboxSheet } from "./Inbox";
 import {
   inboxGroups,
+  inboxOrder,
   isNews,
   lastReplies,
   pickGroup,
   pickReview,
   REVIEW_PREFIX,
+  repick,
   reviewLane,
 } from "./inboxGroups";
 import {
@@ -561,7 +563,7 @@ export function Dashboard({
   onInterior: () => void;
   /** 결재함에서 고른 승무원 묶음 열쇠(없으면 첫 묶음) */
   picked: string | null;
-  onPick: (key: string) => void;
+  onPick: (key: string | null) => void;
 }) {
   const groups = useMemo(
     () => inboxGroups(tasks, crewById, now),
@@ -570,9 +572,18 @@ export function Dashboard({
   const replies = useMemo(() => lastReplies(tasks), [tasks]);
   const decisions = useMemo(() => tasks.filter((t) => !isNews(t)), [tasks]);
   const reviews = useMemo(() => reviewLane(tasks, now), [tasks, now]);
+  const order = useMemo(() => inboxOrder(reviews, groups), [reviews, groups]);
+  // 고른 묶음이 사라지면(다 처리하면) 지난 순서에서 이웃을 고른다(inboxGroups.ts repick).
+  // 그리는 이번 판에 바로 쓰고, 고른 상태에도 적어 옛 열쇠가 남지 않게 한다.
+  const lastOrder = useRef(order);
+  const current = repick(lastOrder.current, order, picked);
+  useEffect(() => {
+    lastOrder.current = order;
+    if (current !== picked) onPick(current);
+  }, [order, current, picked, onPick]);
   // 리뷰 칸에서 고른 서류가 있으면 그 한 장, 아니면 승무원 묶음
   const group =
-    pickReview(reviews, picked, crewById, now) ?? pickGroup(groups, picked);
+    pickReview(reviews, current, crewById, now) ?? pickGroup(groups, current);
   const firstReview = reviews.tasks[0];
   return (
     <div className={`relative flex h-full flex-col ${styles.panel}`}>
