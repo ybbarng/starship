@@ -187,7 +187,7 @@ export function deskTaskId(crewId: string, waitId: string): string {
 
 /**
  * 기다림 하나를 Task로 내보낼 때의 출처. 코드 리뷰(topic "code-review")면 "review", 아니면 "session".
- * 비서(본부)와 데모가 같은 규칙을 쓴다(docs/desk.md "할 일로 내보내기").
+ * 비서(본부)와 데모가 같은 규칙을 쓴다(docs/desk.md "답하기" 1번).
  */
 export function deskSource(w: Waiting): { kind: "review" | "session" } {
   return { kind: w.topic === "code-review" ? "review" : "session" };

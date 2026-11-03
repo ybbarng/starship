@@ -440,6 +440,26 @@
       ]
     },
     {
+      "id": "inbox-review-lane",
+      "title": "결재함 코드 리뷰 칸",
+      "parent": "cockpit-inbox",
+      "status": "done",
+      "size": 1,
+      "summary": "사람이 봐야 할 코드 리뷰(책상 topic code-review, source review)를 결재함 맨 위에 승무원 상관없이 모음. 반나절 넘으면 경고 색과 경고등",
+      "since": "2026-11-03",
+      "found": "2026-11-03",
+      "links": [
+        {
+          "label": "cockpit-inbox.md",
+          "path": "docs/cockpit-inbox.md"
+        },
+        {
+          "label": "inboxGroups.ts",
+          "path": "src/protos/cockpit/inboxGroups.ts"
+        }
+      ]
+    },
+    {
       "id": "crew-views",
       "title": "승무원 세 화면 역할",
       "status": "done",
