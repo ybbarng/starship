@@ -6,9 +6,9 @@
   "description": "A spaceship cockpit dashboard for your AI assistant sessions",
   "type": "module",
   "scripts": {
-    "dev": "next dev -p 7790",
+    "dev": "STARSHIP_BIND=127.0.0.1 next dev -H 127.0.0.1 -p 7790",
     "build": "next build",
-    "start": "next start -p 7790",
+    "start": "next start -H 127.0.0.1 -p 7790",
     "lint": "biome check .",
     "format": "biome check --write .",
     "typecheck": "tsc --noEmit",
