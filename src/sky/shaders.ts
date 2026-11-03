@@ -60,8 +60,8 @@ attribute float aIndex;
 uniform vec3 uObserver;
 uniform float uRadius;
 uniform float uNearHide;
-/** 숨길 별의 aIndex(장면의 구가 대신 그린다), 없으면 -1 */
-uniform float uHide;
+/** 숨길 별의 aIndex 두 칸(x: 목적지, y: 떠나온 별. 장면의 구가 대신 그린다), 없으면 -1 */
+uniform vec2 uHide;
 uniform float uFarFade;
 uniform float uPixelRatio;
 uniform float uTime;
@@ -86,7 +86,7 @@ void main() {
   float faint = pow(10.0, -0.3 * max(0.0, mag - 6.0));
   vAlpha = clamp(size / 2.2, 0.25, 1.0) * faint * (aFar > 0.5 ? uFarFade : 1.0);
   // 아주 가까운 별은 장면의 별이 그린다. 너무 흐린 별도 그리지 않는다.
-  if ((aFar < 0.5 && d < uNearHide) || abs(aIndex - uHide) < 0.5 || vAlpha < 0.01) {
+  if ((aFar < 0.5 && d < uNearHide) || abs(aIndex - uHide.x) < 0.5 || abs(aIndex - uHide.y) < 0.5 || vAlpha < 0.01) {
     gl_PointSize = 0.0;
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
   }
@@ -102,6 +102,9 @@ attribute vec3 aB;
 attribute float aT;
 uniform vec3 uObserver;
 uniform float uRadius;
+/** 이동 중 긴 호를 흐리게 하는 정도(0: 그대로, 1: 29° 넘는 호는 지운다). 식은 stars3d.ts travelArcDim. */
+uniform float uTravel;
+varying float vFade;
 void main() {
   // position: 선의 앞 끝 별(광년), aB: 뒤 끝 별, aT: 0..1 사이 자리
   vec3 da = normalize(position - uObserver);
@@ -112,14 +115,20 @@ void main() {
     ? da
     : (sin((1.0 - aT) * th) * da + sin(aT * th) * db) / sin(th);
   gl_Position = projectionMatrix * modelViewMatrix * vec4(normalize(dir) * uRadius, 1.0);
+  // 별들 사이를 지나는 동안 태양 곁 별들이 한쪽에 몰려, 거기서 먼 별로 가는 선이 부채꼴로 하늘을
+  // 가로지른다(실제 기하 그대로지만 화면을 덮는다). 이동 중에는 긴 호(9°에서 흐려지기 시작해 29°면 지운다)만
+  // 흐리게 한다. 지구에서 본 별자리 선은 대개 15°보다 짧다. 20°~70°로 두면 부채꼴이 거의 그대로 남았다.
+  vFade = 1.0 - uTravel * smoothstep(0.15, 0.5, th);
 }
 `;
 
 export const lineFragment = /* glsl */ `
 uniform vec3 uColor;
 uniform float uOpacity;
+varying float vFade;
 void main() {
-  gl_FragColor = vec4(uColor, uOpacity);
+  if (vFade < 0.01) discard;
+  gl_FragColor = vec4(uColor, uOpacity * vFade);
 }
 `;
 
