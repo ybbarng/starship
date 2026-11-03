@@ -157,7 +157,8 @@ function withProblems<T extends { problems?: string[] }>(
 
 /**
  * 승무원 하나의 지도가 지나온 모습(되감기). 서버 연결 모드는 {base}/v1/crew/{id}/map/history 를 중계하고,
- * 장마다 지도를 검사해 걸린 장은 뺀다. 서버가 이 끝점을 모르면(404) 빈 기록이다.
+ * 장마다 지도를 검사해 겉이 틀린 장은 빼고, 구역 몇 개만 틀린 장은 그것만 고친 채 쓴다(되감기는 문제를 따로 알리지 않는다).
+ * 서버가 이 끝점을 모르면(404) 빈 기록이다.
  */
 export async function getCrewMapHistory(
   crewId: string,
