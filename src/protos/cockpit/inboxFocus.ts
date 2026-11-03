@@ -8,11 +8,12 @@ export type InboxKey =
   | { type: "paper"; d: -1 | 1 }
   | { type: "group"; d: -1 | 1 }
   | { type: "choice"; n: number }
-  | { type: "snooze" };
+  | { type: "snooze" }
+  | { type: "open" };
 
 /**
  * 결재함 단축키(2026-11-03): J/K 다음·이전 서류, [ ] 이전·다음 묶음(리뷰 칸 포함),
- * 1~9 포커스한 서류의 선택지, S 1시간 뒤. 한글 자판에서도 같은 자리 글쇠(ㅓ·ㅏ·ㄴ)를 받는다(G를 ㅎ로 받듯이).
+ * 1~9 포커스한 서류의 선택지, S 1시간 뒤, O 원래 곳(PR) 열기. 한글 자판에서도 같은 자리 글쇠(ㅓ·ㅏ·ㄴ·ㅐ)를 받는다(G를 ㅎ로 받듯이).
  */
 export function inboxKey(key: string): InboxKey | null {
   switch (key) {
@@ -32,6 +33,10 @@ export function inboxKey(key: string): InboxKey | null {
     case "S":
     case "ㄴ":
       return { type: "snooze" };
+    case "o":
+    case "O":
+    case "ㅐ":
+      return { type: "open" };
   }
   return /^[1-9]$/.test(key) ? { type: "choice", n: Number(key) } : null;
 }
@@ -116,6 +121,8 @@ export function runInboxKey(cmd: InboxKey): boolean {
     return press(
       paper.querySelectorAll<HTMLElement>("[data-choice]")[cmd.n - 1],
     );
+  if (cmd.type === "open")
+    return press(paper.querySelector<HTMLElement>("[data-paper-url]"));
   return press(paper.querySelector<HTMLElement>('[data-action="snooze"]'));
 }
 

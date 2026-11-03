@@ -393,7 +393,8 @@ function InboxSheetView({
               data-inbox-keys
               className="shrink-0 border-t border-white/[0.05] px-4 py-1 font-mono text-[10px] text-white/30"
             >
-              J/K 서류 · [ ] 묶음 · 1–9 선택지 · S 1시간 뒤 · G 창밖 감상
+              J/K 서류 · [ ] 묶음 · 1–9 선택지 · S 1시간 뒤 · O 원래 곳 · G 창밖
+              감상
             </p>
           </>
         ) : (
@@ -592,6 +593,18 @@ function PaperView({
         <span className="truncate text-white/35">
           · {sourceLabel(task.source)}
         </span>
+        {/* 원래 곳으로(코드 리뷰면 PR). 책상 코드 리뷰는 본부가 첫 확인 항목 주소를 url로 준다. O 키로도 연다 */}
+        {task.url && (
+          <a
+            href={task.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-paper-url
+            className="shrink-0 text-[#7fb8ff]/85 hover:text-[#7fb8ff] hover:underline"
+          >
+            {task.source.kind === "review" ? "PR 열기 ↗" : "원래 곳에서 열기 ↗"}
+          </a>
+        )}
         <span
           className={`ml-auto shrink-0 font-mono tabular-nums ${ageTone(task.since, now)}`}
         >

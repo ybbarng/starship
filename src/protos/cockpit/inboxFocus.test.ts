@@ -25,6 +25,11 @@ describe("inboxKey: 결재함 단축키", () => {
       expect(inboxKey(k)).toEqual({ type: "snooze" });
   });
 
+  it("O는 원래 곳(PR) 열기, 한글 자판의 ㅐ도 같게", () => {
+    for (const k of ["o", "O", "ㅐ"])
+      expect(inboxKey(k)).toEqual({ type: "open" });
+  });
+
   it("다른 키는 건드리지 않는다(G·Esc는 조종석이 따로 받는다)", () => {
     for (const k of ["g", "Escape", "ArrowDown", "Enter", " "])
       expect(inboxKey(k)).toBeNull();
