@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { findPaths } from "./filePaths";
+import { fileViewHref, findPaths } from "./filePaths";
 
 describe("findPaths: 글 속 파일 경로 찾기", () => {
   it("세부 글에 적힌 절대 경로를 찾는다(뒤에 붙은 조사는 빼고)", () => {
@@ -51,5 +51,21 @@ describe("findPaths: 글 속 파일 경로 찾기", () => {
 
   it("경로가 없으면 빈 목록", () => {
     expect(findPaths("쿠폰 입력 방식 두 가지 중 고르기")).toEqual([]);
+  });
+});
+
+describe("fileViewHref: 보기 단추 주소", () => {
+  it("md는 읽기 좋게 그린 화면으로(경로는 주소용으로 감싼다)", () => {
+    const p = "/private/tmp/s/scratchpad/릴리스 노트.md";
+    expect(fileViewHref(p)).toBe(`/files/view?path=${encodeURIComponent(p)}`);
+    expect(fileViewHref("~/notes/README.MD")).toMatch(/^\/files\/view\?path=/);
+  });
+
+  it("md가 아니면 파일을 그대로 내주는 끝점으로", () => {
+    const p = "/Users/me/Desktop/a.png";
+    expect(fileViewHref(p)).toBe(`/api/files?path=${encodeURIComponent(p)}`);
+    expect(fileViewHref("/Users/me/Desktop/run.log")).toMatch(
+      /^\/api\/files\?/,
+    );
   });
 });

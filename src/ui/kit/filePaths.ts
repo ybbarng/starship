@@ -17,3 +17,22 @@ export function findPaths(text: string): string[] {
   }
   return out;
 }
+
+/** 파일 이름(경로 마지막 조각) */
+export function baseName(p: string): string {
+  return p.split("/").filter(Boolean).pop() ?? p;
+}
+
+/** 마크다운으로 그려 보여 줄 파일인가. 서버 보기 종류(VIEW_TYPES)에 있는 md만 본다. */
+export function isMarkdown(p: string): boolean {
+  return /\.md$/i.test(p);
+}
+
+/**
+ * "보기" 단추의 주소. md는 읽기 좋게 그린 화면(/files/view, 그 화면이 /api/files를 fetch한다),
+ * 나머지는 파일을 그대로 내주는 /api/files. 검사는 어느 쪽이든 /api/files가 한다.
+ */
+export function fileViewHref(p: string): string {
+  const q = encodeURIComponent(p);
+  return isMarkdown(p) ? `/files/view?path=${q}` : `/api/files?path=${q}`;
+}

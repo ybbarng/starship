@@ -1,20 +1,14 @@
 "use client";
 
-// 이 맥의 파일을 "보기"(새 탭, /api/files)와 "열기"(맥의 맞는 프로그램)로 다루는 단추.
+// 이 맥의 파일을 "보기"(새 탭)와 "열기"(맥의 맞는 프로그램)로 다루는 단추.
 // 책상 카드(DeskPanel)와 조종석 결재함(Inbox)이 함께 쓴다. 검사는 서버가 한다. 설계: docs/files.md.
+// md는 날 글 대신 읽기 좋게 그린 화면(/files/view)으로 연다(2026-11-03).
 import { useState } from "react";
 import { useToast } from "@/data/toast";
+import { baseName, fileViewHref } from "@/ui/kit/filePaths";
 
-/** 파일 이름(경로 마지막 조각). 단추 옆에 작게 보여 어떤 파일인지 알린다. */
-function baseName(p: string): string {
-  return p.split("/").filter(Boolean).pop() ?? p;
-}
-
-/**
- * 책상의 path(이 맥의 파일)를 "보기"(새 탭, /api/files)와 "열기"(맥의 맞는 프로그램)로 다룬다.
- * 허용 폴더·숨김·확장자는 서버가 검사하고, 거절하면 그 까닭을 알림으로 보인다. 설계: docs/files.md.
- */
-export function FileButtons({ path }: { path: string }) {
+/** "열기": 서버에 맥의 맞는 프로그램으로 열어 달라고 하고, 결과를 알림으로 보인다. */
+export function useOpenFile(path: string) {
   const toast = useToast((s) => s.show);
   const [busy, setBusy] = useState(false);
   const open = async () => {
@@ -39,6 +33,15 @@ export function FileButtons({ path }: { path: string }) {
       setBusy(false);
     }
   };
+  return { open, busy };
+}
+
+/**
+ * 책상의 path(이 맥의 파일)를 "보기"(새 탭)와 "열기"(맥의 맞는 프로그램)로 다룬다.
+ * 허용 폴더·숨김·확장자는 서버가 검사하고, 거절하면 그 까닭을 알림으로 보인다. 설계: docs/files.md.
+ */
+export function FileButtons({ path }: { path: string }) {
+  const { open, busy } = useOpenFile(path);
   return (
     <span
       data-file={path}
@@ -51,7 +54,7 @@ export function FileButtons({ path }: { path: string }) {
         {baseName(path)}
       </span>
       <a
-        href={`/api/files?path=${encodeURIComponent(path)}`}
+        href={fileViewHref(path)}
         target="_blank"
         rel="noopener noreferrer"
         data-file-view
