@@ -371,8 +371,13 @@ export function buildSnapshot(
     )
     .sort((a, b) => RANK[a.kind] - RANK[b.kind] || a.since - b.since);
 
+  // 교신은 사람이 보낸 것만. 책상 기다림은 코드 리뷰(source review)여도 세션이 적은 것이라 뺀다.
   const hails: Hail[] = tasks
-    .filter((t) => ["chat", "issue", "review", "doc"].includes(t.source.kind))
+    .filter(
+      (t) =>
+        ["chat", "issue", "review", "doc"].includes(t.source.kind) &&
+        !t.id.startsWith("desk:"),
+    )
     .map((t) => ({
       id: `h-${t.id}`,
       from: { name: t.from, where: t.source.service },
@@ -386,7 +391,9 @@ export function buildSnapshot(
     }));
 
   const waiting = new Set(
-    tasks.filter((t) => t.source.kind === "session").map((t) => t.crewId),
+    tasks
+      .filter((t) => t.source.kind === "session" || t.id.startsWith("desk:"))
+      .map((t) => t.crewId),
   );
   const seeds2: CrewSeed[] =
     scenario === "busy"

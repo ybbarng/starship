@@ -55,10 +55,20 @@ export const CheckItem = z.object({
 });
 export type CheckItem = z.infer<typeof CheckItem>;
 
+/**
+ * 기다림의 주제(선택). 종류(type)와 따로 "무엇에 관한 기다림인가"를 적는다.
+ * - code-review: 코드 리뷰를 사람이 봐 달라(PR 주소는 items[].url 등에 그대로). 할 일로 나갈 때 source.kind가 "review"가 되고,
+ *   조종석 결재함 맨 위 "코드 리뷰" 칸에 모인다(2026-11-03 사용자 결정, docs/cockpit-inbox.md).
+ */
+export const WaitTopic = z.enum(["code-review"]);
+export type WaitTopic = z.infer<typeof WaitTopic>;
+
 export const Waiting = z
   .object({
     id: z.string().min(1),
     type: WaitType,
+    /** 무엇에 관한 기다림인가(선택). code-review면 코드 리뷰 */
+    topic: WaitTopic.optional(),
     /** 내가 할 일 한 줄 */
     title: z.string().min(1),
     /** 왜·맥락 짧게 */
@@ -173,6 +183,14 @@ export function parseDesk(raw: unknown): DeskParse {
 /** 기다림 하나를 Task로 내보낼 때의 id. 비서와 화면이 같은 규칙을 쓴다. */
 export function deskTaskId(crewId: string, waitId: string): string {
   return `desk:${crewId}:${waitId}`;
+}
+
+/**
+ * 기다림 하나를 Task로 내보낼 때의 출처. 코드 리뷰(topic "code-review")면 "review", 아니면 "session".
+ * 비서(본부)와 데모가 같은 규칙을 쓴다(docs/desk.md "할 일로 내보내기").
+ */
+export function deskSource(w: Waiting): { kind: "review" | "session" } {
+  return { kind: w.topic === "code-review" ? "review" : "session" };
 }
 
 /** 기다림 하나에 답할 때 고를 수 있는 것. answer는 글로만 답한다. */

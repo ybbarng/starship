@@ -3,6 +3,7 @@ import {
   type Desk,
   deskAnswer,
   deskChoices,
+  deskSource,
   deskTaskId,
   parseDesk,
   summarizeDesk,
@@ -185,6 +186,41 @@ describe("parseDesk", () => {
     });
   });
 
+  describe("주제(topic)", () => {
+    /** 리뷰 세션이 "사람이 보는 게 좋다"고 올리는 모양 그대로 */
+    const review = {
+      id: "pr-231",
+      type: "check",
+      topic: "code-review",
+      title: "shop#231 결제 재시도 리뷰 봐 주세요",
+      since: "2026-11-03T09:00:00+09:00",
+      items: [
+        {
+          label: "shop#231 결제 재시도",
+          url: "https://github.com/example/shop/pull/231",
+          look: "재시도 횟수 상한이 맞나",
+        },
+      ],
+    };
+
+    it("code-review를 읽는다", () => {
+      const result = parseDesk(desk([review]));
+      expect(result.ok && result.desk.waiting[0]?.topic).toBe("code-review");
+    });
+
+    it("없어도 된다", () => {
+      const result = parseDesk(desk([decide]));
+      expect(result.ok).toBe(true);
+      expect(result.ok && result.desk.waiting[0]?.topic).toBeUndefined();
+    });
+
+    it("모르는 주제는 거절한다", () => {
+      const result = parseDesk(desk([{ ...review, topic: "design-review" }]));
+      expect(result.ok).toBe(false);
+      expect(result.problems[0]).toMatch(/^waiting\.0\.topic/);
+    });
+  });
+
   describe("하는 일의 승인받은 것(approved)", () => {
     const ship = {
       id: "ship",
@@ -220,6 +256,13 @@ describe("할 일과 이어 주기", () => {
       "고칠 것 있음",
     ]);
     expect(deskChoices({ ...w, type: "answer" })).toBeUndefined();
+  });
+
+  it("출처는 코드 리뷰면 review, 아니면 session", () => {
+    expect(deskSource(w)).toEqual({ kind: "session" });
+    expect(deskSource({ ...w, topic: "code-review" })).toEqual({
+      kind: "review",
+    });
   });
 
   it("요약은 기다림 수와 하는 일 수", () => {

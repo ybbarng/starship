@@ -60,15 +60,29 @@ describe("데모 책상", () => {
       "desk:web-shop:checkout-motion",
       "desk:web-shop:coupon-entry",
       "desk:web-shop:free-ship",
+      "desk:web-shop:pr-231",
       "desk:web-shop:prod-push",
     ]);
     const approve = deskTasks.find((t) => t.id.endsWith(":prod-push"));
     expect(approve?.choices).toEqual(["승인", "보류"]);
     expect(snap.crew.find((c) => c.id === "web-shop")?.desk).toEqual({
-      waiting: 4,
+      waiting: 5,
       doing: 2,
       answers: 2,
     });
+  });
+
+  it("코드 리뷰 기다림은 source review로 나가고, 교신은 만들지 않는다", () => {
+    const snap = buildSnapshot(createDemoState(t0), "default", t0);
+    const review = snap.tasks.find((t) => t.id === "desk:web-shop:pr-231");
+    expect(review?.source).toEqual({ kind: "review" });
+    expect(review?.kind).toBe("review");
+    expect(
+      snap.tasks.find((t) => t.id === "desk:web-shop:coupon-entry")?.source,
+    ).toEqual({ kind: "session" });
+    expect(snap.hails.some((h) => h.taskId === "desk:web-shop:pr-231")).toBe(
+      false,
+    );
   });
 
   it("답한 기다림은 Task에서도 책상 요약에서도 빠진다", () => {
@@ -78,7 +92,7 @@ describe("데모 책상", () => {
     expect(snap.tasks.some((t) => t.id === "desk:web-shop:prod-push")).toBe(
       false,
     );
-    expect(snap.crew.find((c) => c.id === "web-shop")?.desk?.waiting).toBe(3);
+    expect(snap.crew.find((c) => c.id === "web-shop")?.desk?.waiting).toBe(4);
   });
 
   it("데모 책상은 모두 형식 검사를 통과한다", () => {
