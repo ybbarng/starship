@@ -31,6 +31,28 @@ export function isNews(t: Task): boolean {
   return t.kind === "reply";
 }
 
+/**
+ * 결재 수: 소식(isNews)을 뺀 할 일 수. 조종석 결재함·선내 함교·갑판 기다림·Dock 배지가 모두 이 수를 쓴다
+ * (docs/crew-views.md "건수는 어디서나 결재만 센다"). 책상 기다림도 `desk:` Task로 들어 있으니 따로 더하지 않는다.
+ */
+export function decisionCount(tasks: readonly Task[]): number {
+  let n = 0;
+  for (const t of tasks) if (!isNews(t)) n++;
+  return n;
+}
+
+/** 승무원별 결재(소식 뺀 할 일). 본부가 준 순서 그대로. 승무원 없는 일은 들지 않는다 */
+export function decisionsByCrew(tasks: readonly Task[]): Map<string, Task[]> {
+  const by = new Map<string, Task[]>();
+  for (const t of tasks) {
+    if (isNews(t) || !t.crewId) continue;
+    const list = by.get(t.crewId);
+    if (list) list.push(t);
+    else by.set(t.crewId, [t]);
+  }
+  return by;
+}
+
 /** 승무원마다 마지막 답변(소식) 하나. 결재 서류 맨 아래에 접어 둔다. */
 export function lastReplies(tasks: readonly Task[]): Map<string, Task> {
   const by = new Map<string, Task>();

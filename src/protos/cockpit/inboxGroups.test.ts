@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { Crew, Task } from "@/protocol/v1";
 import {
+  decisionCount,
+  decisionsByCrew,
   inboxGroups,
   inboxOrder,
   LOOSE_KEY,
@@ -144,6 +146,24 @@ describe("마지막 답변(reply)은 결재가 아닌 소식", () => {
     ]);
     expect([...r.keys()]).toEqual(["billing"]);
     expect(r.get("billing")?.since).toBe(NOW - 0.1 * H);
+  });
+
+  it("decisionCount·decisionsByCrew: 소식을 빼고 센다. 승무원별에는 승무원 없는 일이 들지 않는다", () => {
+    const tasks = [
+      reply("1", "billing", 0.5),
+      task("a", "web-shop", 1),
+      task("ci-red", undefined, 3),
+      reply("2", "web-shop", 0.2),
+      task("b", "web-shop", 2),
+    ];
+    expect(decisionCount(tasks)).toBe(3);
+    const by = decisionsByCrew(tasks);
+    expect([...by.keys()]).toEqual(["web-shop"]);
+    expect(by.get("web-shop")?.map((t) => t.id)).toEqual([
+      "desk:web-shop:a",
+      "desk:web-shop:b",
+    ]);
+    expect(by.has("billing")).toBe(false);
   });
 });
 
