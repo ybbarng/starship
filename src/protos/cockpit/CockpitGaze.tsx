@@ -215,10 +215,10 @@ export function CockpitGaze() {
   const close = () => setModal(null);
   const modalCrew =
     modal?.type === "crew" ? bridge.crewById.get(modal.id) : undefined;
+  // 전체 목록도 경고등·목차처럼 결재만 센다. 마지막 답변(소식)은 수만 제목에 따로 적는다(화면마다 건수가 달랐다)
   const listTasks =
-    modal?.type === "list" && modal.kind === "late"
-      ? warnings.old
-      : bridge.tasks;
+    modal?.type === "list" && modal.kind === "late" ? warnings.old : decisions;
+  const newsCount = bridge.tasks.length - decisions.length;
 
   const inCockpit = stage === 0 && !gaze;
 
@@ -347,7 +347,8 @@ export function CockpitGaze() {
           }}
         >
           <GazeLayer
-            tasks={bridge.tasks}
+            // 띠의 "내 차례"와 맨 앞 일도 결재만(마지막 답변이 맨 앞에 오지 않게)
+            tasks={decisions}
             hails={hails}
             seen={hail.seen}
             now={now}
@@ -414,7 +415,7 @@ export function CockpitGaze() {
         title={
           modal?.type === "list" && modal.kind === "late"
             ? `1시간 넘게 기다린 일 ${warnings.old.length}`
-            : `내 차례 전체 ${bridge.tasks.length}`
+            : `내 차례 ${decisions.length}${newsCount ? ` · 마지막 답변 ${newsCount}` : ""}`
         }
         width={760}
       >

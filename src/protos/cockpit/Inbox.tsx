@@ -163,6 +163,8 @@ export function InboxIndex({
   const busy = new Set(groups.map((g) => g.key));
   const others = sortCrew(crew.filter((c) => !busy.has(c.id)));
   const total = groups.reduce((n, g) => n + g.tasks.length, 0);
+  // "곳"은 결재가 있는 묶음만(답해 둔 것만 있는 승무원은 세지 않는다)
+  const places = groups.filter((g) => g.tasks.length > 0).length;
   const answerTotal = groups.reduce((n, g) => n + g.answers, 0);
   return (
     <section
@@ -181,8 +183,7 @@ export function InboxIndex({
         <span>승무원</span>
         <span className="h-px flex-1 bg-white/[0.07]" />
         <span className="tracking-normal text-white/45">
-          결재 {total} · {groups.length}곳
-          {answerTotal > 0 && ` · 답 ${answerTotal}`}
+          결재 {total} · {places}곳{answerTotal > 0 && ` · 답 ${answerTotal}`}
         </span>
       </div>
       <div
