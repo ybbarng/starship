@@ -83,12 +83,24 @@ export function FuelRoom() {
           </span>
         )}
       </header>
-      {query.isLoading || !data ? (
+      {data ? (
+        <Room data={data} />
+      ) : query.error ? (
+        <p role="alert" className="p-8 font-mono text-[12px] text-[#ff9a7a]/80">
+          계기가 켜지지 않았어요 · 사용량을 읽지 못했어요 ·{" "}
+          {String(query.error.message)}
+          <button
+            type="button"
+            onClick={() => query.refetch()}
+            className="ml-3 rounded border border-white/15 px-2 py-0.5 text-white/60 hover:bg-white/[0.06] hover:text-white"
+          >
+            다시 읽기
+          </button>
+        </p>
+      ) : (
         <p className="p-8 font-mono text-[12px] text-white/50">
           계기를 켜는 중…
         </p>
-      ) : (
-        <Room data={data} />
       )}
     </main>
   );
@@ -217,9 +229,9 @@ function Schematic({ data }: { data: UsageResponse }) {
                   h: t.h + (feed ? 58 : 46),
                 })}
                 align={i === 0 && !feed ? "start" : "center"}
-                text={`${AREA_LABEL[a]} 탱크(${TAG[a]}) = ${AREA_LABEL[a]} 프로젝트 세션이 오늘 쓴 연료(출력 토큰).\n오늘 ${tokens(data.areas[a].output)} · 오늘 연소의 ${Math.round((data.areas[a].output / total) * 100)}% · 연료비 추정 ${usd(data.areas[a].cost)}${
+                text={`${AREA_LABEL[a]} 탱크(${TAG[a]}) = ${AREA_LABEL[a]} 프로젝트 세션이 오늘 쓴 연료(출력 토큰).\n${tokens(data.areas[a].output)} · 연료비 추정 ${usd(data.areas[a].cost)}\n오늘 ${Math.round((data.areas[a].output / total) * 100)}% = 오늘 세 영역이 태운 연료 중 ${AREA_LABEL[a]} 몫${
                   feed?.split
-                    ? `\n주간 몫 ${Math.round(feed.split.parts[a])}% = 주 연료통(주간 한도)에서 이번 주 나눠 쓴 몫(근사)`
+                    ? `\n주간 몫 ${Math.round(feed.split.parts[a])}% = 주간 한도에서 이 영역이 쓴 몫(근사)`
                     : ""
                 }`}
               />
@@ -628,7 +640,7 @@ function Tank({
         fill="#e8edf7"
         fillOpacity="0.85"
       >
-        {tokens(today)} · {Math.round(share * 100)}%
+        {tokens(today)} · 오늘 {Math.round(share * 100)}%
       </text>
       {weeklyPart !== undefined && (
         <text
