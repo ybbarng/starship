@@ -130,6 +130,8 @@ body {
   font-weight: 700;
   line-height: 1.35;
   margin: 1.8em 0 0.6em;
+  /* #절 링크로 왔을 때 위에 붙은 머리(파일 이름·경로)에 제목이 가리지 않게 */
+  scroll-margin-top: 6rem;
 }
 .md-body h1 {
   font-size: 1.75em;

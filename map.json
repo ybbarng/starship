@@ -363,7 +363,7 @@
       "parent": "cabin",
       "status": "done",
       "size": 1,
-      "summary": "md의 보기는 그린 글 화면(/files/view)으로. 책상 글 속에만 적힌 경로에도 보기·열기 단추. md 속 HTML·그림은 그리지 않는다",
+      "summary": "md의 보기는 그린 글 화면(/files/view)으로. 책상 글 속에만 적힌 경로에도 보기·열기 단추. md 속 HTML·그림은 그리지 않는다. 문서 사이 상대 링크·#절 링크로 옮겨 다닌다",
       "since": "2026-11-03",
       "found": "2026-11-03",
       "links": [

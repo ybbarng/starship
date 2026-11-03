@@ -94,7 +94,7 @@
 
 책상은 읽기 전용이다. 답은 이미 있는 Task 동작(`POST /v1/actions`의 `answer`)으로 보낸다.
 
-1. 비서는 기다림 하나하나를 Task로도 내보낸다. id는 `desk:<crewId>:<waitId>`(`deskTaskId`)다. 출처(`source`)는 `deskSource`가 정한다. `topic`이 `code-review`면 `{ kind: "review" }`(프로토콜 v1의 코드 리뷰 요청), 아니면 `{ kind: "session" }`이다. 책상 기다림은 출처가 `review`여도 사람이 보낸 교신(Hail)이 아니라서 교신을 만들지 않고, 그 승무원은 여전히 "나를 기다림"이다. 동작은 `answer`와 `snooze`이고, 세션 창이 있으면 `focus`도 붙는다. `dismiss`는 없다. 책상은 세션이 지우는 것이라, 선실에서 치워도 다음에 읽을 때 다시 생기기 때문이다.
+1. 비서는 기다림 하나하나를 Task로도 내보낸다. id는 `desk:<crewId>:<waitId>`(`deskTaskId`)다. 출처(`source`)는 `deskSource`가 정한다. `topic`이 `code-review`면 `{ kind: "review" }`(프로토콜 v1의 코드 리뷰 요청), 아니면 `{ kind: "session" }`이다. 코드 리뷰면 기다림의 첫 http(s) 주소(`items[].url`, 없으면 `options[].url`)를 Task의 `url`로 내보낸다(`deskUrl`, 2026-11-03: 결재함 서류에서 PR로 바로 가게). 다른 기다림은 주소가 여럿이라 하나를 고르지 않고 `url`을 비운다. Task의 `since`는 기다림의 `since`를 `parseWhen`으로 읽는다(날짜만 적으면 이 컴퓨터 시간대 자정, 없으면 지금). 책상 기다림은 출처가 `review`여도 사람이 보낸 교신(Hail)이 아니라서 교신을 만들지 않고, 그 승무원은 여전히 "나를 기다림"이다. 동작은 `answer`와 `snooze`이고, 세션 창이 있으면 `focus`도 붙는다. `dismiss`는 없다. 책상은 세션이 지우는 것이라, 선실에서 치워도 다음에 읽을 때 다시 생기기 때문이다.
 2. 고를 것(`choices`)은 `deskChoices`가 정한다. decide는 선택지 `label`들, approve는 `["승인","보류"]`, check는 `["확인함","고칠 것 있음"]`이다. answer는 고를 것 없이 글만 받는다.
 3. 선실 카드는 그 Task id로 `answer`를 보낸다.
    - 고른 것에 글을 덧붙이면 `"<고른 것> — <글>"`처럼 한 줄로 잇는다(`deskAnswer`).

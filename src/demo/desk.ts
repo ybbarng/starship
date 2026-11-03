@@ -1,12 +1,15 @@
 // 데모 책상: 지어낸 세션들이 나를 기다리는 것과 지금 하는 일.
 // web-shop은 네 종류(decide·check·approve·answer)와 코드 리뷰(topic code-review)가 다 있고 지도도 있다. orbit-notes는 지도 없이 책상만 있다.
 // 기다림 하나하나는 스냅샷의 Task로도 나간다(id desk:<crewId>:<waitId>). 답하면 책상에서도 빠진다.
+
+import { parseWhen } from "@/protocol/common";
 import {
   answerKey,
   type Desk,
   deskChoices,
   deskSource,
   deskTaskId,
+  deskUrl,
   type Waiting,
 } from "@/protocol/desk";
 import type { Task, TaskKind } from "@/protocol/v1";
@@ -187,6 +190,7 @@ const KIND: Record<Waiting["type"], TaskKind> = {
 /**
  * 책상의 기다림을 Task로 내보낸다. 비서가 하는 일과 같은 모양.
  * 출처는 deskSource: 코드 리뷰(topic "code-review")면 review라서 결재함 "코드 리뷰" 칸에 모인다.
+ * 코드 리뷰면 PR 주소(deskUrl)를 url로 낸다.
  */
 export function deskTasks(
   crewId: string,
@@ -194,19 +198,24 @@ export function deskTasks(
   context: Task["context"],
   now = Date.now(),
 ): Task[] {
-  return desk.waiting.map((w) => ({
-    id: deskTaskId(crewId, w.id),
-    kind: KIND[w.type],
-    source: deskSource(w),
-    context,
-    title: w.title,
-    detail: w.detail,
-    from: crewId,
-    crewId,
-    since: w.since ? Date.parse(w.since) : now,
-    actions: ["focus", "answer", "snooze"],
-    choices: deskChoices(w),
-  }));
+  return desk.waiting.map((w) => {
+    const url = deskUrl(w);
+    return {
+      id: deskTaskId(crewId, w.id),
+      kind: KIND[w.type],
+      source: deskSource(w),
+      context,
+      title: w.title,
+      detail: w.detail,
+      from: crewId,
+      crewId,
+      // 날짜만 적은 since("2026-10-31")도 이 컴퓨터 시간대 자정으로 읽는다
+      since: w.since ? parseWhen(w.since) : now,
+      actions: ["focus", "answer", "snooze"],
+      choices: deskChoices(w),
+      ...(url ? { url } : {}),
+    };
+  });
 }
 
 /** 답하거나 치우거나 미룬 기다림, 읽은 답을 뺀 책상. hidden은 Task id나 answerKey로 묻는다. */
