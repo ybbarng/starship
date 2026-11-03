@@ -151,6 +151,9 @@ export function useSnapshot() {
   });
 }
 
+/** 할 일 "미루기" 한 번의 길이 */
+export const SNOOZE_MS = 3_600_000;
+
 const NO_TASKS: Task[] = [];
 const NO_CREW: Crew[] = [];
 
@@ -249,13 +252,16 @@ export function useAct() {
       task: Task,
       action: Extract<ActionRequest, { target: "task" }>["action"],
       answer?: string,
+      /** 미룰 끝(Unix 밀리초). 안 주면 지금부터 1시간 */
+      until?: number,
     ) =>
       send({
         target: "task",
         id: task.id,
         action,
         answer,
-        until: action === "snooze" ? Date.now() + 3_600_000 : undefined,
+        until:
+          action === "snooze" ? (until ?? Date.now() + SNOOZE_MS) : undefined,
       }),
     crew: (crew: Crew, action: Crew["actions"][number]) =>
       send({ target: "crew", id: crew.id, action }),
