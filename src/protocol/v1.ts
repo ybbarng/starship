@@ -3,6 +3,7 @@
 // 승무원 지도는 GET {base}/v1/crew/{id}/map, 책상은 GET {base}/v1/crew/{id}/desk 로 준다.
 // 자세한 설명은 docs/protocol.md.
 import { z } from "zod";
+import { lenientArray } from "./common";
 import { Desk } from "./desk";
 import { ProjectMap } from "./map";
 
@@ -302,19 +303,44 @@ export const Link = z.object({
 });
 export type Link = z.infer<typeof Link>;
 
-export const Snapshot = z.object({
-  protocol: z.literal(PROTOCOL),
-  generatedAt: Millis,
-  /** 할 일. 서버가 급한 순으로 정렬해 준다. 첫째가 "지금 할 일". */
-  tasks: z.array(Task),
-  hails: z.array(Hail),
-  crew: z.array(Crew),
-  gauges: z.array(Gauge),
-  /** 관제 링크(회선 상태). 형식이 틀리면 스냅샷 전체를 버리지 않고 이것만 뺀다. */
-  link: Link.optional().catch(undefined),
-  /** 화면 구석에 적을 안내(예: "데모 데이터"). */
-  notice: z.string().optional(),
-});
+/**
+ * GET {base}/v1/snapshot 응답.
+ * 바깥(protocol·generatedAt)만 엄격하다. tasks·hails·crew·gauges는 항목마다 따로 검사해
+ * 틀린 항목만 빼고, 왜 뺐는지는 problems에 모은다(본부가 모르는 enum 값을 하나 보내도 화면 전체가 죽지 않게).
+ */
+export const Snapshot = z
+  .object({
+    protocol: z.literal(PROTOCOL),
+    generatedAt: Millis,
+    /** 할 일. 서버가 급한 순으로 정렬해 준다. 첫째가 "지금 할 일". */
+    tasks: lenientArray(Task, "tasks"),
+    hails: lenientArray(Hail, "hails"),
+    crew: lenientArray(Crew, "crew"),
+    gauges: lenientArray(Gauge, "gauges"),
+    /** 관제 링크(회선 상태). 형식이 틀리면 스냅샷 전체를 버리지 않고 이것만 뺀다. */
+    link: Link.optional().catch(undefined),
+    /** 화면 구석에 적을 안내(예: "데모 데이터"). */
+    notice: z.string().optional(),
+    /** 형식 검사에 걸려 뺀 항목(사람이 읽을 한 줄씩). 본부가 보내도 되고 Starship이 더해 넣는다. 없으면 생략. */
+    problems: z.array(z.string()).optional(),
+  })
+  .transform(({ tasks, hails, crew, gauges, problems, ...rest }) => {
+    const all = [
+      ...(problems ?? []),
+      ...tasks.problems,
+      ...hails.problems,
+      ...crew.problems,
+      ...gauges.problems,
+    ];
+    return {
+      ...rest,
+      tasks: tasks.items,
+      hails: hails.items,
+      crew: crew.items,
+      gauges: gauges.items,
+      ...(all.length ? { problems: all } : {}),
+    };
+  });
 export type Snapshot = z.infer<typeof Snapshot>;
 
 export const ActionRequest = z.discriminatedUnion("target", [
