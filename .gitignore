@@ -6,6 +6,6 @@ coverage/
 next-env.d.ts
 .env*.local
 .DS_Store
-.next-check/
+.next-*/
 .claude/worktrees/
 .cache/
