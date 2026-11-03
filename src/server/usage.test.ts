@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createUsageState,
   loadCache,
+  projectPaths,
   scanLogs,
   type UsageState,
 } from "./usage";
@@ -15,7 +16,7 @@ const PROJECT = "-home-me-personal-projects-starship";
 function line(
   id: string,
   output: number,
-  more: { sidechain?: boolean; cwd?: string; text?: string } = {},
+  more: { sidechain?: boolean; cwd?: string; text?: string; at?: string } = {},
 ) {
   // 실제 기록과 같은 차례: message(model·id·content·usage) 다음에 맨 위 type·timestamp·cwd·sessionId
   return `${JSON.stringify({
@@ -35,7 +36,7 @@ function line(
       },
     },
     type: "assistant",
-    timestamp: new Date().toISOString(),
+    timestamp: more.at ?? new Date().toISOString(),
     cwd: more.cwd ?? "/home/me/personal/projects/starship",
     sessionId: "sess-1",
   })}\n`;
@@ -174,6 +175,36 @@ describe("기록 훑기", () => {
     expect([...(s.cwds.get(PROJECT)?.keys() ?? [])]).toEqual([
       "/home/me/personal/projects/starship",
     ]);
+  });
+
+  it("폴더 이름을 바꾸면 옛 이름의 줄이 더 많아도 가장 최근 작업 폴더로 본다", async () => {
+    const old = "/home/me/personal/projects/mighty/mighty";
+    const now = "/home/me/personal/projects/game/game";
+    const day = new Date(Date.now() - 86_400_000).toISOString();
+    await writeFile(
+      log,
+      line("o1", 1, { cwd: old, at: day }) +
+        line("o2", 1, { cwd: old, at: day }) +
+        line("o3", 1, { cwd: old, at: day }) +
+        line("n1", 1, { cwd: now }),
+    );
+    const s = createUsageState();
+    await scanLogs(s, projects);
+    expect(projectPaths(s)[PROJECT]).toBe(now);
+  });
+
+  it("본 세션이 작업 트리 안에서 일한 줄은 그 저장소 폴더로 센다", async () => {
+    const repo = "/home/me/personal/projects/game/game";
+    await writeFile(
+      log,
+      line("m1", 1, {
+        cwd: repo,
+        at: new Date(Date.now() - 60_000).toISOString(),
+      }) + line("m2", 1, { cwd: `${repo}/.claude/worktrees/hq` }),
+    );
+    const s = createUsageState();
+    await scanLogs(s, projects);
+    expect(projectPaths(s)[PROJECT]).toBe(repo);
   });
 
   it("남긴 상태를 다시 읽으면 처음부터 읽지 않고, 이어서 온 줄도 바꿔 끼운다", async () => {

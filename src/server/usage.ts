@@ -55,7 +55,7 @@ const CHUNK = 1024 * 1024;
 const RECENT_IDS = 5_000;
 /** 한 번에 이만큼 넘게 붙잡으면 그만큼 쉰다(코어 하나를 절반쯤만 쓴다). */
 const BUSY_MS = 25;
-const CACHE_VERSION = 4;
+const CACHE_VERSION = 5; // 5: cwds 값이 줄 수에서 마지막으로 본 시각으로(2026-11-04)
 
 const USAGE_MARK = Buffer.from(USAGE_KEY);
 const ASSISTANT_MARK = Buffer.from('"type":"assistant"');
@@ -69,7 +69,10 @@ export type UsageState = {
   recent: Map<string, UsageRecord>;
   /** 32일 안에 센 요청 id → 날짜. 손으로 복사·이동한 기록 파일에 같은 요청이 또 있으면 거른다 */
   seen: Map<string, string>;
-  /** 프로젝트(기록 폴더) → 작업 폴더별 줄 수. 가장 많은 것을 그 프로젝트의 경로로 본다 */
+  /**
+   * 프로젝트(기록 폴더) → 작업 폴더별 마지막으로 본 시각(ms). 가장 최근 것을 그 프로젝트의 경로로 본다.
+   * 폴더 이름을 바꾸면 옛 이름의 줄이 훨씬 많아도 지금 이름이 이긴다(2026-11-04 mighty → game).
+   */
   cwds: Map<string, Map<string, number>>;
   scannedAt: number;
   scanMs: number;
@@ -182,7 +185,13 @@ export async function getUsage(
   };
 }
 
-function projectPaths(s: UsageState): ProjectPaths {
+/** 작업 트리(…/.claude/worktrees/<이름>) 안에서 일한 줄은 그 저장소 폴더로 센다 */
+export function repoOf(cwd: string): string {
+  const i = cwd.indexOf("/.claude/worktrees/");
+  return i > 0 ? cwd.slice(0, i) : cwd;
+}
+
+export function projectPaths(s: UsageState): ProjectPaths {
   const out: ProjectPaths = {};
   for (const [project, counts] of s.cwds) {
     let best: string | undefined;
@@ -421,9 +430,13 @@ function take(
     if (oldest !== undefined) s.recent.delete(oldest);
   }
   if (got.cwd && !got.sidechain) {
-    const counts = s.cwds.get(project) ?? new Map<string, number>();
-    counts.set(got.cwd, (counts.get(got.cwd) ?? 0) + 1);
-    s.cwds.set(project, counts);
+    const seen = s.cwds.get(project) ?? new Map<string, number>();
+    // 작업 트리에서 연 세션(기록 폴더 이름에 -claude-worktrees-)은 지금처럼 따로 센다
+    const cwd = project.includes("-claude-worktrees-")
+      ? got.cwd
+      : repoOf(got.cwd);
+    seen.set(cwd, Math.max(seen.get(cwd) ?? 0, r.t));
+    s.cwds.set(project, seen);
   }
 }
 
