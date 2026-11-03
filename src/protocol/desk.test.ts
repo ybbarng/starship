@@ -5,6 +5,7 @@ import {
   deskChoices,
   deskSource,
   deskTaskId,
+  deskUrl,
   parseDesk,
   summarizeDesk,
   type Waiting,
@@ -277,6 +278,42 @@ describe("할 일과 이어 주기", () => {
     expect(deskSource({ ...w, topic: "code-review" })).toEqual({
       kind: "review",
     });
+  });
+
+  it("코드 리뷰면 첫 http(s) 주소를 Task.url로: items 먼저, 없으면 options", () => {
+    const review: Waiting = {
+      id: "pr-231",
+      type: "check",
+      topic: "code-review",
+      title: "shop#231 결제 재시도 고침 — 사람 리뷰 필요",
+      items: [
+        { label: "리뷰 메모", path: "/Users/me/Desktop/review.md" },
+        {
+          label: "shop#231",
+          url: "https://github.com/example/shop/pull/231",
+        },
+        { label: "shop#232", url: "https://github.com/example/shop/pull/232" },
+      ],
+      options: [{ id: "a", label: "a", url: "https://example.com/a" }],
+    };
+    expect(deskUrl(review)).toBe("https://github.com/example/shop/pull/231");
+    expect(deskUrl({ ...review, items: undefined })).toBe(
+      "https://example.com/a",
+    );
+    expect(
+      deskUrl({ ...review, items: [{ label: "주소 없음" }], options: [] }),
+    ).toBeUndefined();
+  });
+
+  it("코드 리뷰가 아니면 주소가 있어도 Task.url을 내지 않는다", () => {
+    expect(deskUrl(w)).toBeUndefined();
+    expect(
+      deskUrl({
+        ...w,
+        type: "check",
+        items: [{ label: "데모", url: "https://example.com/demo" }],
+      }),
+    ).toBeUndefined();
   });
 
   it("요약은 기다림 수와 하는 일 수", () => {

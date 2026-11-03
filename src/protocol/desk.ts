@@ -187,6 +187,20 @@ export function deskSource(w: Waiting): { kind: "review" | "session" } {
   return { kind: w.topic === "code-review" ? "review" : "session" };
 }
 
+/**
+ * 기다림을 할 일로 내보낼 때의 원래 서비스 주소(Task.url).
+ * 코드 리뷰(topic "code-review")일 때만 낸다: 확인 항목(items[].url)에서 먼저, 없으면 선택지(options[].url)에서
+ * 첫 http(s) 주소. 결재함 서류에서 PR로 바로 가게(2026-11-03). 다른 기다림은 주소가 여럿이라 하나를 고르지 않는다.
+ */
+export function deskUrl(w: Waiting): string | undefined {
+  if (w.topic !== "code-review") return undefined;
+  const urls = [
+    ...(w.items ?? []).map((i) => i.url),
+    ...(w.options ?? []).map((o) => o.url),
+  ];
+  return urls.find((u) => u !== undefined && /^https?:\/\//i.test(u));
+}
+
 /** 기다림 하나에 답할 때 고를 수 있는 것. answer는 글로만 답한다. */
 export function deskChoices(w: Waiting): string[] | undefined {
   switch (w.type) {
