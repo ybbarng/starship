@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { type ComponentType, useEffect, useMemo, useState } from "react";
 import { useBridge, useCrewDesk, useCrewMap } from "@/data/hooks";
+import { useSent } from "@/data/sent";
 // 선실: 승무원(프로젝트) 하나의 방. 가운데 지도 한 장, 위쪽 줄에 진행률·늘어난 구역·갱신 시각,
 // 오른쪽 판에 고른 구역의 자세한 내용. 설계: docs/map.md "화면: 선실".
 // 가운데 그림은 기본이 개척지(FrontierView, 끌고 확대해 다니는 육각 행성 지도. 설계: docs/frontier.md)다.
@@ -225,7 +226,9 @@ function MapRoom({
   const [selected, setSelected] = useState<string | null>(map.here ?? null);
   // 고르기 전에는 기다리는 것이 있으면 책상, 없으면 지도. 책상이 늦게 와도 따라간다.
   const [pickedTab, setTab] = useState<SideTab | null>(null);
-  const waiting = crewTaskCount(desk, tasks);
+  // 읽음을 구독해야 "읽음"을 누른 순간 배지도 줄어든다(전에는 다음 폴링까지 그대로였다)
+  const read = useSent((s) => s.read);
+  const waiting = crewTaskCount(crewId, desk, tasks, read);
   const tabs: SideTab[] = crew?.brief
     ? ["tasks", "map", "brief"]
     : ["tasks", "map"];

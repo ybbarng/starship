@@ -3,7 +3,7 @@
 // 선실 옆판 "할 일": 이 승무원을 기다리는 것 전부. 결재함(조종석)에서 이 승무원 묶음을 연 것과 같은 내용이다.
 //   답해 둔 것(물어본 것에 세션이 남긴 답) → 책상(기다림 + 하는 일) → 책상 밖에서 온 일 → 마지막 답변(접힘)
 // 세 화면의 역할: docs/crew-views.md
-import { isReadHidden } from "@/data/sent";
+import { readKey } from "@/data/sent";
 import type { Desk } from "@/protocol/desk";
 import type { Task } from "@/protocol/v1";
 import { Paper, ReplyNote } from "@/protos/cockpit/Inbox";
@@ -24,17 +24,20 @@ function fromDesk(t: Task): boolean {
  * 할 일 판 배지: 이 승무원의 결재(decisionsByCrew, 조종석 결재함 "결재 n"과 같은 수) + 읽지 않은 답해 둔 것.
  * 책상 기다림은 `desk:` Task로 결재에 들어 있으니 desk.waiting을 따로 세지 않는다. 그래서 미룬 기다림·
  * 아직 Task가 오지 않은 기다림은 결재가 아니라 세지 않는다(2026-11-03, 전에는 desk.waiting.length를 세어
- * 조종석보다 많았다). 답해 둔 것은 읽음을 눌러 숨긴 것은 빼고 센다. 정의: docs/crew-views.md "건수".
+ * 조종석보다 많았다). 답해 둔 것은 읽음을 눌러 숨긴 것(read, src/data/sent.ts)은 빼고 센다.
+ * read는 부르는 쪽이 useSent((s) => s.read)로 구독해 넘긴다. 그래야 읽음을 누르면 배지도 바로 다시 그려진다.
+ * 정의: docs/crew-views.md "건수".
  */
 export function crewTaskCount(
+  crewId: string,
   desk: Desk | null,
   tasks: readonly Task[],
-  crewId: string | undefined = tasks.find((t) => t.crewId)?.crewId,
+  read: Readonly<Record<string, true>>,
 ): number {
   const answers = (desk?.answers ?? []).filter(
-    (a) => !isReadHidden(a.id, crewId),
+    (a) => !read[readKey(crewId, a.id)],
   );
-  const decisions = crewId ? (decisionsByCrew(tasks).get(crewId) ?? []) : [];
+  const decisions = decisionsByCrew(tasks).get(crewId) ?? [];
   return decisions.length + answers.length;
 }
 

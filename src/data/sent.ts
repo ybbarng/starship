@@ -88,13 +88,3 @@ export function noteTaskResult(
   if (req.action === "snooze" && req.until !== undefined)
     useSent.getState().snooze(deskSentKey(req.id), req.until);
 }
-
-/**
- * 읽음으로 숨긴 답인지. crewId를 모르면 id만으로 본다(답 id는 책상 안에서만 겹치지 않는다).
- * 화면 밖 계산(crewTaskCount)에서도 쓰려고 훅이 아니라 지금 값을 읽는다.
- */
-export function isReadHidden(answerId: string, crewId?: string): boolean {
-  const read = useSent.getState().read;
-  if (crewId) return !!read[readKey(crewId, answerId)];
-  return Object.keys(read).some((k) => k.endsWith(`/${answerId}`));
-}

@@ -2,14 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { type Desk, deskTaskId } from "@/protocol/desk";
 import type { Task } from "@/protocol/v1";
 import { crewTaskCount } from "@/ui/desk/CrewTasks";
-import {
-  deskSentKey,
-  forkKey,
-  isReadHidden,
-  noteTaskResult,
-  readKey,
-  useSent,
-} from "./sent";
+import { deskSentKey, forkKey, noteTaskResult, readKey, useSent } from "./sent";
 
 beforeEach(() => useSent.setState({ sent: {}, read: {}, snoozed: {} }));
 
@@ -96,13 +89,26 @@ describe("crewTaskCount: 읽음으로 숨긴 답해 둔 것은 세지 않는다"
     actions: ["answer"],
   };
 
+  // 화면은 useSent((s) => s.read)를 구독해 넘긴다. 읽음을 누르면 배지가 바로 다시 그려지게(2026-11-03)
+  const read = () => useSent.getState().read;
+
   it("숨긴 것을 빼고, 본부가 못 받아 되돌리면 다시 센다", () => {
-    expect(crewTaskCount(desk, [reply])).toBe(2);
+    expect(crewTaskCount("web-shop", desk, [reply], read())).toBe(2);
     useSent.getState().setRead(readKey("web-shop", "a1"), true);
-    expect(isReadHidden("a1", "web-shop")).toBe(true);
-    expect(crewTaskCount(desk, [reply])).toBe(1);
+    expect(crewTaskCount("web-shop", desk, [reply], read())).toBe(1);
     useSent.getState().setRead(readKey("web-shop", "a1"), false);
-    expect(crewTaskCount(desk, [reply])).toBe(2);
+    expect(crewTaskCount("web-shop", desk, [reply], read())).toBe(2);
+  });
+
+  it("넘긴 읽음 기록으로 센다(가게의 지금 값을 몰래 읽지 않는다)", () => {
+    const hidden = { [readKey("web-shop", "a1")]: true as const };
+    expect(crewTaskCount("web-shop", desk, [reply], hidden)).toBe(1);
+    expect(crewTaskCount("web-shop", desk, [reply], {})).toBe(2);
+  });
+
+  it("할 일이 마지막 답변뿐이어도 승무원 id로 찾는다(할 일에서 crewId를 짐작하지 않는다)", () => {
+    const hidden = { [readKey("web-shop", "a2")]: true as const };
+    expect(crewTaskCount("web-shop", desk, [], hidden)).toBe(1);
   });
 
   it("결재(decisionsByCrew) + 읽지 않은 답: 미뤘거나 아직 Task가 없는 기다림은 세지 않는다", () => {
@@ -134,12 +140,12 @@ describe("crewTaskCount: 읽음으로 숨긴 답해 둔 것은 세지 않는다"
       })),
     };
     expect(
-      crewTaskCount(three, [deskTask("w1"), outside, reply], "web-shop"),
+      crewTaskCount("web-shop", three, [deskTask("w1"), outside, reply], {}),
     ).toBe(2 + 2);
   });
 
   it("다른 승무원에서 숨긴 같은 id는 건드리지 않는다", () => {
     useSent.getState().setRead(readKey("blog", "a1"), true);
-    expect(crewTaskCount(desk, [reply], "web-shop")).toBe(2);
+    expect(crewTaskCount("web-shop", desk, [reply], read())).toBe(2);
   });
 });
