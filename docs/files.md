@@ -8,7 +8,7 @@
 
 코드: [`src/server/files.ts`](../src/server/files.ts)(검사), [`src/app/api/files/route.ts`](../src/app/api/files/route.ts)(보기), [`src/app/api/files/open/route.ts`](../src/app/api/files/open/route.ts)(열기), [`src/ui/kit/FileButtons.tsx`](../src/ui/kit/FileButtons.tsx)(단추), [`src/ui/desk/waitFiles.ts`](../src/ui/desk/waitFiles.ts)(책상 글 속 경로 고르기), [`src/app/files/view/page.tsx`](../src/app/files/view/page.tsx)·[`src/ui/files/MdView.tsx`](../src/ui/files/MdView.tsx)(md 보기 화면). 시험: [`src/server/files.test.ts`](../src/server/files.test.ts), [`src/ui/desk/waitFiles.test.ts`](../src/ui/desk/waitFiles.test.ts), [`src/ui/kit/filePaths.test.ts`](../src/ui/kit/filePaths.test.ts), [`src/ui/files/mdLinks.test.ts`](../src/ui/files/mdLinks.test.ts).
 
-## 비서가 설정할 환경 변수
+## 띄우는 쪽이 설정할 환경 변수
 
 | 이름 | 뜻 | 예 |
 |---|---|---|
@@ -16,7 +16,7 @@
 
 - 이 값이 없으면: 서버 모드(`STARSHIP_SERVER_URL`이 있을 때)는 **모든 파일 요청을 거절**한다. 데모 모드는 저장소의 `public/demo-files`(지어낸 예시 파일)만 허용하고, 열기는 검사까지만 하고 실제로 실행하지 않는다.
 - 허용 폴더는 좁게 잡는다. 홈 전체(`~`)는 권하지 않는다. 숨김 폴더는 막히지만, 홈 아래에는 숨김이 아닌 민감한 파일(`~/Library` 아래 메일·메시지 등)도 있다.
-- 바꾼 뒤에는 앱(7790)을 다시 띄워야 반영된다.
+- 바꾼 뒤에는 앱을 다시 띄워야 반영된다.
 
 ## 1. 데이터의 뜻·연결·책임
 
@@ -36,7 +36,7 @@
 | 보기 응답이 이 앱 출처로 스크립트를 돌리지 못한다 | `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox`, `Content-Disposition: inline` |
 | 보기는 200MB까지 | `MAX_VIEW_BYTES`. 넘으면 413, 열기로 본다 |
 | 다른 사이트가 내 파일을 끌어가지 못한다 | 보기는 `Sec-Fetch-Site`가 `same-origin`(카드 링크)이고 `Host`가 이 컴퓨터 자신(127.0.0.1·localhost·[::1])일 때만. `none`(주소창)은 브라우저가 아닌 클라이언트가 마음대로 넣을 수 있어 받지 않는다(2026-11-01 비서 지적). `Host`를 보면 DNS 재바인딩도 막힌다 |
-| 같은 Wi-Fi·VPN의 다른 기기가 못 본다 | 서버를 `next start -H 127.0.0.1`로 띄운다(비서 install-starship.sh). 코드는 ① `STARSHIP_BIND` 환경 변수 ② 띄울 때 인자(`-H`·`--hostname`) ③ `HOSTNAME` 순서로 보고, 처음 보이는 값이 이 컴퓨터 자신이 아니면(아무것도 없어도) 모든 주소로 뜬 것으로 보고 보기·열기를 거절한다(`boundToLoopback`). 다른 기기는 `Host`·`Origin`을 꾸밀 수 있어서다. 데모 예시 파일만 예외 |
+| 같은 Wi-Fi·VPN의 다른 기기가 못 본다 | 서버를 `next start -H 127.0.0.1`로 띄운다(`pnpm start`가 이렇게 띄운다). 코드는 ① `STARSHIP_BIND` 환경 변수 ② 띄울 때 인자(`-H`·`--hostname`) ③ `HOSTNAME` 순서로 보고, 처음 보이는 값이 이 컴퓨터 자신이 아니면(아무것도 없어도) 모든 주소로 뜬 것으로 보고 보기·열기를 거절한다(`boundToLoopback`). 다른 기기는 `Host`·`Origin`을 꾸밀 수 있어서다. 데모 예시 파일만 예외 |
 | `next dev`에서도 보기·열기가 된다(2026-11-03) | `next dev`는 서버를 자식 프로세스로 띄우며 `-H`를 인자로 넘기지 않아(`next/dist/cli/next-dev.js`) ②가 보이지 않고 늘 거절됐다. 그래서 `pnpm dev`는 `STARSHIP_BIND=127.0.0.1 next dev -H 127.0.0.1`로 띄운다. `pnpm start`도 `-H 127.0.0.1`을 붙인다(`next start`는 같은 프로세스라 ②로 보인다). 다른 방식으로 띄우면 `STARSHIP_BIND`를 실제로 묶은 주소와 같게 둔다 |
 | 앱 전체가 이 컴퓨터 자신의 이름으로만 열린다 | `src/proxy.ts`가 모든 요청의 `Host`를 보고 127.0.0.1·localhost·[::1]이 아니면 421(2026-11-01 사용자 결정). 남의 도메인이 127.0.0.1을 가리키게 하는 DNS 재바인딩으로 조종석·API를 읽지 못한다. 조종석을 다른 기기에서 보지 않기로 해 로그인은 두지 않았다. 폰 등에서 보게 되면 이 검사를 넓히기 전에 로그인부터 둔다 |
 | 다른 사이트가 내 맥에서 파일을 열지 못한다 | 열기는 `isSameOrigin`(Origin = Host)일 때만 |
