@@ -610,11 +610,11 @@ function Tank({
           strokeOpacity="0.45"
         />
       ))}
-      {/* 이름판 */}
+      {/* 이름판. "18.9만 · 오늘 55%"가 들어가게 탱크보다 조금 넓다(탱크 사이 54 안) */}
       <rect
-        x={t.x + 6}
+        x={t.x - 8}
         y={t.y + t.h + 12}
-        width={t.w - 12}
+        width={t.w + 16}
         height={weeklyPart === undefined ? 30 : 43}
         rx="2"
         fill="#0d1118"
