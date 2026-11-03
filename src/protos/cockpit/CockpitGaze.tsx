@@ -18,8 +18,12 @@ import { lightTime } from "@/protos/open-bridge/cockpit/ui";
 import { Interior } from "@/protos/open-bridge/interior/Interior";
 import { ScaleNote } from "@/sky/ScaleNote";
 import { SpaceView } from "@/sky/SpaceView";
-import { formatDistance, formatNearDistance } from "@/sky/telemetry";
-import { useKoreaTime, useTelemetry } from "@/sky/useTelemetry";
+import {
+  formatDistance,
+  formatNearDistance,
+  type Telemetry,
+} from "@/sky/telemetry";
+import { useKoreaTime, useTelemetryPick } from "@/sky/useTelemetry";
 import { useDestination } from "@/sky/voyage";
 import { EventLayer } from "@/ui/events";
 import {
@@ -525,18 +529,26 @@ const SEOUL = new Intl.DateTimeFormat("en-GB", {
   hourCycle: "h23",
 });
 
+/** 유리 아래 글이 쓰는 값만, 글로 바꿔서. 보이는 글이 그대로면 다시 그리지 않는다 */
+function glassPick(t: Telemetry) {
+  return {
+    traveling: t.traveling,
+    target: t.targetKm === null ? null : formatNearDistance(t.targetKm),
+    km:
+      t.earthKm < 14_959_787
+        ? `${Math.round(t.earthKm).toLocaleString("ko-KR")} km`
+        : formatDistance(t.earthKm),
+    light: lightTime(t.earthKm),
+  };
+}
+
 /** 유리 아래 가장자리의 작은 글: 목적지 · 지구까지 거리 · 교신 지연 · 한국 시각(진짜 값) */
 function GlassReadout({ bottom }: { bottom: number }) {
-  const t = useTelemetry(2);
-  // 1초마다 다시 그려 준다. 화면이 뜨기 전(서버 그림)에는 "--:--:--"
-  const korea = useKoreaTime();
-  const time = korea.date ? SEOUL.format(new Date()) : korea.time;
+  // 보이는 글이 같으면 다시 그리지 않고, 이동 중이 아니면 1초 1번만 본다(2026-11-03).
+  // 1초마다 바뀌는 시각은 KoreaClock만 다시 그린다.
+  const t = useTelemetryPick(glassPick, 2, 1);
   const dest = useDestination();
   const atEarth = dest.id === "earth" && !t.traveling;
-  const km =
-    t.earthKm < 14_959_787
-      ? `${Math.round(t.earthKm).toLocaleString("ko-KR")} km`
-      : formatDistance(t.earthKm);
   return (
     <div
       data-glass-readout
@@ -549,16 +561,14 @@ function GlassReadout({ bottom }: { bottom: number }) {
         </span>
         <span className="font-sans text-white/85">{dest.ko}</span>
       </span>
-      {t.targetKm !== null && !atEarth && (
+      {t.target !== null && !atEarth && (
         <>
           <span className="text-white/20">·</span>
           <span data-target-distance>
             <span className="font-sans text-white/35">
               {t.traveling ? "남은 거리 " : `${dest.ko}까지 `}
             </span>
-            <span className="text-white/85">
-              {formatNearDistance(t.targetKm)}
-            </span>
+            <span className="text-white/85">{t.target}</span>
           </span>
         </>
       )}
@@ -567,20 +577,26 @@ function GlassReadout({ bottom }: { bottom: number }) {
         <span className="font-sans text-white/35">
           {atEarth ? "지구 고도 " : "지구까지 "}
         </span>
-        {km}
+        {t.km}
       </span>
       <span className="text-white/20">·</span>
       <span>
         <span className="font-sans text-white/35">교신 지연 </span>
-        {lightTime(t.earthKm)}
+        {t.light}
       </span>
       <span className="text-white/20">·</span>
       <span>
         <span className="font-sans text-white/35">한국 </span>
-        {time}
+        <KoreaClock />
       </span>
       <span className="text-white/20">·</span>
       <ScaleNote />
     </div>
   );
+}
+
+/** 한국 시각만 1초마다 다시 그린다. 화면이 뜨기 전(서버 그림)에는 "--:--:--" */
+function KoreaClock() {
+  const korea = useKoreaTime();
+  return <>{korea.date ? SEOUL.format(new Date()) : korea.time}</>;
 }

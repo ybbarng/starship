@@ -38,6 +38,8 @@ export type Shown = {
   /** 본부가 값을 받은 때 */
   at?: number;
   stale: boolean;
+  /** 본부가 방금 실패해 Starship 서버가 기억해 둔 마지막 값이다 */
+  held?: boolean;
   now: number;
   demo: boolean;
 };
@@ -54,7 +56,9 @@ export function useShownLimits(): Shown {
     ready: true,
     limits,
     at: data.at,
-    stale: isStale(data.at, now),
+    // 서버가 기억해 둔 값을 준 것(본부가 방금 실패)도 오래된 값으로 흐리게
+    stale: data.stale === true || isStale(data.at, now),
+    held: data.stale === true,
     now,
     demo: data.source === "demo",
   };
@@ -88,7 +92,9 @@ export function WeeklyFuelBand() {
         <span className="ml-auto font-mono text-[10.5px] text-white/35">
           {shown.demo ? "데모 · 지어낸 값" : "계정 한도 · 본부 값"}
           {at !== undefined && ` · ${agoText(at, now)} 값`}
-          {stale && " · 오래된 값이에요"}
+          {shown.held
+            ? " · 본부에 닿지 않아 마지막으로 받은 값이에요"
+            : stale && " · 오래된 값이에요"}
         </span>
       </div>
       {!main ? (

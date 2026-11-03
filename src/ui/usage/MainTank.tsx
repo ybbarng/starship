@@ -46,6 +46,8 @@ export type WeeklyFeed = {
   now: number;
   at?: number;
   stale: boolean;
+  /** 본부가 방금 실패해 서버가 기억해 둔 마지막 값 */
+  held?: boolean;
   demo: boolean;
   split?: ReturnType<typeof splitUsed>;
   /** 영역마다 나눠 쓴 몫 0..1(배관 굵기) */
@@ -67,6 +69,7 @@ export function useWeeklyFeed(): WeeklyFeed | null {
     now: shown.now,
     at: shown.at,
     stale: shown.stale,
+    held: shown.held,
     demo: shown.demo,
     split,
     shares: split ? feedShares(split.parts) : undefined,
@@ -77,7 +80,7 @@ export function useWeeklyFeed(): WeeklyFeed | null {
 export function mainTankTip(f: WeeklyFeed): string {
   const age =
     f.at !== undefined
-      ? `\n\n${f.demo ? "데모 · 지어낸 값" : "계정 한도 · 본부 값"} · ${agoText(f.at, f.now)} 값${f.stale ? "(오래된 값)" : ""}`
+      ? `\n\n${f.demo ? "데모 · 지어낸 값" : "계정 한도 · 본부 값"} · ${agoText(f.at, f.now)} 값${f.held ? "(본부에 닿지 않아 마지막으로 받은 값)" : f.stale ? "(오래된 값)" : ""}`
       : "";
   if (!f.main)
     return `주 연료통(T-0) = 계정 주간 한도.\n리셋되어 본부가 새 값을 기다리는 중이에요.${age}`;

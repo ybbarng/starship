@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { demoLimits, nextTwoAm } from "@/demo/limits";
+import type { UsageLimitsResponse } from "@/protocol/limits";
 import {
   agoText,
   feedShares,
   isExpired,
   isStale,
+  keepLastGood,
   levelOf,
   resetShort,
   resetText,
@@ -136,5 +138,34 @@ describe("데모 한도", () => {
     );
     const five = d.limits.find((l) => l.id === "five-hour");
     expect(five?.resetsAt).toBeGreaterThan(now);
+  });
+});
+
+describe("본부가 잠깐 실패할 때(keepLastGood)", () => {
+  const AT = new Date(2026, 10, 3, 19, 0).getTime();
+  const good: UsageLimitsResponse = {
+    ok: true,
+    source: "remote",
+    at: AT,
+    limits: [{ id: "week", usedPct: 42, resetsAt: AT + 6 * HOUR }],
+  };
+  const fail: UsageLimitsResponse = {
+    ok: false,
+    source: "remote",
+    limits: [],
+    note: "본부 502",
+  };
+  it("마지막 성공값을 stale로, at은 그대로, 까닭은 note에", () => {
+    expect(keepLastGood(fail, good)).toEqual({
+      ...good,
+      stale: true,
+      note: "본부 502",
+    });
+  });
+  it("받은 적이 없으면 실패 그대로", () => {
+    expect(keepLastGood(fail, undefined)).toBe(fail);
+  });
+  it("성공 응답은 건드리지 않는다", () => {
+    expect(keepLastGood(good, good)).toBe(good);
   });
 });

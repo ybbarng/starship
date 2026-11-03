@@ -31,6 +31,7 @@ import {
   HEAD_BYTES,
   keyOf,
   type ProjectPaths,
+  parseAccountSwitch,
   parseAreaRules,
   recordFromWindows,
   TAIL_BYTES,
@@ -123,6 +124,9 @@ export async function getUsage(
 ): Promise<UsageResponse> {
   const now = opts.now ?? Date.now();
   const dir = usageDir();
+  const accountSwitch = parseAccountSwitch(
+    process.env.STARSHIP_USAGE_ACCOUNT_SWITCH,
+  );
   if (!dir) {
     const records = buildDemoUsage(now);
     const buckets = bucketsFrom(records);
@@ -146,6 +150,7 @@ export async function getUsage(
         files: 0,
         buckets: buckets.size,
         rules: true,
+        accountSwitch,
       },
     };
   }
@@ -172,6 +177,7 @@ export async function getUsage(
       files: s.files.size,
       buckets: s.buckets.size,
       rules: rules.length > 0,
+      accountSwitch,
     },
   };
 }

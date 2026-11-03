@@ -3,8 +3,8 @@
 import { memo, useEffect, useMemo, useRef } from "react";
 import { useBridgeStatus } from "@/data/hooks";
 import type { Crew, CrewStatus, Hail, Link, Task } from "@/protocol/v1";
-import { formatSpeed } from "@/sky/telemetry";
-import { useTelemetry } from "@/sky/useTelemetry";
+import { formatSpeed, type Telemetry } from "@/sky/telemetry";
+import { useTelemetryPick } from "@/sky/useTelemetry";
 import { useDestination, useVoyage } from "@/sky/voyage";
 import { ago, CREW_STATUS_LABEL, sourceLabel, Tip } from "@/ui/kit";
 import { VERDICT_LABEL, verdictDetail } from "@/ui/link/model";
@@ -405,10 +405,20 @@ const PLANETS: { id: string; ko: string; color: string; size: number }[] = [
   { id: "neptune", ko: "해왕성", color: "#5a7ce0", size: 9 },
 ];
 
+/** 항법 칸이 쓰는 값만(속도는 글로 바꿔서). 머무는 동안은 모두 그대로라 다시 그리지 않는다 */
+function navPick(t: Telemetry) {
+  return {
+    traveling: t.traveling,
+    speed: formatSpeed(t.speedKmS),
+    progress: t.progress,
+  };
+}
+
 export function NavMini({ onPicker }: { onPicker: () => void }) {
   const dest = useDestination();
   const travelTo = useVoyage((s) => s.travelTo);
-  const t = useTelemetry(4);
+  // 이동 중에만 1초 4번, 머무는 동안은 1초 1번 보고 값이 같으면 건너뛴다(2026-11-03, 전엔 늘 4번 다시 그렸다)
+  const t = useTelemetryPick(navPick, 4, 1);
   return (
     <section
       aria-label="항법"
@@ -436,7 +446,7 @@ export function NavMini({ onPicker }: { onPicker: () => void }) {
         </b>
         {t.traveling ? (
           <span className="ml-auto font-mono text-[11px] text-[#9fe3ff] tabular-nums">
-            {formatSpeed(t.speedKmS)}
+            {t.speed}
           </span>
         ) : (
           <span className="ml-auto truncate text-[11px] text-white/35">

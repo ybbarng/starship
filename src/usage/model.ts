@@ -267,6 +267,25 @@ export function parseRange(v: string | null | undefined): UsageRange {
   return v === "today" || v === "30d" ? v : "7d";
 }
 
+/**
+ * 계정을 바꾼 날(STARSHIP_USAGE_ACCOUNT_SWITCH, "YYYY-MM-DD"). 이 컴퓨터 기록에는 계정을 나눌 값이 없어
+ * 그날 앞뒤 기록이 섞인다고 화면에 알린다. 형식이 틀리거나 없는 날이면 undefined(화면에 줄을 두지 않는다).
+ */
+export function parseAccountSwitch(
+  v: string | null | undefined,
+): string | undefined {
+  const s = v?.trim() ?? "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return undefined;
+  const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+  const date = new Date(Date.UTC(y, mo - 1, d));
+  return date.getUTCFullYear() === y &&
+    date.getUTCMonth() === mo - 1 &&
+    date.getUTCDate() === d
+    ? s
+    : undefined;
+}
+
 /** 기간의 시작 시각. 오늘은 이 컴퓨터 시간대의 자정, 7일·30일은 그 날수만큼 앞의 자정. */
 export function rangeStart(range: UsageRange, now: number): number {
   const d = new Date(now);
@@ -603,6 +622,8 @@ export type UsageMeta = {
   buckets: number;
   /** 업무·개인 규칙이 있나 */
   rules: boolean;
+  /** 계정을 바꾼 날("YYYY-MM-DD", STARSHIP_USAGE_ACCOUNT_SWITCH). 없으면 화면에 그 줄을 두지 않는다 */
+  accountSwitch?: string;
 };
 
 /** GET /api/usage?range= 응답. burn은 최근 15분 분당 출력(= 지금 속도) */

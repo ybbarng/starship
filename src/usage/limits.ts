@@ -1,5 +1,6 @@
 // 계정 사용 한도(주간 연료)를 화면에 적는 순수 함수. 한도 값은 본부가 주고(src/protocol/limits.ts),
 // 영역(업무·개인·기타) 몫은 이 컴퓨터 기록에서 셈한 통계(src/usage/model.ts)로 근사한다. 설계: docs/usage.md "주간 연료".
+import type { UsageLimitsResponse } from "@/protocol/limits";
 import type { Area, Totals } from "./model";
 
 export const AREAS: Area[] = ["work", "personal", "other"];
@@ -133,4 +134,16 @@ export const LEVEL_COLOR = {
 export function pctText(usedPct: number): { used: string; left: string } {
   const r = (v: number) => `${Math.round(v)}%`;
   return { used: r(usedPct), left: r(100 - usedPct) };
+}
+
+/**
+ * 본부가 잠깐 실패했을 때 돌려줄 응답. 마지막으로 받은 성공값이 있으면 그 값을 stale:true로(실패 까닭은 note),
+ * 없으면 실패 응답 그대로. at은 그대로 두어 화면이 "n분 전 값"으로 흐리게 보인다.
+ */
+export function keepLastGood(
+  fail: UsageLimitsResponse,
+  lastGood: UsageLimitsResponse | undefined,
+): UsageLimitsResponse {
+  if (fail.ok || !lastGood?.ok) return fail;
+  return { ...lastGood, stale: true, note: fail.note };
 }
