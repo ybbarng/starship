@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef } from "react";
+import { useBridgeStatus } from "@/data/hooks";
 import type { Crew, CrewStatus, Hail, Link, Task } from "@/protocol/v1";
 import { formatSpeed } from "@/sky/telemetry";
 import { useTelemetry } from "@/sky/useTelemetry";
@@ -83,9 +84,11 @@ function Tile({
 }
 
 /** 본부 연결 등. 화면 시계(30초)와 따로 2초 시계로 끊김과 "마지막으로 받은 때"를 센다. */
-function HqTile({ error, lastAt }: { error: boolean; lastAt: number }) {
+function HqTile() {
+  // 받은 때·오류는 이 등만 읽는다(조종석 전체가 5초마다 다시 그려지지 않게, hooks.ts useBridgeStatus)
+  const { error, updatedAt: lastAt } = useBridgeStatus();
   const now = useNow(HQ_CLOCK_MS);
-  const connected = hqConnected(error, lastAt, now);
+  const connected = hqConnected(!!error, lastAt, now);
   return (
     <Tile
       id="link"
@@ -110,8 +113,6 @@ export function Annunciators({
   tasks,
   hails,
   warnings,
-  hqError,
-  lastAt,
   link,
   onList,
   onHail,
@@ -120,9 +121,6 @@ export function Annunciators({
   tasks: Task[];
   hails: Hail[];
   warnings: Warnings;
-  /** 본부에서 상태를 받다 오류가 났는지. 끊김 판정은 연결 등이 자기 시계로 한다 */
-  hqError: boolean;
-  lastAt: number;
   link?: Link;
   onList: (k: ListKind) => void;
   onHail: () => void;
@@ -180,7 +178,7 @@ export function Annunciators({
         hint="사람이 부른 교신. 누르면 화상 창"
         onClick={hails.length ? onHail : undefined}
       />
-      <HqTile error={hqError} lastAt={lastAt} />
+      <HqTile />
       {link && link.verdict !== "ok" && (
         <Tile
           id="relay"
@@ -530,8 +528,6 @@ export function Dashboard({
   crew,
   crewById,
   warnings,
-  hqError,
-  lastAt,
   link,
   now,
   push,
@@ -549,10 +545,6 @@ export function Dashboard({
   crew: Crew[];
   crewById: Map<string, Crew>;
   warnings: Warnings;
-  /** 본부에서 상태를 받다 오류가 났는지 */
-  hqError: boolean;
-  /** 본부에서 상태를 마지막으로 받은 때 */
-  lastAt: number;
   link?: Link;
   now: number;
   push: number;
@@ -593,8 +585,6 @@ export function Dashboard({
           tasks={decisions}
           hails={hails}
           warnings={warnings}
-          hqError={hqError}
-          lastAt={lastAt}
           link={link}
           onList={onList}
           onHail={() => onHail()}

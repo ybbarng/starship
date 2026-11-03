@@ -321,9 +321,7 @@ export function CockpitGaze() {
           crew={bridge.crew}
           crewById={bridge.crewById}
           warnings={warnings}
-          // 끊김 판정(15초 유예)은 연결 등이 2초 시계로 한다(30초 시계로는 늦고 "0초 전"에 머물렀다)
-          hqError={!!bridge.error}
-          lastAt={bridge.updatedAt}
+          // 끊김 판정(15초 유예)은 연결 등(HqTile)이 useBridgeStatus와 2초 시계로 한다
           link={bridge.link}
           now={now}
           push={push}
