@@ -5,7 +5,7 @@
 //   왼쪽 = 승무원 목차: 기다리는 일이 있는 승무원(건수·가장 오래 기다린 시간·지금 하는 일), 그 아래 나머지 승무원
 //   가운데 = 고른 승무원의 결재 서류: 제목 전체·세부·선택지를 모두 펼치고 그 자리에서 처리
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useBridgeStatus, useCrewDesk } from "@/data/hooks";
 import type { Context, Crew, Task } from "@/protocol/v1";
 import { AnswerList } from "@/ui/desk/Answers";
@@ -22,6 +22,7 @@ import { FileButtons } from "@/ui/kit/FileButtons";
 import { findPaths } from "@/ui/kit/filePaths";
 import styles from "./cockpit.module.css";
 import { inboxEmpty } from "./hqLink";
+import { focusLost, focusPaper, indexButton, sheetPapers } from "./inboxFocus";
 import {
   type InboxGroup,
   LOOSE_KEY,
@@ -313,6 +314,45 @@ export function InboxSheet({
   now: number;
   onCrew: (id: string) => void;
 }) {
+  const listRef = useRef<HTMLUListElement>(null);
+  // 처리 단추를 누른 서류의 자리. 그 서류가 빠지면 같은 자리(없으면 바로 앞) 서류로 포커스를 옮긴다.
+  // 누른 단추가 서류와 함께 사라져 포커스가 body로 떨어지면 키보드로 이어 처리할 수 없었다(2026-11-03).
+  const pending = useRef<{ group: string; index: number; id: string } | null>(
+    null,
+  );
+  const remember = (e: React.SyntheticEvent) => {
+    const t = e.target as HTMLElement;
+    // 동작 단추를 눌렀거나 글 답을 보냈을 때
+    if (e.type === "click" && !t.closest("[data-action]")) return;
+    const item = t.closest<HTMLElement>("[data-inbox-item]");
+    const ul = listRef.current;
+    if (!item || !ul || !group) return;
+    pending.current = {
+      group: group.key,
+      index: sheetPapers(ul).indexOf(item),
+      id: item.dataset.inboxItem ?? "",
+    };
+  };
+  const key = group?.key;
+  const ids = group?.tasks.map((t) => t.id).join("|") ?? "";
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 묶음과 서류 목록이 바뀔 때만 본다(ids가 그 목록)
+  useEffect(() => {
+    const p = pending.current;
+    if (!p) return;
+    const ul = listRef.current;
+    if (key === p.group && ul) {
+      const papers = sheetPapers(ul);
+      if (papers.some((el) => el.dataset.inboxItem === p.id)) return; // 아직 남아 있다(보내는 중·실패)
+      pending.current = null;
+      // 그사이 다른 곳으로 옮겨 갔으면 건드리지 않는다
+      if (!focusLost() && !ul.contains(document.activeElement)) return;
+      focusPaper(papers[Math.min(p.index, papers.length - 1)]);
+      return;
+    }
+    // 묶음을 다 처리해 다른 묶음으로 넘어갔으면 목차에서 새로 고른 묶음 단추로
+    pending.current = null;
+    if (key && focusLost()) indexButton(key)?.focus();
+  }, [key, ids]);
   return (
     <div className="relative flex h-full min-w-0 flex-col rounded-xl bg-[#07090d] p-[3px] shadow-[0_0_0_1px_rgba(255,255,255,0.07),0_8px_22px_rgba(0,0,0,0.55)]">
       <div
@@ -324,6 +364,9 @@ export function InboxSheet({
             <SheetHeader group={group} now={now} onCrew={onCrew} />
             <ul
               key={group.key}
+              ref={listRef}
+              onClickCapture={remember}
+              onSubmitCapture={remember}
               data-scroll-inside
               className={`min-h-0 flex-1 space-y-2 overflow-y-auto px-4 pt-2 pb-3 [scrollbar-color:rgba(255,255,255,.15)_transparent] [scrollbar-width:thin] ${styles.swap}`}
             >
@@ -519,6 +562,7 @@ export function Paper({
   return (
     <li
       data-inbox-item={task.id}
+      tabIndex={-1}
       className={`rounded-lg border px-3 pt-2 pb-2.5 ${
         stale
           ? "border-[#ff8a7a]/25 bg-[#ff8a7a]/[0.035]"
