@@ -78,9 +78,10 @@
 
 | 규칙 | 보장 |
 |---|---|
-| `waiting[].id`가 겹치지 않는다 | `checkDesk`가 잡는다. Task id가 여기서 나오므로, 겹치면 답이 엉뚱한 곳으로 간다 |
+| `waiting[].id`가 겹치지 않는다 | `parseDesk`가 앞쪽을 남기고 겹친 뒤쪽 기다림을 뺀다(`checkDesk`로도 볼 수 있다). Task id가 여기서 나오므로, 겹치면 답이 엉뚱한 곳으로 간다 |
 | decide는 선택지 2개 이상, check는 항목 1개 이상 | `Waiting` 스키마(`superRefine`) |
-| 한 기다림 안에서 `options[].id`가 겹치지 않는다 | `checkDesk` |
+| 한 기다림 안에서 `options[].id`가 겹치지 않는다 | `parseDesk`가 겹친 뒤쪽 선택지를 뺀다. 그래서 decide 선택지가 2개보다 적어지면 그 기다림을 뺀다 |
+| `answers[].id`가 겹치지 않는다 | `parseDesk`가 겹친 뒤쪽을 뺀다 |
 | 날짜는 `Date.parse`로 읽힌다 | `When` 스키마 |
 | `topic`은 정한 값(`code-review`)만 | `WaitTopic` 스키마 |
 | 주소는 http(s)만 | `WebUrl` 스키마. 카드가 주소를 그대로 링크로 여니까 `javascript:`·`data:`·`file:` 같은 주소는 막는다. 원본은 `src/protocol/common.ts`(지도·스냅숏의 주소 칸도 같은 규칙) |
@@ -88,7 +89,14 @@
 | 날짜만 적은 값은 이 컴퓨터의 자정 | `since`·`updatedAt`·`at`에 `2026-10-31`처럼 날짜만 적으면 UTC가 아니라 이 컴퓨터 시간대의 자정으로 읽는다(`parseWhen`, `src/protocol/common.ts`). 지도(`found`·`since` 등)도 같다 |
 | 모르는 필드는 버린다 | zod 기본 동작. 같은 버전 안에서 필드를 더할 수 있다 |
 
-비서와 Starship은 같은 `parseDesk`로 검사한다. 서버 모드에서는 Starship이 받은 책상을 다시 검사한다. 걸리면 `desk: null`로 바꾸고 문제를 화면 위쪽에 알린다.
+비서와 Starship은 같은 `parseDesk`로 검사한다. 서버 모드에서는 Starship이 받은 책상을 다시 검사한다.
+
+**틀린 항목은 그것만 뺀다(2026-11-03).** 세션이 기다림 하나를 잘못 적어도 그 승무원의 책상이 통째로 사라지지 않게, 스냅숏과 같은 규칙을 쓴다.
+
+- 겉(`desk` 이름, `updatedAt`, `waiting`·`doing`이 배열인지, `answers`가 있으면 배열인지)이 틀리면 지금처럼 책상 전체를 거절한다(`desk: null`).
+- `waiting`·`doing`·`answers`는 항목마다 따로 검사해 틀린 항목만 빼고, 나머지는 그대로 보인다.
+- 뺀 까닭은 `"waiting[2] (id pick): options: decide는 선택지가 2개 이상 있어야 해요"` 꼴로 `problems`에 적는다(번호는 파일에 적힌 순서, 0부터). 화면 위쪽에 알린다.
+- 돌려준 책상은 `checkDesk`를 늘 통과한다.
 
 ## 답하기
 

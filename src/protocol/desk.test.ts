@@ -20,6 +20,13 @@ function desk(waiting: unknown[], doing: unknown[] = []): unknown {
   };
 }
 
+/** 기다림 하나만 빠지고 책상은 남는다: 남은 기다림 id와 problems를 돌려준다. */
+function dropped(raw: unknown) {
+  const r = parseDesk(raw);
+  expect(r.ok).toBe(true);
+  return { ids: r.desk?.waiting.map((w) => w.id), problems: r.problems };
+}
+
 const decide = {
   id: "submit-way",
   type: "decide",
@@ -118,7 +125,11 @@ describe("parseDesk", () => {
             },
           ]),
         );
-        expect(result.ok).toBe(false);
+        expect(result.ok).toBe(true);
+        expect(result.desk?.waiting).toEqual([]);
+        expect(result.problems[0]).toMatch(
+          /^waiting\[0\] \(id report\): items\.0\.path/,
+        );
       }
     });
 
@@ -135,21 +146,26 @@ describe("parseDesk", () => {
       const result = parseDesk(
         desk([{ ...decide, options: [decide.options[0]] }]),
       );
-      expect(result.ok).toBe(false);
-      expect(result.problems[0]).toContain("waiting.0.options");
+      expect(result.ok).toBe(true);
+      expect(result.desk?.waiting).toEqual([]);
+      expect(result.problems[0]).toMatch(
+        /^waiting\[0\] \(id submit-way\): options/,
+      );
     });
 
     it("check에 항목이 없으면 걸린다", () => {
       const result = parseDesk(
         desk([{ id: "c", type: "check", title: "봐 주세요" }]),
       );
-      expect(result.ok).toBe(false);
-      expect(result.problems[0]).toContain("waiting.0.items");
+      expect(result.desk?.waiting).toEqual([]);
+      expect(result.problems[0]).toMatch(/^waiting\[0\] \(id c\): items/);
     });
 
     it("읽을 수 없는 날짜는 걸린다", () => {
-      const result = parseDesk(desk([{ ...decide, since: "어제쯤" }]));
-      expect(result.ok).toBe(false);
+      expect(dropped(desk([{ ...decide, since: "어제쯤" }]))).toMatchObject({
+        ids: [],
+        problems: [expect.stringContaining("since")],
+      });
     });
 
     it("http(s)가 아닌 주소는 걸린다", () => {
@@ -160,14 +176,14 @@ describe("parseDesk", () => {
           decide.options[1],
         ],
       };
-      expect(parseDesk(desk([bad])).ok).toBe(false);
+      expect(dropped(desk([bad])).ids).toEqual([]);
       const file = {
         id: "c",
         type: "check",
         title: "봐 주세요",
         items: [{ label: "가", url: "file:///etc/passwd" }],
       };
-      expect(parseDesk(desk([file])).ok).toBe(false);
+      expect(dropped(desk([file])).ids).toEqual([]);
     });
 
     it("다른 버전은 받지 않는다", () => {
@@ -180,10 +196,36 @@ describe("parseDesk", () => {
   });
 
   describe("짜임", () => {
-    it("waiting id가 겹치면 걸린다", () => {
-      const result = parseDesk(desk([decide, { ...decide }]));
-      expect(result.ok).toBe(false);
-      expect(result.problems).toEqual(['기다림 id "submit-way"가 겹쳐요']);
+    it("waiting id가 겹치면 뒤쪽만 뺀다", () => {
+      const result = parseDesk(
+        desk([
+          decide,
+          { ...decide, title: "뒤쪽" },
+          { ...decide, id: "other" },
+        ]),
+      );
+      expect(result.desk?.waiting.map((w) => w.title)).toEqual([
+        decide.title,
+        decide.title,
+      ]);
+      expect(result.desk?.waiting.map((w) => w.id)).toEqual([
+        "submit-way",
+        "other",
+      ]);
+      expect(result.problems).toEqual([
+        "waiting[1] (id submit-way): id가 앞 항목과 겹쳐 뺐어요",
+      ]);
+    });
+
+    it("겹친 id 가운데 앞쪽이 틀려 빠졌으면 뒤쪽이 남는다", () => {
+      const result = parseDesk(
+        desk([
+          { ...decide, since: "어제쯤" },
+          { ...decide, title: "뒤쪽" },
+        ]),
+      );
+      expect(result.desk?.waiting.map((w) => w.title)).toEqual(["뒤쪽"]);
+      expect(result.problems).toHaveLength(1);
     });
 
     it("한 기다림 안에서 선택지 id가 겹치면 걸린다", () => {
@@ -195,9 +237,79 @@ describe("parseDesk", () => {
           },
         ]),
       );
+      // 선택지 둘 중 하나가 빠지면 decide가 성립하지 않아 기다림째 뺀다
+      expect(result.desk?.waiting).toEqual([]);
       expect(result.problems).toEqual([
-        '기다림 "submit-way"에 선택지 id "photo"가 겹쳐요',
+        'waiting[0] (id submit-way): 선택지 id "photo"가 겹쳐 뒤쪽을 뺐어요',
+        "waiting[0] (id submit-way): 겹친 선택지를 빼니 decide 선택지가 2개보다 적어 뺐어요",
       ]);
+    });
+
+    it("겹친 선택지를 빼도 2개 이상 남으면 기다림은 남는다", () => {
+      const result = parseDesk(
+        desk([
+          {
+            ...decide,
+            options: [
+              ...decide.options,
+              { ...decide.options[1], label: "또 칸 채우기" },
+            ],
+          },
+        ]),
+      );
+      expect(result.desk?.waiting[0]?.options?.map((o) => o.label)).toEqual([
+        "사진 올리기",
+        "칸 채우기",
+      ]);
+      expect(result.problems).toEqual([
+        'waiting[0] (id submit-way): 선택지 id "form"가 겹쳐 뒤쪽을 뺐어요',
+      ]);
+    });
+
+    it("기다림 하나가 틀려도 나머지 기다림과 doing·answers는 남는다", () => {
+      const result = parseDesk({
+        ...(desk(
+          [
+            decide,
+            { id: "push", type: "approve", title: "운영에 올려도 될까요" },
+            { id: "broken", type: "decide", title: "선택지 없음" },
+            { id: "name", type: "answer", title: "대회 이름을 알려 주세요" },
+          ],
+          [{ title: "단위 시험 돌리는 중" }],
+        ) as object),
+        answers: [
+          {
+            id: "a1",
+            q: "중복 쿠폰은 왜 두 장까지만 돼요?",
+            a: "결제 대행사가 할인 줄을 두 개까지만 받아요.",
+            at: "2026-11-02T17:20:00+09:00",
+          },
+        ],
+      });
+      expect(result.ok).toBe(true);
+      expect(result.desk?.waiting.map((w) => w.id)).toEqual([
+        "submit-way",
+        "push",
+        "name",
+      ]);
+      expect(result.desk?.doing).toHaveLength(1);
+      expect(result.desk?.answers).toHaveLength(1);
+      expect(result.problems).toEqual([
+        "waiting[2] (id broken): options: decide는 선택지가 2개 이상 있어야 해요",
+      ]);
+    });
+
+    it("겉이 틀리면 책상 전체를 거절한다", () => {
+      for (const bad of [
+        { ...(desk([]) as object), updatedAt: "어제쯤" },
+        { ...(desk([]) as object), waiting: "없음" },
+        { ...(desk([]) as object), doing: undefined },
+      ]) {
+        const result = parseDesk(bad);
+        expect(result.ok).toBe(false);
+        expect(result.desk).toBeNull();
+        expect(result.problems.length).toBeGreaterThan(0);
+      }
     });
   });
 
@@ -231,8 +343,8 @@ describe("parseDesk", () => {
 
     it("모르는 주제는 거절한다", () => {
       const result = parseDesk(desk([{ ...review, topic: "design-review" }]));
-      expect(result.ok).toBe(false);
-      expect(result.problems[0]).toMatch(/^waiting\.0\.topic/);
+      expect(result.desk?.waiting).toEqual([]);
+      expect(result.problems[0]).toMatch(/^waiting\[0\] \(id pr-231\): topic/);
     });
   });
 
@@ -249,8 +361,10 @@ describe("parseDesk", () => {
       expect(result.ok && result.desk.doing[0]?.approved).toBe(ship.approved);
     });
 
-    it("빈 글은 거절한다", () => {
-      expect(parseDesk(desk([], [{ ...ship, approved: "" }])).ok).toBe(false);
+    it("빈 글이면 그 일만 뺀다", () => {
+      const result = parseDesk(desk([], [{ ...ship, approved: "" }, ship]));
+      expect(result.desk?.doing).toHaveLength(1);
+      expect(result.problems[0]).toMatch(/^doing\[0\] \(id ship\): approved/);
     });
   });
 });
@@ -352,10 +466,12 @@ describe("답해 둔 것(answers)", () => {
     expect(r.ok && r.desk.answers?.[0]?.q).toBe(answer("a1").q);
   });
 
-  it("id가 겹치면 거절한다", () => {
+  it("id가 겹치면 뒤쪽만 뺀다", () => {
     const r = parseDesk(withAnswers([answer("a1"), answer("a1")]));
-    expect(r.ok).toBe(false);
-    expect(r.problems.join()).toContain("a1");
+    expect(r.desk?.answers).toHaveLength(1);
+    expect(r.problems).toEqual([
+      "answers[1] (id a1): id가 앞 항목과 겹쳐 뺐어요",
+    ]);
   });
 
   it("요약에 답 수가 붙는다(없으면 빠진다)", () => {
