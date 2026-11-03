@@ -49,7 +49,7 @@ export function CrewTasks({
   const others = tasks.filter((t) => !isNews(t) && !fromDesk(t));
   const reply = lastReplies(tasks).get(crewId);
   return (
-    <div className="flex flex-col gap-5" data-crew-tasks>
+    <div className="flex min-w-0 flex-col gap-5" data-crew-tasks>
       {desk?.answers?.length ? (
         <AnswerList crewId={crewId} answers={desk.answers} now={now} />
       ) : null}

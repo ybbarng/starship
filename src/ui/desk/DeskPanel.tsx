@@ -165,7 +165,7 @@ function WaitCard({
   return (
     <article
       data-wait={wait.type}
-      className="rounded-md border border-white/[0.08] bg-white/[0.03]"
+      className="min-w-0 rounded-md border border-white/[0.08] bg-white/[0.03] [overflow-wrap:anywhere]"
       style={{ borderLeft: `3px solid ${color}` }}
     >
       <div className="flex flex-col gap-2 px-3 py-2.5">
@@ -258,7 +258,10 @@ function WaitCard({
                   it.label
                 )}
                 {(files.items[i] ?? []).map((p) => (
-                  <span key={p} className="ml-2 inline-flex align-baseline">
+                  <span
+                    key={p}
+                    className="ml-2 inline-flex max-w-full align-baseline"
+                  >
                     <FileButtons path={p} />
                   </span>
                 ))}

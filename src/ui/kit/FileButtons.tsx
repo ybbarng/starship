@@ -42,10 +42,11 @@ export function useOpenFile(path: string) {
  */
 export function FileButtons({ path }: { path: string }) {
   const { open, busy } = useOpenFile(path);
+  // 좁은 옆판(320px)에서는 파일 이름이 줄어들고 단추는 제 크기를 지킨다(2026-11-03)
   return (
     <span
       data-file={path}
-      className="inline-flex max-w-full items-center gap-1.5 whitespace-nowrap"
+      className="inline-flex min-w-0 max-w-full items-center gap-1.5 whitespace-nowrap"
     >
       <span
         className="min-w-0 max-w-[14rem] truncate text-[11px] text-white/45"
@@ -58,7 +59,7 @@ export function FileButtons({ path }: { path: string }) {
         target="_blank"
         rel="noopener noreferrer"
         data-file-view
-        className="rounded bg-white/[0.08] px-1.5 py-0.5 text-[11.5px] text-[#7ce0ff] hover:bg-white/[0.14]"
+        className="shrink-0 rounded bg-white/[0.08] px-1.5 py-0.5 text-[11.5px] text-[#7ce0ff] hover:bg-white/[0.14]"
       >
         보기 ↗
       </a>
@@ -68,7 +69,7 @@ export function FileButtons({ path }: { path: string }) {
         disabled={busy}
         onClick={open}
         title="맥에서 맞는 프로그램으로 열어요"
-        className="rounded bg-white/[0.08] px-1.5 py-0.5 text-[11.5px] text-white/80 hover:bg-white/[0.14] disabled:opacity-40"
+        className="shrink-0 rounded bg-white/[0.08] px-1.5 py-0.5 text-[11.5px] text-white/80 hover:bg-white/[0.14] disabled:opacity-40"
       >
         열기
       </button>
