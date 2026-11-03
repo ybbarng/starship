@@ -136,3 +136,56 @@ export function surfacePeak(kelvin: number): number {
 export function starSceneRadius(radiusSun: number): number {
   return Math.min(14, Math.max(1.6, 2.3 * radiusSun ** 0.27));
 }
+
+/** 0..1 사이를 부드럽게 잇는다(GLSL smoothstep과 같은 식). */
+export function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+/** 별을 떠날 때 카메라에 맞춘 관측자 자리에서 실제 위치 자리로 옮겨 가는 진행 구간(이동 진행 e) */
+export const DEPART_BLEND: readonly [number, number] = [0.15, 0.6];
+
+/**
+ * 별을 떠나 별이 아닌 곳(태양계 등)으로 가는 동안의 하늘 관측자 자리(광년).
+ * 처음에는 카메라에 맞춘 자리(near: 떠나온 별 구와 별자리 선이 붙어 있다), DEPART_BLEND 구간에서
+ * 실제 위치 자리(real)로 옮겨 간다. 실제 위치는 진행 1%도 안 돼 별에서 0.5광년을 넘어, 그대로 쓰면
+ * 떠나온 별의 구가 곧바로 사라지고 선이 구에서 떨어졌다(2026-11-03).
+ */
+export function departureObserver(near: Vec3, real: Vec3, e: number): Vec3 {
+  const w = smoothstep(DEPART_BLEND[0], DEPART_BLEND[1], e);
+  return [
+    near[0] + (real[0] - near[0]) * w,
+    near[1] + (real[1] - near[1]) * w,
+    near[2] + (real[2] - near[2]) * w,
+  ];
+}
+
+/**
+ * 이동 중 긴 별자리 호를 흐리게 하는 정도(셰이더 uTravel, 0..1). 진행 약 17%~83%에서 가장 세고
+ * 출발·도착 때는 0이라, 별에 머물 때 그 별에서 뻗는 긴 선은 그대로이고 도착하며 차츰 돋아난다.
+ * 태양계 안(관측자가 태양에서 0.02광년 안) 이동은 하늘이 그대로라 흐리게 하지 않고, 1광년까지 차츰 세게 한다.
+ */
+export function travelArcDim(
+  traveling: boolean,
+  progress: number,
+  observerFromSunLy: number,
+): number {
+  if (!traveling) return 0;
+  const along = Math.min(1, 2 * Math.sin(Math.PI * progress));
+  return along * smoothstep(0.02, 1, observerFromSunLy);
+}
+
+/** 떠나온 별 구가 화면에서 이 반지름(픽셀)보다 작아지면 끄고 하늘 점에 맡긴다. */
+export const MIN_STAR_DISC_PX = 1.5;
+
+/** 구가 화면에서 차지하는 반지름(픽셀). fovDeg는 세로 화각, heightPx는 캔버스 높이. */
+export function discRadiusPx(
+  radius: number,
+  distance: number,
+  fovDeg: number,
+  heightPx: number,
+): number {
+  const focal = heightPx / 2 / Math.tan((fovDeg * Math.PI) / 360);
+  return (radius / Math.max(distance, 1e-9)) * focal;
+}

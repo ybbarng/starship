@@ -55,12 +55,16 @@ import {
   starField,
 } from "./sky3d";
 import {
+  departureObserver,
+  discRadiusPx,
   FAR_LY,
   farFade,
+  MIN_STAR_DISC_PX,
   NEAR_HIDE_LY,
   SURFACE_REF_K,
   seenFrom,
   surfacePeak,
+  travelArcDim,
 } from "./stars3d";
 import {
   distanceKm,
@@ -128,7 +132,8 @@ export function SpaceView({
   const glareRef = useRef<HTMLDivElement>(null);
   const warpRef = useRef<HTMLCanvasElement>(null);
   const warp = useRef(0);
-  const hideStar = useRef(-1);
+  const hideStar = useRef<HideSlots>([-1, -1]);
+  const rootRef = useRef<HTMLDivElement>(null);
   const mode = useScale((s) => s.mode);
   const hdr = useHdrEnabled();
 
@@ -143,9 +148,20 @@ export function SpaceView({
 
   useWarpStreaks(warpRef, warp);
 
+  // 바깥 div의 data-voyage-phase(travel/cruise): 촬영 스크립트가 도착을 기다릴 때 읽는다.
+  // 단계가 바뀔 때마다 장면 전체를 다시 그리지 않게 상태 구독으로 속성만 바꾼다.
+  useEffect(() => {
+    const set = (phase: string) => {
+      if (rootRef.current) rootRef.current.dataset.voyagePhase = phase;
+    };
+    set(useVoyage.getState().phase);
+    return useVoyage.subscribe((s) => set(s.phase));
+  }, []);
+
   return (
     // 배치는 className으로 받는다(예: "absolute inset-0"). 주지 않으면 relative.
     <div
+      ref={rootRef}
       className={twMerge("relative overflow-hidden bg-[#02030a]", className)}
     >
       <Canvas
@@ -246,8 +262,8 @@ function SkyDome({
   constellations: boolean;
   starScale: number;
   grid: boolean;
-  /** 하늘에서 숨길 별의 자리(StarTargets가 정한다), 없으면 -1 */
-  hide: RefObject<number>;
+  /** 하늘에서 숨길 별의 자리 두 칸(목적지, 떠나온 별. StarTargets가 정한다), 없으면 -1 */
+  hide: RefObject<HideSlots>;
 }) {
   const gridGeo = useMemo(() => equatorialGrid(), []);
   const group = useRef<THREE.Group>(null);
@@ -311,7 +327,7 @@ function SkyDome({
           uRadius: { value: SKY_RADIUS },
           uNearHide: { value: NEAR_HIDE_LY },
           uFarFade: { value: 1 },
-          uHide: { value: -1 },
+          uHide: { value: new THREE.Vector2(-1, -1) },
         },
         transparent: true,
         depthWrite: false,
@@ -330,6 +346,7 @@ function SkyDome({
           uRadius: { value: SKY_RADIUS * 0.99 },
           uColor: { value: new THREE.Color("#6f8fd8") },
           uOpacity: { value: 0.32 },
+          uTravel: { value: 0 },
         },
         transparent: true,
         depthWrite: false,
@@ -344,12 +361,18 @@ function SkyDome({
     const [ox, oy, oz] = skyObserver.ly;
     (u.uObserver?.value as THREE.Vector3 | undefined)?.set(ox, oy, oz);
     if (u.uFarFade) u.uFarFade.value = farFade(skyObserver.fromSun);
-    if (u.uHide) u.uHide.value = hide.current ?? -1;
+    (u.uHide?.value as THREE.Vector2 | undefined)?.set(...hide.current);
     (lineMat.uniforms.uObserver?.value as THREE.Vector3 | undefined)?.set(
       ox,
       oy,
       oz,
     );
+    if (lineMat.uniforms.uTravel)
+      lineMat.uniforms.uTravel.value = travelArcDim(
+        telemetry.traveling,
+        telemetry.progress,
+        skyObserver.fromSun,
+      );
   });
 
   return (
@@ -1361,6 +1384,11 @@ const starPlacement = new Map<
 
 /** 지금 프레임에 그린 별 구의 자리(이름표 가림 계산에 쓴다). StarTargets가 매 프레임 채운다. */
 const starSceneNow = new Map<string, THREE.Vector3>();
+/** 지금 프레임에 장면에 그린 별 구(id). StarTargets가 매 프레임 채우고 이름표 가림이 읽는다. */
+const starMeshOn = new Set<string>();
+
+/** 하늘 점에서 숨길 별 자리 두 칸: [목적지, 떠나온 별], 없으면 -1 */
+type HideSlots = [number, number];
 
 function placeStar(d: Destination, from: THREE.Vector3) {
   const [sx, sy, sz] = starLy(d);
@@ -1444,6 +1472,7 @@ function starLy(d: Destination): Vec3 {
 /**
  * 별 목적지를 장면의 구로 그리나. 목적지는 늘, 유명한 별 13개는 태양계 안에서만(예전 화면 그대로),
  * 그 밖에는 관측자가 0.5광년 안에 있을 때만(하늘의 점과 겹치지 않게).
+ * 떠나온 별은 StarTargets가 화면 크기로 따로 정한다.
  */
 function starMeshVisible(d: Destination, destinationId: string): boolean {
   if (d.id === destinationId) return true;
@@ -1462,9 +1491,9 @@ function StarTargets({
   hdr: boolean;
   catalog: SkyCatalog;
   /** 하늘에서 숨길 별(장면의 구가 대신 그린다)의 자리. SkyDome이 읽는다. */
-  hideRef: RefObject<number>;
+  hideRef: RefObject<HideSlots>;
 }) {
-  const { camera } = useThree();
+  const { camera, gl } = useThree();
   const refs = useRef<(THREE.Mesh | null)[]>([]);
   const groups = useRef<Map<string, THREE.Group>>(new Map());
   const destinationId = useVoyage((s) => s.destinationId);
@@ -1498,24 +1527,48 @@ function StarTargets({
   useFrame(() => {
     for (const m of refs.current) m?.quaternion.copy(camera.quaternion);
     const { phase } = useVoyage.getState();
+    const departing = phase === "travel" ? previousId : null;
+    const fov = (camera as THREE.PerspectiveCamera).fov;
+    const heightPx = gl.domElement.clientHeight;
     for (const d of stars) {
       const g = groups.current.get(d.id);
       if (!g) continue;
-      g.visible = starMeshVisible(d, destinationId);
       // 구는 태양 기준 유한한 거리(starDistance)에 놓여, 카메라가 태양에서 멀면(보이저 2호 등)
       // 하늘의 별 점·이름표와 시차만큼 어긋났다. 가는 중·도착한 별이 아니면 카메라를 따라가게 해
       // 하늘 점과 같은 방향에 둔다(2026-11-01 사용자 지적).
-      const real =
-        d.id === destinationId || (phase === "travel" && d.id === previousId);
+      const real = d.id === destinationId || d.id === departing;
       if (real) g.position.copy(starTargetPosition(d));
       else g.position.copy(camera.position).add(starHomePosition(d));
       starSceneNow.set(d.id, g.position.clone());
+      // 떠나온 별은 화면에서 몇 픽셀로 작아질 때까지 구를 그린다. 관측자 자리만 보면 진행 1%도 안 돼
+      // 0.5광년을 넘어 구가 곧바로 사라졌다(2026-11-03).
+      let on = starMeshVisible(d, destinationId);
+      if (!on && d.id === departing)
+        on =
+          discRadiusPx(
+            d.star?.radius ?? 1,
+            camera.position.distanceTo(g.position),
+            fov,
+            heightPx,
+          ) >= MIN_STAR_DISC_PX;
+      g.visible = on;
+      if (on) starMeshOn.add(d.id);
+      else starMeshOn.delete(d.id);
     }
-    // 태양계 밖에서는 목적지 별의 하늘 점을 숨긴다(장면의 구와 자리가 조금 달라 둘로 보인다).
-    const dest = DESTINATION_BY_ID.get(destinationId);
-    const i = dest?.star?.hip ? field.index.get(dest.star.hip) : undefined;
-    hideRef.current =
-      i !== undefined && skyObserver.fromSun >= SOLAR_SYSTEM_LY ? i : -1;
+    for (const id of starMeshOn)
+      if (!stars.some((d) => d.id === id)) starMeshOn.delete(id);
+    // 태양계 밖에서는 목적지 별과, 구를 그리는 동안의 떠나온 별의 하늘 점을 숨긴다
+    // (장면의 구와 자리가 조금 달라 둘로 보인다).
+    const outside = skyObserver.fromSun >= SOLAR_SYSTEM_LY;
+    const slot = (id: string | null): number => {
+      const hip = id ? DESTINATION_BY_ID.get(id)?.star?.hip : undefined;
+      const i = hip ? field.index.get(hip) : undefined;
+      return i !== undefined && outside ? i : -1;
+    };
+    hideRef.current = [
+      slot(destinationId),
+      departing && starMeshOn.has(departing) ? slot(departing) : -1,
+    ];
   });
   return (
     <group>
@@ -1812,6 +1865,8 @@ function CameraRig({
     fromReal: Vec3;
     /** 출발할 때 하늘 관측자의 별 곁 어긋남(광년) */
     fromOffset: Vec3;
+    /** 떠나온 별(별에서 출발했을 때). 처음 얼마간 하늘 관측자 자리를 그 별 구에 맞춘다. */
+    fromStar: Destination | null;
   } | null>(null);
   /** 지난 프레임 하늘 관측자의 별 곁 어긋남(광년) */
   const lastOffset = useRef<Vec3>([0, 0, 0]);
@@ -1854,6 +1909,8 @@ function CameraRig({
     const p = poseFor(dest, orbits);
     const to = p.center.clone().add(p.dir.clone().multiplyScalar(p.dist));
     const d = camera.position.distanceTo(to);
+    const { previousId } = useVoyage.getState();
+    const from = previousId ? DESTINATION_BY_ID.get(previousId) : undefined;
     trip.current = {
       from: camera.position.clone(),
       fromLook: look.current.clone(),
@@ -1862,6 +1919,7 @@ function CameraRig({
       far: d > (scaleMode() === "real" ? 200_000 : 3000),
       fromReal: [...telemetry.position] as Vec3,
       fromOffset: [...lastOffset.current] as Vec3,
+      fromStar: from?.star ? from : null,
     };
     yaw.current = 0;
     pitch.current = 0;
@@ -2027,10 +2085,10 @@ function CameraRig({
       ];
     };
     let off: Vec3;
+    const e = t0
+      ? easeInOut(Math.min(1, (performance.now() - t0.start) / t0.duration))
+      : 1;
     if (t0) {
-      const e = easeInOut(
-        Math.min(1, (performance.now() - t0.start) / t0.duration),
-      );
       const to = offsetAt(target);
       off = [0, 1, 2].map(
         (i) => (t0.fromOffset[i] ?? 0) * (1 - e) + (to[i] ?? 0) * e,
@@ -2049,7 +2107,21 @@ function CameraRig({
       const [sx, sy, sz] = starLy(dest);
       off = [near[0] - sx, near[1] - sy, near[2] - sz];
     } else {
-      skyObserver.ly = [x + off[0], y + off[1], z + off[2]];
+      const real: Vec3 = [x + off[0], y + off[1], z + off[2]];
+      // 별을 떠나 태양계 등으로 돌아가는 처음에는 떠나온 별 구에 맞춘 자리에서 실제 위치 자리로
+      // 옮겨 간다. 실제 위치만 쓰면 진행 1%도 안 돼 별에서 0.5광년을 넘어 선이 구에서 떨어졌다.
+      const from = t0?.fromStar;
+      const back = from?.star
+        ? observerNearStar(from, camera.position, from.star.radius * 12)
+        : null;
+      if (back) {
+        skyObserver.ly = departureObserver(back, real, e);
+        off = [
+          skyObserver.ly[0] - x,
+          skyObserver.ly[1] - y,
+          skyObserver.ly[2] - z,
+        ];
+      } else skyObserver.ly = real;
     }
     lastOffset.current = off;
     skyObserver.fromSun = Math.hypot(...skyObserver.ly);
@@ -2368,7 +2440,7 @@ function LabelLayer({
           r: d.star?.radius ?? 1,
           at: () => starSceneNow.get(d.id) ?? starTargetPosition(d),
           // 장면에 그린 별만 이름표를 가린다.
-          on: () => starMeshVisible(d, useVoyage.getState().destinationId),
+          on: () => starMeshOn.has(d.id),
         };
       }),
     ],

@@ -8,6 +8,9 @@ import { angularDistanceDeg, matchVertex, parseHip2 } from "./skyData";
 import {
   absoluteMag,
   apparentMag,
+  DEPART_BLEND,
+  departureObserver,
+  discRadiusPx,
   distanceFromParallax,
   estimateRadiusSun,
   FAR_LY,
@@ -18,6 +21,7 @@ import {
   seenFrom,
   starSceneRadius,
   surfacePeak,
+  travelArcDim,
 } from "./stars3d";
 import { STAR_LY, STAR_RADIUS_SUN } from "./telemetry";
 
@@ -252,5 +256,79 @@ describe("하늘 자료와 목적지", () => {
     expect(list.some((d) => d.en === "Spica")).toBe(true);
     // 알파 센타우리 B는 A(유명한 별)와 같은 무리라 따로 두지 않는다.
     expect(hips.has(71681)).toBe(false);
+  });
+});
+
+describe("별을 떠날 때 하늘 관측자 자리", () => {
+  // 베텔게우스에서 지구로 돌아오는 길: 실제 위치는 별에서 태양으로 곧게 줄어든다.
+  const ly = STAR_LY.betelgeuse ?? 548;
+  const star: [number, number, number] = [0, 0, ly];
+  // 카메라에 맞춘 자리: 도착 거리에서는 별에서 0.05광년 비켜 서 있다.
+  const near: [number, number, number] = [0.03, 0.01, ly - 0.04];
+  const realAt = (e: number): [number, number, number] => [0, 0, ly * (1 - e)];
+  const fromStar = (p: [number, number, number]) =>
+    Math.hypot(p[0] - star[0], p[1] - star[1], p[2] - star[2]);
+
+  it("처음에는 카메라에 맞춘 자리 그대로라 떠나온 별이 0.5광년 안에 남는다", () => {
+    for (const e of [0, 0.003, 0.05, DEPART_BLEND[0]]) {
+      const p = departureObserver(near, realAt(e), e);
+      expect(p).toEqual(near);
+      expect(fromStar(p)).toBeLessThan(0.5);
+    }
+    // 실제 위치만 쓰면 진행 0.1%에서 이미 0.5광년을 넘는다(예전 버그).
+    expect(fromStar(realAt(0.001))).toBeGreaterThan(0.5);
+  });
+
+  it("구간이 끝나면 실제 위치 자리와 같다", () => {
+    for (const e of [DEPART_BLEND[1], 0.8, 1]) {
+      const p = departureObserver(near, realAt(e), e);
+      const r = realAt(e);
+      for (let i = 0; i < 3; i++) expect(p[i]).toBeCloseTo(r[i] ?? 0, 9);
+    }
+  });
+
+  it("그 사이에서는 별에서 멀어지는 쪽으로만 움직인다(되돌아가며 깜빡이지 않는다)", () => {
+    let last = 0;
+    for (let k = 0; k <= 100; k++) {
+      const e = k / 100;
+      const d = fromStar(departureObserver(near, realAt(e), e));
+      expect(d).toBeGreaterThanOrEqual(last - 1e-9);
+      last = d;
+    }
+  });
+});
+
+describe("이동 중 긴 별자리 호 흐리게", () => {
+  it("머무는 동안·출발·도착 때는 흐리게 하지 않는다", () => {
+    expect(travelArcDim(false, 1, 550)).toBe(0);
+    expect(travelArcDim(true, 0, 550)).toBe(0);
+    expect(travelArcDim(true, 1, 0.05)).toBeCloseTo(0, 9);
+  });
+
+  it("태양계 안 이동(지구 → 화성)은 하늘이 그대로다", () => {
+    expect(travelArcDim(true, 0.5, 1.6e-5)).toBe(0);
+  });
+
+  it("별들 사이를 지나는 동안 가장 세고, 출발·도착 가까이서 약해진다", () => {
+    expect(travelArcDim(true, 0.5, 300)).toBeCloseTo(1, 9);
+    expect(travelArcDim(true, 0.2, 300)).toBeCloseTo(1, 9);
+    expect(travelArcDim(true, 0.05, 300)).toBeLessThan(0.5);
+    expect(travelArcDim(true, 0.95, 300)).toBeLessThan(0.5);
+  });
+});
+
+describe("구의 화면 반지름", () => {
+  // 하늘 화면: 세로 화각 55°, 캔버스 높이 583px(/lab/sky 1372×872)
+  it("도착 거리(반지름 × 12)에서는 크게, 태양계 거리(6,000)에서는 2픽셀 아래로", () => {
+    const r = 14; // 베텔게우스의 화면 반지름
+    expect(discRadiusPx(r, r * 12, 55, 583)).toBeGreaterThan(40);
+    expect(discRadiusPx(r, 6000, 55, 583)).toBeLessThan(2);
+  });
+
+  it("거리가 두 배면 반지름은 절반", () => {
+    expect(discRadiusPx(2, 400, 55, 800)).toBeCloseTo(
+      discRadiusPx(2, 200, 55, 800) / 2,
+      9,
+    );
   });
 });
