@@ -26,7 +26,7 @@ import {
   CrewMapResponse,
   Snapshot,
 } from "@/protocol/v1";
-import { dedupeSnapshot } from "./dedupe";
+import { dedupeDesk, dedupeSnapshot } from "./dedupe";
 
 const HOUR = 3_600_000;
 
@@ -184,7 +184,9 @@ export async function getCrewDesk(
   const info = sourceInfo();
   if (info.mode === "demo") {
     const desk = demoDesks(demoState(seat), now)[crewId];
-    return desk ? { desk, deskAt: Date.parse(desk.updatedAt) } : { desk: null };
+    return desk
+      ? { desk: dedupeDesk(desk), deskAt: Date.parse(desk.updatedAt) }
+      : { desk: null };
   }
   const res = await fetch(
     `${info.base}/v1/crew/${encodeURIComponent(crewId)}/desk`,
@@ -196,7 +198,7 @@ export async function getCrewDesk(
   if (body.desk === null) return { ...body, desk: null };
   const parsed = parseDesk(body.desk);
   return parsed.ok
-    ? { ...body, desk: parsed.desk }
+    ? { ...body, desk: dedupeDesk(parsed.desk) }
     : {
         ...body,
         desk: null,
