@@ -323,4 +323,27 @@ describe("boundToLoopback", () => {
       boundToLoopback(["node", "next", "start"], { HOSTNAME: "my-mac" }),
     ).toBe(false);
   });
+  it("next dev의 자식 프로세스처럼 인자가 안 보여도 STARSHIP_BIND로 밝히면 true", () => {
+    // next dev가 띄운 서버 프로세스의 argv에는 -H가 없다(start-server.js만 있다)
+    const child = [
+      "node",
+      "/x/node_modules/next/dist/server/lib/start-server.js",
+    ];
+    expect(boundToLoopback(child, { STARSHIP_BIND: "127.0.0.1" })).toBe(true);
+    expect(boundToLoopback(child, { STARSHIP_BIND: " localhost " })).toBe(true);
+  });
+  it("STARSHIP_BIND가 먼저다: 모든 주소로 밝히면 인자가 127.0.0.1이어도 false", () => {
+    expect(
+      boundToLoopback(["node", "next", "start", "-H", "127.0.0.1"], {
+        STARSHIP_BIND: "0.0.0.0",
+      }),
+    ).toBe(false);
+  });
+  it("STARSHIP_BIND가 비었으면 인자·HOSTNAME으로 넘어간다", () => {
+    expect(
+      boundToLoopback(["node", "next", "start", "-H", "127.0.0.1"], {
+        STARSHIP_BIND: "",
+      }),
+    ).toBe(true);
+  });
 });

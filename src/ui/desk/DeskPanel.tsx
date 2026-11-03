@@ -1,9 +1,10 @@
 "use client";
 
-// 선실 오른쪽 판의 책상: 세션이 나를 기다리는 것(카드)과 지금 하는 일. 설계: docs/desk.md.
-// 답은 책상이 아니라 같은 기다림의 Task(id desk:<crewId>:<waitId>)에 answer로 보낸다.
 import { useState } from "react";
 import { useAct } from "@/data/hooks";
+// 선실 오른쪽 판의 책상: 세션이 나를 기다리는 것(카드)과 지금 하는 일. 설계: docs/desk.md.
+// 답은 책상이 아니라 같은 기다림의 Task(id desk:<crewId>:<waitId>)에 answer로 보낸다.
+import { parseWhen } from "@/protocol/common";
 import {
   type Desk,
   deskAnswer,
@@ -13,7 +14,7 @@ import {
 } from "@/protocol/desk";
 import type { Task } from "@/protocol/v1";
 import { FileButtons } from "@/ui/kit/FileButtons";
-import { agoLabel } from "@/ui/map/labels";
+import { agoLabel } from "@/ui/kit/labels";
 import { waitFiles } from "./waitFiles";
 
 export const WAIT_LABEL: Record<WaitType, string> = {
@@ -43,7 +44,7 @@ export function DeskPanel({
   now: number;
 }) {
   const byId = new Map(tasks.map((t) => [t.id, t]));
-  const updated = Date.parse(desk.updatedAt);
+  const updated = parseWhen(desk.updatedAt);
   return (
     <div data-desk className="flex flex-col gap-3 text-[13px]">
       <div className="flex items-baseline justify-between">
@@ -91,7 +92,7 @@ export function DeskPanel({
               </span>
               {d.since && (
                 <span className="shrink-0 text-[11px] text-white/35">
-                  {agoLabel(Date.parse(d.since), now)}
+                  {agoLabel(parseWhen(d.since), now)}
                 </span>
               )}
             </li>
@@ -172,7 +173,7 @@ function WaitCard({
           )}
           {wait.since && (
             <span className="ml-auto text-white/35">
-              {agoLabel(Date.parse(wait.since), now)}부터
+              {agoLabel(parseWhen(wait.since), now)}부터
             </span>
           )}
         </div>

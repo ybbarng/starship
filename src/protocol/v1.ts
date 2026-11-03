@@ -3,6 +3,7 @@
 // 승무원 지도는 GET {base}/v1/crew/{id}/map, 책상은 GET {base}/v1/crew/{id}/desk 로 준다.
 // 자세한 설명은 docs/protocol.md.
 import { z } from "zod";
+import { lenientArray, WebUrl } from "./common";
 import { Desk } from "./desk";
 import { ProjectMap } from "./map";
 
@@ -103,7 +104,7 @@ export const Task = z.object({
   /** answer로 고를 수 있는 선택지. */
   choices: z.array(z.string().min(1)).optional(),
   /** 원래 서비스에서 여는 주소. */
-  url: z.url().optional(),
+  url: WebUrl.optional(),
 });
 export type Task = z.infer<typeof Task>;
 
@@ -123,7 +124,7 @@ export const Hail = z.object({
   /** 이 교신으로 생긴 할 일. 있으면 할 일 동작으로 답한다. */
   taskId: z.string().min(1).optional(),
   crewId: z.string().min(1).optional(),
-  url: z.url().optional(),
+  url: WebUrl.optional(),
 });
 export type Hail = z.infer<typeof Hail>;
 
@@ -302,58 +303,90 @@ export const Link = z.object({
 });
 export type Link = z.infer<typeof Link>;
 
-export const Snapshot = z.object({
-  protocol: z.literal(PROTOCOL),
-  generatedAt: Millis,
-  /** 할 일. 서버가 급한 순으로 정렬해 준다. 첫째가 "지금 할 일". */
-  tasks: z.array(Task),
-  hails: z.array(Hail),
-  crew: z.array(Crew),
-  gauges: z.array(Gauge),
-  /** 관제 링크(회선 상태). 형식이 틀리면 스냅샷 전체를 버리지 않고 이것만 뺀다. */
-  link: Link.optional().catch(undefined),
-  /** 화면 구석에 적을 안내(예: "데모 데이터"). */
-  notice: z.string().optional(),
-});
+/**
+ * GET {base}/v1/snapshot 응답.
+ * 바깥(protocol·generatedAt)만 엄격하다. tasks·hails·crew·gauges는 항목마다 따로 검사해
+ * 틀린 항목만 빼고, 왜 뺐는지는 problems에 모은다(본부가 모르는 enum 값을 하나 보내도 화면 전체가 죽지 않게).
+ */
+export const Snapshot = z
+  .object({
+    protocol: z.literal(PROTOCOL),
+    generatedAt: Millis,
+    /** 할 일. 서버가 급한 순으로 정렬해 준다. 첫째가 "지금 할 일". */
+    tasks: lenientArray(Task, "tasks"),
+    hails: lenientArray(Hail, "hails"),
+    crew: lenientArray(Crew, "crew"),
+    gauges: lenientArray(Gauge, "gauges"),
+    /** 관제 링크(회선 상태). 형식이 틀리면 스냅샷 전체를 버리지 않고 이것만 뺀다. */
+    link: Link.optional().catch(undefined),
+    /** 화면 구석에 적을 안내(예: "데모 데이터"). */
+    notice: z.string().optional(),
+    /** 형식 검사에 걸려 뺀 항목(사람이 읽을 한 줄씩). 본부가 보내도 되고 Starship이 더해 넣는다. 없으면 생략. */
+    problems: z.array(z.string()).optional(),
+  })
+  .transform(({ tasks, hails, crew, gauges, problems, ...rest }) => {
+    const all = [
+      ...(problems ?? []),
+      ...tasks.problems,
+      ...hails.problems,
+      ...crew.problems,
+      ...gauges.problems,
+    ];
+    return {
+      ...rest,
+      tasks: tasks.items,
+      hails: hails.items,
+      crew: crew.items,
+      gauges: gauges.items,
+      ...(all.length ? { problems: all } : {}),
+    };
+  });
 export type Snapshot = z.infer<typeof Snapshot>;
 
+/** 동작 요청의 id·crewId·region 길이 상한. */
+const ReqId = z.string().min(1).max(200);
+/** 동작 요청의 답 글 길이 상한. 세션 창에 그대로 넘기는 글이라 넉넉히 두되 끝없이 받지는 않는다. */
+const ReqAnswer = z.string().max(4000);
+
 export const ActionRequest = z.discriminatedUnion("target", [
+  /** 할 일에 동작 하나(답하기·미루기 등). */
   z.object({
     target: z.literal("task"),
-    id: z.string().min(1),
+    id: ReqId,
     action: TaskAction,
     /** answer일 때 고른 선택지나 쓴 글. */
-    answer: z.string().optional(),
+    answer: ReqAnswer.optional(),
     /** snooze일 때 다시 보일 시각. */
     until: Millis.optional(),
   }),
+  /** 승무원에 동작 하나(창으로 가기·브리핑 다시 만들기). */
   z.object({
     target: z.literal("crew"),
-    id: z.string().min(1),
+    id: ReqId,
     action: CrewAction,
+  }),
+  /** 책상의 답해 둔 것을 읽음으로: 서버가 그 책상에서 뺀다(docs/desk.md "답해 둔 것"). */
+  z.object({
+    target: z.literal("answer"),
+    crewId: ReqId,
+    id: ReqId,
+    action: z.literal("read"),
   }),
   /**
    * 지도 갈림길에 선실에서 바로 답하기(docs/map.md "갈림길에 답하기"). 서버가 그 세션에 넘기고,
    * map.json은 세션이 고친다(화면이 파일을 직접 쓰지 않는다).
    */
-  /** 책상의 답해 둔 것을 읽음으로: 서버가 그 책상에서 뺀다(docs/desk.md "답해 둔 것"). */
-  z.object({
-    target: z.literal("answer"),
-    crewId: z.string().min(1),
-    id: z.string().min(1),
-    action: z.literal("read"),
-  }),
   z.object({
     target: z.literal("sign"),
     /** 승무원(프로젝트) id */
-    crewId: z.string().min(1),
+    crewId: ReqId,
     /** 표지가 놓인 구역 id */
-    region: z.string().min(1),
+    region: ReqId,
     /** 갈림길 표지 id */
-    id: z.string().min(1),
+    id: ReqId,
     action: z.literal("answer"),
     /** 고른 선택지나 쓴 글 */
-    answer: z.string().min(1),
+    answer: ReqAnswer.min(1),
   }),
 ]);
 export type ActionRequest = z.infer<typeof ActionRequest>;
@@ -362,7 +395,10 @@ export const ActionResult = z.object({
   ok: z.boolean(),
   /** 화면에 잠깐 띄울 한 줄. */
   note: z.string().optional(),
-  /** 브라우저에서 열 주소(focus가 원래 서비스로 가야 할 때). */
-  openUrl: z.url().optional(),
+  /**
+   * 브라우저에서 열 주소(focus가 원래 서비스로 가야 할 때). http(s)만.
+   * 동작은 이미 끝났으니 주소가 틀리면 결과 전체를 버리지 않고 주소만 뺀다.
+   */
+  openUrl: WebUrl.optional().catch(undefined),
 });
 export type ActionResult = z.infer<typeof ActionResult>;

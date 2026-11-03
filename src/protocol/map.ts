@@ -2,6 +2,7 @@
 // 이 파일이 스키마의 원본이다. 비서도 같은 규칙(검사·진행률)으로 읽으니 여기 함수는 모두 순수 함수로 둔다.
 // 자세한 설명은 docs/map.md.
 import { z } from "zod";
+import { parseWhen, WebUrl, When } from "./common";
 
 export const MAP_FORMAT = "starship-map/1" as const;
 
@@ -10,11 +11,6 @@ export const MAX_DEPTH = 3;
 
 /** "새 땅"으로 보이는 기간: 발견된 지 7일 안. */
 export const NEW_FOUND_MS = 7 * 86_400_000;
-
-/** 날짜("2026-10-22")나 시각("2026-10-29T10:12:00+09:00"). 읽을 수 있는 글이면 받는다. */
-const When = z
-  .string()
-  .refine((s) => !Number.isNaN(Date.parse(s)), "날짜로 읽을 수 없어요");
 
 /**
  * 구역 상태.
@@ -37,7 +33,7 @@ export type RegionStatus = z.infer<typeof RegionStatus>;
 export const RegionLink = z.object({
   label: z.string().min(1),
   path: z.string().min(1).optional(),
-  url: z.url().optional(),
+  url: WebUrl.optional(),
 });
 export type RegionLink = z.infer<typeof RegionLink>;
 
@@ -287,5 +283,5 @@ export function isForkForMe(sign: Sign): boolean {
 /** 발견된 지 7일 안이면 "새 땅". */
 export function isNewFound(region: Region, now: number): boolean {
   if (region.found === undefined) return false;
-  return now - Date.parse(region.found) <= NEW_FOUND_MS;
+  return now - parseWhen(region.found) <= NEW_FOUND_MS;
 }

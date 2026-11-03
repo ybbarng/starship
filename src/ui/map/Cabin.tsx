@@ -1,12 +1,13 @@
 "use client";
 
+import Link from "next/link";
+import { type ComponentType, useEffect, useMemo, useState } from "react";
+import { useBridge, useCrewDesk, useCrewMap } from "@/data/hooks";
 // 선실: 승무원(프로젝트) 하나의 방. 가운데 지도 한 장, 위쪽 줄에 진행률·늘어난 구역·갱신 시각,
 // 오른쪽 판에 고른 구역의 자세한 내용. 설계: docs/map.md "화면: 선실".
 // 가운데 그림은 기본이 개척지(FrontierView, 끌고 확대해 다니는 육각 행성 지도. 설계: docs/frontier.md)다.
 // 처음 treemap(MapView)은 /proto/cabin/treemap에 비교용으로 남아 있다.
-import Link from "next/link";
-import { type ComponentType, useEffect, useMemo, useState } from "react";
-import { useBridge, useCrewDesk, useCrewMap } from "@/data/hooks";
+import { parseWhen } from "@/protocol/common";
 import type { Desk } from "@/protocol/desk";
 import {
   droppedIds,
@@ -20,8 +21,9 @@ import type { Crew, Task } from "@/protocol/v1";
 import { CrewBrief, CrewHeader } from "@/protos/classic/CrewDetail";
 import { CrewTasks, crewTaskCount } from "@/ui/desk/CrewTasks";
 import { Toasts } from "@/ui/kit";
+import { agoLabel } from "@/ui/kit/labels";
 import { FrontierView } from "./frontier/FrontierView";
-import { agoLabel, SIGN_ICON } from "./labels";
+import { SIGN_ICON } from "./labels";
 import { MapView, type MapViewProps } from "./MapView";
 import { RegionPanel } from "./RegionPanel";
 
@@ -157,7 +159,7 @@ function TopLine({
 }) {
   const s = summarizeMap(map);
   const pct = Math.round(s.progress * 100);
-  const updated = map.updatedAt ? Date.parse(map.updatedAt) : mapAt;
+  const updated = map.updatedAt ? parseWhen(map.updatedAt) : mapAt;
   return (
     <div
       data-map-topline

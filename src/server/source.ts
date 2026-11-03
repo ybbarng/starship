@@ -16,6 +16,7 @@ import {
   demoDesks,
   type Scenario,
 } from "@/demo/scenario";
+import { parseWhen } from "@/protocol/common";
 import { answerKey, parseDesk } from "@/protocol/desk";
 import { type ProjectMap, parseMap } from "@/protocol/map";
 import {
@@ -27,6 +28,7 @@ import {
   Snapshot,
 } from "@/protocol/v1";
 import { dedupeDesk, dedupeSnapshot } from "./dedupe";
+import { ACTION_TIMEOUT_MS, createShared, fetchUpstream } from "./upstream";
 
 const HOUR = 3_600_000;
 
@@ -44,19 +46,46 @@ export function sourceInfo(): SourceInfo {
 const g = globalThis as typeof globalThis & {
   __starshipDemoSeats?: Map<string, DemoState>;
 };
-function demoState(seat: string) {
+/** 자리 이름 길이 상한. 주소의 seat 쿼리를 그대로 쓰니 끝없이 긴 이름을 받지 않는다. */
+export const MAX_SEAT_CHARS = 200;
+/** 데모 자리 수 상한. 넘으면 가장 오래 안 쓴 자리를 버린다(아무 seat로 메모리를 채우지 못하게). */
+export const MAX_DEMO_SEATS = 50;
+
+function demoSeats() {
   g.__starshipDemoSeats ??= new Map();
-  let s = g.__starshipDemoSeats.get(seat);
-  if (!s) {
-    s = createDemoState();
-    g.__starshipDemoSeats.set(seat, s);
+  return g.__starshipDemoSeats;
+}
+
+/** 자리를 쓴다: 맨 뒤(가장 최근)로 옮기고, 많으면 맨 앞(가장 오래 안 쓴 것)부터 버린다. */
+function putSeat(seat: string, s: DemoState) {
+  const seats = demoSeats();
+  seats.delete(seat);
+  seats.set(seat, s);
+  while (seats.size > MAX_DEMO_SEATS) {
+    const oldest = seats.keys().next().value;
+    if (oldest === undefined) break;
+    seats.delete(oldest);
   }
+}
+
+function demoState(rawSeat: string) {
+  const seat = rawSeat.slice(0, MAX_SEAT_CHARS);
+  const s = demoSeats().get(seat) ?? createDemoState();
+  putSeat(seat, s);
   return s;
 }
 
 export function resetDemo(seat: string) {
-  g.__starshipDemoSeats?.set(seat, createDemoState());
+  putSeat(seat.slice(0, MAX_SEAT_CHARS), createDemoState());
 }
+
+/** 지금 데모 자리 수(시험용). */
+export function demoSeatCount(): number {
+  return demoSeats().size;
+}
+
+// 탭 여러 개가 몇 초마다 같은 것을 물어도 본부에는 1.5초에 한 번만(src/server/upstream.ts)
+const shared = createShared();
 
 export async function getSnapshot(
   scenario: Scenario,
@@ -66,10 +95,13 @@ export async function getSnapshot(
   const info = sourceInfo();
   if (info.mode === "demo")
     return buildSnapshot(demoState(seat), scenario, Date.now(), link);
-  const res = await fetch(`${info.base}/v1/snapshot`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`snapshot ${res.status}`);
-  // 본부가 같은 승무원·할 일을 두 번 보내도 화면에는 하나만(src/server/dedupe.ts)
-  return dedupeSnapshot(Snapshot.parse(await res.json()));
+  const url = `${info.base}/v1/snapshot`;
+  return shared.get(url, async () => {
+    const res = await fetchUpstream(url);
+    if (!res.ok) throw new Error(`snapshot ${res.status}`);
+    // 틀린 항목은 빼고 problems에(src/protocol/v1.ts). 같은 승무원·할 일을 두 번 보내도 화면에는 하나만(src/server/dedupe.ts)
+    return dedupeSnapshot(Snapshot.parse(await res.json()));
+  });
 }
 
 /**
@@ -97,9 +129,8 @@ export async function getCrewMap(
       mapAt: now - 2 * HOUR,
     };
   }
-  const res = await fetch(
+  const res = await fetchUpstream(
     `${info.base}/v1/crew/${encodeURIComponent(crewId)}/map`,
-    { cache: "no-store" },
   );
   if (res.status === 404) return { map: null };
   if (!res.ok) throw new Error(`map ${res.status}`);
@@ -130,9 +161,8 @@ export async function getCrewMapHistory(
     if (crewId !== DEMO_MAP_CREW) return { frames: [] };
     return { frames: demoMapHistory(buildDemoMap(now), now) };
   }
-  const res = await fetch(
+  const res = await fetchUpstream(
     `${info.base}/v1/crew/${encodeURIComponent(crewId)}/map/history`,
-    { cache: "no-store" },
   );
   if (res.status === 404) return { frames: [] };
   if (!res.ok) throw new Error(`map history ${res.status}`);
@@ -185,25 +215,25 @@ export async function getCrewDesk(
   if (info.mode === "demo") {
     const desk = demoDesks(demoState(seat), now)[crewId];
     return desk
-      ? { desk: dedupeDesk(desk), deskAt: Date.parse(desk.updatedAt) }
+      ? { desk: dedupeDesk(desk), deskAt: parseWhen(desk.updatedAt) }
       : { desk: null };
   }
-  const res = await fetch(
-    `${info.base}/v1/crew/${encodeURIComponent(crewId)}/desk`,
-    { cache: "no-store" },
-  );
-  if (res.status === 404) return { desk: null };
-  if (!res.ok) throw new Error(`desk ${res.status}`);
-  const body = DeskEnvelope.parse(await res.json());
-  if (body.desk === null) return { ...body, desk: null };
-  const parsed = parseDesk(body.desk);
-  return parsed.ok
-    ? { ...body, desk: dedupeDesk(parsed.desk) }
-    : {
-        ...body,
-        desk: null,
-        problems: [...(body.problems ?? []), ...parsed.problems],
-      };
+  const url = `${info.base}/v1/crew/${encodeURIComponent(crewId)}/desk`;
+  return shared.get(url, async (): Promise<CrewDeskResponse> => {
+    const res = await fetchUpstream(url);
+    if (res.status === 404) return { desk: null };
+    if (!res.ok) throw new Error(`desk ${res.status}`);
+    const body = DeskEnvelope.parse(await res.json());
+    if (body.desk === null) return { ...body, desk: null };
+    const parsed = parseDesk(body.desk);
+    return parsed.ok
+      ? { ...body, desk: dedupeDesk(parsed.desk) }
+      : {
+          ...body,
+          desk: null,
+          problems: [...(body.problems ?? []), ...parsed.problems],
+        };
+  });
 }
 
 /** 책상 응답에서 desk만 아직 검사하지 않은 껍데기. */
@@ -215,14 +245,26 @@ export async function runAction(
 ): Promise<ActionResult> {
   const info = sourceInfo();
   if (info.mode === "remote") {
-    const res = await fetch(`${info.base}/v1/actions`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(req),
-    });
-    if (!res.ok)
-      return { ok: false, note: `서버가 거절했어요 (${res.status})` };
-    return ActionResult.parse(await res.json());
+    try {
+      const res = await fetchUpstream(
+        `${info.base}/v1/actions`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(req),
+        },
+        ACTION_TIMEOUT_MS,
+      );
+      if (!res.ok)
+        return { ok: false, note: `서버가 거절했어요 (${res.status})` };
+      const body = ActionResult.safeParse(await res.json().catch(() => null));
+      return body.success
+        ? body.data
+        : { ok: false, note: "본부의 답을 읽지 못했어요" };
+    } finally {
+      // 동작 뒤 읽기가 동작 전 스냅숏·책상을 다시 보이지 않게
+      shared.clear();
+    }
   }
   return demoAction(req, seat);
 }

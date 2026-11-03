@@ -2,27 +2,21 @@
 // 이 파일이 스키마의 원본이다. 비서도 같은 규칙으로 읽으니 여기 함수는 모두 순수 함수로 둔다.
 // 자세한 설명은 docs/desk.md.
 import { z } from "zod";
+import { WebUrl, When } from "./common";
 
 export const DESK_FORMAT = "starship-desk/1" as const;
 
-/** 날짜("2026-10-31")나 시각("2026-10-31T10:12:00+09:00"). 읽을 수 있는 글이면 받는다. */
-const When = z
-  .string()
-  .refine((s) => !Number.isNaN(Date.parse(s)), "날짜로 읽을 수 없어요");
-
-/** http(s) 주소만 받는다. 화면에서 그대로 링크로 여니까 다른 scheme은 막는다. */
-const WebUrl = z
-  .url()
-  .refine((s) => /^https?:\/\//i.test(s), "http(s) 주소만 쓸 수 있어요");
-
 /**
- * 이 맥의 파일 절대 경로. 선실이 "보기"(/api/files)·"열기"(/api/files/open) 단추로 쓴다.
- * 허용 폴더·숨김·확장자 검사는 Starship 서버가 따로 한다(docs/files.md). 여기서는 모양만 본다.
+ * 이 맥의 파일 경로. 절대 경로(/로 시작)나 홈 기준 경로(~/로 시작). 선실이 "보기"(/api/files)·"열기"(/api/files/open) 단추로 쓴다.
+ * ~/는 Starship 서버가 홈으로 펼친다. 허용 폴더·숨김·확장자 검사도 서버가 따로 한다(docs/files.md). 여기서는 모양만 본다.
  */
 const FilePath = z
   .string()
   .max(4096)
-  .refine((s) => s.startsWith("/"), "절대 경로(/로 시작)만 쓸 수 있어요");
+  .refine(
+    (s) => s.startsWith("/") || s.startsWith("~/"),
+    "절대 경로(/로 시작)나 ~/로 시작하는 경로만 쓸 수 있어요",
+  );
 
 /**
  * 기다리는 것의 종류.

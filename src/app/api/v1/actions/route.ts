@@ -1,4 +1,5 @@
-import { ActionRequest } from "@/protocol/v1";
+import { ActionRequest, ActionResult } from "@/protocol/v1";
+import { readJsonBody } from "@/server/body";
 import { isSameOrigin } from "@/server/origin";
 import { resetDemo, runAction, sourceInfo } from "@/server/source";
 
@@ -11,7 +12,14 @@ export async function POST(request: Request) {
     );
   }
   const seat = new URL(request.url).searchParams.get("seat") ?? "default";
-  const body: unknown = await request.json().catch(() => null);
+  const read = await readJsonBody(request);
+  if (!read.ok) {
+    return Response.json(
+      { ok: false, note: "요청이 너무 커요" },
+      { status: read.status },
+    );
+  }
+  const body = read.value;
   if (
     sourceInfo().mode === "demo" &&
     typeof body === "object" &&
@@ -25,5 +33,14 @@ export async function POST(request: Request) {
   if (!parsed.success) {
     return Response.json({ ok: false, note: "잘못된 요청" }, { status: 400 });
   }
-  return Response.json(await runAction(parsed.data, seat));
+  // 본부가 멈췄거나(시간 초과) 꺼져 있어도 화면에는 한 줄로 알린다.
+  const result = await runAction(parsed.data, seat).catch(
+    (): ActionResult => ({ ok: false, note: "본부에 닿지 못했어요" }),
+  );
+  const checked = ActionResult.safeParse(result);
+  return Response.json(
+    checked.success
+      ? checked.data
+      : { ok: false, note: "본부의 답을 읽지 못했어요" },
+  );
 }

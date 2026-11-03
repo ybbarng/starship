@@ -1,10 +1,11 @@
 "use client";
 
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 // 시안: 선원 작업실 단면도. 우주선을 옆으로 잘라 층(맨 위 구역)과 방(구역)을 들여다본다.
 // 방 안의 모습이 상태다(Scene). here 방만 환하고 그 승무원의 동물이 일한다.
 // 내가 정할 갈림길이 있는 방에서는 같은 동물이 문 앞에서 손짓한다(그 승무원이 나를 부르는 자리).
 // 교신·위험은 방 벽의 작은 아이콘, 발견 7일 안 방은 새 벽지와 "새 방" 꼬리표.
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { parseWhen } from "@/protocol/common";
 import { isForkForMe, isNewFound, type Region } from "@/protocol/map";
 import type { Crew } from "@/protocol/v1";
 import { Animal, animalFor, poseFor } from "@/ui/crew";
@@ -248,7 +249,7 @@ function RoomView({
           ? poseFor(crew.status)
           : "work";
   const waitedDays = r.since
-    ? (now - Date.parse(r.since)) / 86_400_000
+    ? (now - parseWhen(r.since)) / 86_400_000
     : undefined;
 
   return (

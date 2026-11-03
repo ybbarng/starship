@@ -1,14 +1,15 @@
 "use client";
 
+import { useState } from "react";
+import { useAct } from "@/data/hooks";
 // 답해 둔 것: 물어본 것에 세션이 답했는데 이어서 다른 일을 해 대화에서 지나간 답(2026-11-02 사용자 요청).
 // 결재함(그 승무원 묶음 맨 위)과 선실 "할 일"이 같이 쓴다. "읽음"을 누르면 서버가 책상에서 뺀다.
 // 형식: src/protocol/desk.ts Answered, 뜻: docs/desk.md "답해 둔 것".
-import { useState } from "react";
-import { useAct } from "@/data/hooks";
+import { parseWhen } from "@/protocol/common";
 import type { Answered } from "@/protocol/desk";
 import { FileButtons } from "@/ui/kit/FileButtons";
 import { findPaths } from "@/ui/kit/filePaths";
-import { agoLabel } from "@/ui/map/labels";
+import { agoLabel } from "@/ui/kit/labels";
 
 export function AnswerList({
   crewId,
@@ -24,7 +25,7 @@ export function AnswerList({
   const [read, setRead] = useState<Set<string>>(new Set());
   const shown = answers
     .filter((a) => !read.has(a.id))
-    .sort((a, b) => Date.parse(b.at) - Date.parse(a.at));
+    .sort((a, b) => parseWhen(b.at) - parseWhen(a.at));
   if (!shown.length) return null;
   return (
     <section data-answers className="flex flex-col gap-2">
@@ -76,7 +77,7 @@ function AnswerCard({
       <div className="flex items-baseline gap-2 text-[11px] text-white/45">
         <span className="font-semibold text-[#7ce0ff]/80">물어본 것</span>
         <span className="ml-auto shrink-0">
-          {agoLabel(Date.parse(answer.at), now)}
+          {agoLabel(parseWhen(answer.at), now)}
         </span>
       </div>
       <div className="mt-0.5 text-[13px] font-semibold text-white/90">

@@ -1,11 +1,12 @@
 "use client";
 
-// 연료 기록: 토큰 사용량을 기간(오늘·7일·30일)마다 업무·개인 합계, 프로젝트·세션 순위로 본다. 설계: docs/usage.md.
-// 캐시 읽기가 출력의 수백 배라 한 줄 합계로 보이면 오해하니, 입력·캐시 쓰기·캐시 읽기·출력을 늘 나눠 적는다.
 import Link from "next/link";
 import { useState } from "react";
 import { useBridge, useUsage } from "@/data/hooks";
 import cockpit from "@/protos/cockpit/cockpit.module.css";
+// 연료 기록: 토큰 사용량을 기간(오늘·7일·30일)마다 업무·개인 합계, 프로젝트·세션 순위로 본다. 설계: docs/usage.md.
+// 캐시 읽기가 출력의 수백 배라 한 줄 합계로 보이면 오해하니, 입력·캐시 쓰기·캐시 읽기·출력을 늘 나눠 적는다.
+import { agoLabel } from "@/ui/kit/labels";
 import {
   AREA_LABEL,
   type Area,
@@ -43,13 +44,6 @@ export function tokens(n: number): string {
 export function usd(n: number): string {
   if (n < 10) return `$${n.toFixed(2)}`;
   return `$${Math.round(n).toLocaleString("en-US")}`;
-}
-
-function ago(t: number, now: number): string {
-  const s = Math.max(0, Math.round((now - t) / 1000));
-  if (s < 60) return `${s}초 전`;
-  if (s < 3600) return `${Math.round(s / 60)}분 전`;
-  return `${Math.round(s / 3600)}시간 전`;
 }
 
 function when(t: number): string {
@@ -153,7 +147,8 @@ function Meta({
         <span
           title={`기록 파일 ${m.files}개, 합계 칸 ${m.buckets.toLocaleString("ko-KR")}개를 남겨 두었어요. 5분보다 자주 다시 읽지 않아요`}
         >
-          기록 {ago(m.scannedAt, data.to)}에 읽음 · {m.scanMs}ms
+          기록 {agoLabel(m.scannedAt, data.to, { seconds: true })}에 읽음 ·{" "}
+          {m.scanMs}ms
         </span>
       )}
       {m.source === "local" && (

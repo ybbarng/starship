@@ -50,13 +50,3 @@ export const TALK_STATUS_LABEL: Record<
 export function ownerLabel(owner: string): string {
   return owner === "me" ? "내가" : owner;
 }
-
-/** "2시간 전", "3일 전" */
-export function agoLabel(at: number, now: number): string {
-  const m = Math.max(0, Math.round((now - at) / 60_000));
-  if (m < 1) return "방금";
-  if (m < 60) return `${m}분 전`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}시간 전`;
-  return `${Math.floor(h / 24)}일 전`;
-}

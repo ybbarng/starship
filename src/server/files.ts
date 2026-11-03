@@ -248,14 +248,18 @@ export function parseRange(
 export { isLoopbackHost };
 
 /**
- * 서버를 이 컴퓨터 자신(-H 127.0.0.1 등)에만 열고 띄웠나. 띄울 때 인자(-H·--hostname)를 보고,
- * 없으면 HOSTNAME 환경 변수를 본다. 둘 다 없으면 모든 주소로 뜬 것으로 보고 false.
+ * 서버를 이 컴퓨터 자신(-H 127.0.0.1 등)에만 열고 띄웠나. 차례로 본다:
+ * ① STARSHIP_BIND 환경 변수(띄우는 쪽이 밝힌 값) ② 띄울 때 인자(-H·--hostname) ③ HOSTNAME 환경 변수.
+ * 셋 다 없으면 모든 주소로 뜬 것으로 보고 false.
+ * `next dev`는 서버를 자식 프로세스로 띄우며 인자를 넘기지 않아 ②가 보이지 않는다(next/dist/cli/next-dev.js). 그래서 ①을 둔다.
  * 모든 주소로 뜨면 같은 Wi-Fi·VPN의 다른 기기가 Host를 꾸며 들어올 수 있어 파일을 내주지 않는다(2026-11-01 비서 지적).
  */
 export function boundToLoopback(
   argv: readonly string[] = process.argv,
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): boolean {
+  const bind = env.STARSHIP_BIND?.trim();
+  if (bind) return LOOPBACK.has(bind.toLowerCase());
   let host: string | undefined;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i] ?? "";

@@ -2,6 +2,7 @@
 // 셸을 거치지 않는다(execFile). 검사 규칙은 src/server/files.ts, 설계는 docs/files.md.
 import { execFile } from "node:child_process";
 import { z } from "zod";
+import { readJsonBody } from "@/server/body";
 import {
   boundToLoopback,
   fileRoots,
@@ -30,7 +31,14 @@ export async function POST(request: Request) {
       { status: 403 },
     );
   }
-  const parsed = Body.safeParse(await request.json().catch(() => null));
+  const read = await readJsonBody(request);
+  if (!read.ok) {
+    return Response.json(
+      { ok: false, note: "요청이 너무 커요" },
+      { status: read.status },
+    );
+  }
+  const parsed = Body.safeParse(read.value);
   if (!parsed.success) {
     return Response.json({ ok: false, note: "잘못된 요청" }, { status: 400 });
   }

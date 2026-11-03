@@ -91,8 +91,22 @@ describe("parseDesk", () => {
       );
     });
 
-    it("상대 경로나 ~로 시작하는 path는 걸린다", () => {
-      for (const path of ["Desktop/a.png", "~/Desktop/a.png", ""]) {
+    it("~/로 시작하는 path도 받는다(서버가 홈으로 펼친다)", () => {
+      const result = parseDesk(
+        desk([
+          {
+            id: "report",
+            type: "check",
+            title: "보고서 확인",
+            items: [{ label: "보고서", path: "~/Documents/r.pdf" }],
+          },
+        ]),
+      );
+      expect(result.ok).toBe(true);
+    });
+
+    it("상대 경로나 ~user 꼴 path는 걸린다", () => {
+      for (const path of ["Desktop/a.png", "~me/Desktop/a.png", "~", ""]) {
         const result = parseDesk(
           desk([
             {
