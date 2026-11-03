@@ -4,7 +4,7 @@ import type { Task } from "@/protocol/v1";
 import { crewTaskCount } from "@/ui/desk/CrewTasks";
 import { deskSentKey, forkKey, isReadHidden, readKey, useSent } from "./sent";
 
-beforeEach(() => useSent.setState({ sent: {}, read: {} }));
+beforeEach(() => useSent.setState({ sent: {}, read: {}, snoozed: {} }));
 
 describe("보낸 답: 화면 하나가 아니라 저장소에", () => {
   it("깃발 답은 승무원·구역·깃발로 찾는다(창을 닫았다 열어도 같은 열쇠)", () => {
@@ -28,6 +28,17 @@ describe("보낸 답: 화면 하나가 아니라 저장소에", () => {
     expect(Object.keys(useSent.getState().sent).sort()).toEqual(
       [keep, other].sort(),
     );
+  });
+
+  it("미룬 기다림도 책상에서 빠지면 함께 지운다", () => {
+    const keep = deskSentKey(deskTaskId("web-shop", "coupon-ui"));
+    const gone = deskSentKey(deskTaskId("web-shop", "prod-push"));
+    const until = Date.parse("2026-11-03T11:00:00+09:00");
+    const s = useSent.getState();
+    s.snooze(keep, until);
+    s.snooze(gone, until);
+    s.prune(deskTaskId("web-shop", ""), new Set([keep]));
+    expect(useSent.getState().snoozed).toEqual({ [keep]: until });
   });
 });
 

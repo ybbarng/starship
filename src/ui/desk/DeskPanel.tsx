@@ -3,7 +3,7 @@
 // 선실 오른쪽 판의 책상: 세션이 나를 기다리는 것(카드)과 지금 하는 일. 설계: docs/desk.md.
 // 답은 책상이 아니라 같은 기다림의 Task(id desk:<crewId>:<waitId>)에 answer로 보낸다.
 import { useEffect, useState } from "react";
-import { useAct } from "@/data/hooks";
+import { SNOOZE_MS, useAct } from "@/data/hooks";
 import { deskSentKey, useSent } from "@/data/sent";
 import { parseWhen } from "@/protocol/common";
 import {
@@ -17,6 +17,7 @@ import type { Task } from "@/protocol/v1";
 import { FileButtons } from "@/ui/kit/FileButtons";
 import { agoLabel } from "@/ui/kit/labels";
 import { waitFiles } from "./waitFiles";
+import { snoozeNote, waitAnswerState } from "./waitState";
 
 export const WAIT_LABEL: Record<WaitType, string> = {
   decide: "고르기",
@@ -137,6 +138,16 @@ function WaitCard({
   // 그 사이 "아직 답할 수 없어요"가 잘못 뜨지 않게, 보낸 답을 남겨 두고 보여 준다(2026-11-03)
   const sent = useSent((s) => s.sent[sentKey]);
   const mark = useSent((s) => s.mark);
+  // 미뤄도 할 일은 잠시 빠지고 카드는 남는다. 본부가 받았을 때만 미룬 끝을 남겨 "n분 뒤 다시 와요"로 보인다
+  const snoozedUntil = useSent((s) => s.snoozed[sentKey]);
+  const snoozeIt = useSent((s) => s.snooze);
+  const state = waitAnswerState({ sent, canAnswer, snoozedUntil, now });
+  const snooze = async () => {
+    if (!task) return;
+    const until = Date.now() + SNOOZE_MS;
+    const result = await act.task(task, "snooze", undefined, until);
+    if (result.ok) snoozeIt(sentKey, until);
+  };
   const send = async (choice?: string) => {
     const answer = deskAnswer(choice, text);
     if (!task || !answer) return;
@@ -150,7 +161,7 @@ function WaitCard({
     <button
       key={label}
       type="button"
-      disabled={!canAnswer || act.pending}
+      disabled={state !== "open" || act.pending}
       onClick={() => void send(label)}
       className={`rounded px-2.5 py-1 text-[12px] font-semibold disabled:opacity-40 ${
         primary
@@ -275,11 +286,15 @@ function WaitCard({
           </ol>
         )}
 
-        {sent !== undefined ? (
+        {state === "sent" ? (
           <p data-wait-sent className="text-[12px] text-[#bff3d2]">
             “{sent}” 보냈어요 · 세션이 고치면 사라져요
           </p>
-        ) : canAnswer ? (
+        ) : state === "snoozed" && snoozedUntil !== undefined ? (
+          <p data-wait-snoozed className="text-[11.5px] text-white/50">
+            {snoozeNote(snoozedUntil, now)}
+          </p>
+        ) : state === "open" ? (
           <div className="flex flex-col gap-1.5">
             <textarea
               value={text}
@@ -313,7 +328,7 @@ function WaitCard({
                 <button
                   type="button"
                   disabled={act.pending}
-                  onClick={() => task && act.task(task, "snooze")}
+                  onClick={() => void snooze()}
                   className="ml-auto rounded px-2 py-1 text-[11.5px] text-white/45 hover:bg-white/[0.06] hover:text-white/75"
                 >
                   1시간 미루기
