@@ -3,6 +3,7 @@
 // 이 시안이 함께 쓰는 작은 도우미: 화면 크기, 모드 사이를 부드럽게 옮기는 값, 교신 화상 창 상태, 일 신호 계산.
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { Gauge, Hail, Task } from "@/protocol/v1";
+import { reviewLane } from "./inboxGroups";
 
 export const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -116,7 +117,7 @@ export const HOUR = 3_600_000;
 export const PILE_WARN = 5;
 export const PILE_ALERT = 10;
 
-/** 경고등 줄이 쓰는 값: 일이 쌓였나, 오래 기다린 일, 정기 작업 */
+/** 경고등 줄이 쓰는 값: 일이 쌓였나, 오래 기다린 일, 반나절 넘은 코드 리뷰, 정기 작업 */
 export function useWarnings(
   tasks: Task[],
   gauges: Gauge[],
@@ -138,6 +139,9 @@ export function useWarnings(
       oldest > 4 * HOUR ? "alert" : old.length > 0 ? "warn" : "off";
     const jobs: Lamp = failed.length ? "alert" : warned.length ? "warn" : "off";
     const hail: Lamp = hails.length ? "warn" : "off";
-    return { old, failed, warned, pile, late, jobs, hail };
+    // 반나절(REVIEW_LATE_MS) 넘게 기다린 코드 리뷰 수. 0이면 경고등 줄에 칸을 두지 않는다
+    const reviewLate = reviewLane(tasks, now).late;
+    const review: Lamp = reviewLate ? "warn" : "off";
+    return { old, failed, warned, pile, late, jobs, hail, reviewLate, review };
   }, [tasks, gauges, hails, now]);
 }

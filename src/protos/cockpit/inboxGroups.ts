@@ -102,3 +102,56 @@ export function pickGroup(
 ): InboxGroup | undefined {
   return groups.find((g) => g.key === selected) ?? groups[0];
 }
+
+/* ───────────── 코드 리뷰 칸(2026-11-03 사용자 결정) ───────────── */
+
+/** 코드 리뷰가 이만큼 넘게 기다리면 리뷰 칸 머리를 경고 색으로, 경고등에 한 줄 */
+export const REVIEW_LATE_MS = 12 * 3600_000;
+
+/** 리뷰 칸에서 고른 서류 하나의 묶음 열쇠 앞머리. 뒤에 Task id가 붙는다 */
+export const REVIEW_PREFIX = "review:";
+
+/** 코드 리뷰 칸에 들어갈 결재: 출처가 코드 리뷰이고 소식이 아닌 것(승무원 상관없이) */
+export function isCodeReview(t: Task): boolean {
+  return t.source.kind === "review" && !isNews(t);
+}
+
+export type ReviewLane = {
+  /** 오래 기다린 것부터 */
+  tasks: Task[];
+  /** REVIEW_LATE_MS 넘게 기다린 리뷰 수 */
+  late: number;
+};
+
+/**
+ * 결재함 맨 위 "코드 리뷰" 칸. 같은 할 일이 아래 승무원 묶음에도 그대로 있으니 건수에 더하지 않는다.
+ * 사용자가 리뷰를 다른 결재 사이에서 계속 놓쳐서 따로 모은다(docs/cockpit-inbox.md).
+ */
+export function reviewLane(tasks: readonly Task[], now: number): ReviewLane {
+  const list = tasks.filter(isCodeReview).sort((a, b) => a.since - b.since);
+  return {
+    tasks: list,
+    late: list.filter((t) => now - t.since > REVIEW_LATE_MS).length,
+  };
+}
+
+/** 리뷰 칸에서 고른 서류 하나를 묶음처럼 연다. 고른 것이 리뷰 줄이 아니거나 처리해서 사라졌으면 undefined */
+export function pickReview(
+  lane: ReviewLane,
+  selected: string | null,
+  crewById: ReadonlyMap<string, Crew>,
+  now: number,
+): InboxGroup | undefined {
+  if (!selected?.startsWith(REVIEW_PREFIX)) return undefined;
+  const id = selected.slice(REVIEW_PREFIX.length);
+  const t = lane.tasks.find((x) => x.id === id);
+  if (!t) return undefined;
+  return {
+    key: selected,
+    crew: t.crewId ? crewById.get(t.crewId) : undefined,
+    tasks: [t],
+    oldest: t.since,
+    stale: now - t.since > STALE_MS ? 1 : 0,
+    answers: 0,
+  };
+}

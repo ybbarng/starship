@@ -5,6 +5,10 @@ import {
   LOOSE_KEY,
   lastReplies,
   pickGroup,
+  pickReview,
+  REVIEW_LATE_MS,
+  REVIEW_PREFIX,
+  reviewLane,
   STALE_MS,
 } from "./inboxGroups";
 
@@ -185,5 +189,112 @@ describe("pickGroup: 고른 묶음", () => {
   it("다 처리해서 사라졌으면 첫 묶음", () => {
     expect(pickGroup(groups, "gone")?.key).toBe("billing");
     expect(pickGroup([], "gone")).toBeUndefined();
+  });
+});
+
+describe("reviewLane: 결재함 맨 위 코드 리뷰 칸", () => {
+  /** 책상에서 온 코드 리뷰(topic code-review → source review). 비서가 내보내는 모양 */
+  const deskReview = (id: string, crewId: string, hoursAgo: number) =>
+    task(id, crewId, hoursAgo, {
+      kind: "review",
+      source: { kind: "review" },
+      title: `${id} 리뷰 봐 주세요`,
+      actions: ["focus", "answer", "snooze"],
+      choices: ["확인함", "고칠 것 있음"],
+    });
+  /** 책상 밖 GitHub 리뷰 요청(승무원 없이 오기도 한다) */
+  const ghReview = (id: string, hoursAgo: number, crewId?: string) =>
+    task(id, undefined, hoursAgo, {
+      kind: "review",
+      source: { kind: "review", service: "GitHub" },
+      crewId,
+      url: `https://example.com/shop/pull/${id}`,
+    });
+
+  it("출처가 코드 리뷰인 것만 승무원 상관없이 모아 오래 기다린 것부터", () => {
+    const lane = reviewLane(
+      [
+        task("coupon", "web-shop", 9),
+        deskReview("pr-231", "web-shop", 2),
+        ghReview("212", 5),
+        ghReview("97", 1, "billing"),
+        // 책상 check이지만 코드 리뷰가 아닌 것(연출 확인)은 넣지 않는다
+        task("motion", "web-shop", 20, { kind: "review" }),
+      ],
+      NOW,
+    );
+    expect(lane.tasks.map((t) => t.id)).toEqual([
+      "212",
+      "desk:web-shop:pr-231",
+      "97",
+    ]);
+  });
+
+  it("소식(reply)은 리뷰 출처여도 넣지 않는다", () => {
+    const lane = reviewLane(
+      [ghReview("212", 1), { ...ghReview("old", 3), kind: "reply" }],
+      NOW,
+    );
+    expect(lane.tasks.map((t) => t.id)).toEqual(["212"]);
+  });
+
+  it("반나절(REVIEW_LATE_MS) 넘게 기다린 리뷰 수를 센다", () => {
+    expect(REVIEW_LATE_MS).toBe(12 * H);
+    const lane = reviewLane(
+      [deskReview("a", "web-shop", 13), ghReview("b", 12), ghReview("c", 1)],
+      NOW,
+    );
+    expect(lane.late).toBe(1);
+  });
+
+  it("리뷰가 없으면 빈 칸", () => {
+    expect(reviewLane([task("a", "web-shop", 1)], NOW)).toEqual({
+      tasks: [],
+      late: 0,
+    });
+  });
+
+  it("승무원 묶음과 결재 건수는 그대로다(두 번 세지 않는다)", () => {
+    const tasks = [
+      deskReview("pr-231", "web-shop", 2),
+      task("a", "web-shop", 1),
+    ];
+    const groups = inboxGroups(tasks, new Map(), NOW);
+    expect(groups.reduce((n, g) => n + g.tasks.length, 0)).toBe(2);
+    expect(reviewLane(tasks, NOW).tasks).toHaveLength(1);
+  });
+
+  describe("pickReview: 리뷰 줄을 누르면 그 서류 하나", () => {
+    const byId = new Map([["web-shop", crew("web-shop")]]);
+    const lane = reviewLane(
+      [deskReview("pr-231", "web-shop", 2), ghReview("212", 50)],
+      NOW,
+    );
+
+    it("고른 리뷰 한 장을 그 승무원 묶음처럼 연다", () => {
+      const g = pickReview(
+        lane,
+        `${REVIEW_PREFIX}desk:web-shop:pr-231`,
+        byId,
+        NOW,
+      );
+      expect(g?.tasks.map((t) => t.id)).toEqual(["desk:web-shop:pr-231"]);
+      expect(g?.crew?.id).toBe("web-shop");
+      expect(g?.key).toBe(`${REVIEW_PREFIX}desk:web-shop:pr-231`);
+    });
+
+    it("승무원 없는 리뷰는 승무원 없이, 이틀 넘었으면 묵음 1", () => {
+      const g = pickReview(lane, `${REVIEW_PREFIX}212`, byId, NOW);
+      expect(g?.crew).toBeUndefined();
+      expect(g?.stale).toBe(1);
+    });
+
+    it("리뷰 줄이 아니거나 처리해서 사라졌으면 없다", () => {
+      expect(pickReview(lane, "web-shop", byId, NOW)).toBeUndefined();
+      expect(pickReview(lane, null, byId, NOW)).toBeUndefined();
+      expect(
+        pickReview(lane, `${REVIEW_PREFIX}gone`, byId, NOW),
+      ).toBeUndefined();
+    });
   });
 });

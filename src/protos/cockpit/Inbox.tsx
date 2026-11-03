@@ -1,6 +1,7 @@
 "use client";
 
 // 조종석 결재함(2026-11-02, '지금 할 일' 한 장을 대신함). 묶는 규칙은 inboxGroups.ts, 설계는 docs/cockpit-inbox.md.
+//   왼쪽 맨 위 = 코드 리뷰 칸(2026-11-03): 사람이 봐야 할 코드 리뷰를 승무원 상관없이 오래된 것부터. 누르면 그 서류 한 장
 //   왼쪽 = 승무원 목차: 기다리는 일이 있는 승무원(건수·가장 오래 기다린 시간·지금 하는 일), 그 아래 나머지 승무원
 //   가운데 = 고른 승무원의 결재 서류: 제목 전체·세부·선택지를 모두 펼치고 그 자리에서 처리
 import Link from "next/link";
@@ -20,14 +21,25 @@ import {
 import { FileButtons } from "@/ui/kit/FileButtons";
 import { findPaths } from "@/ui/kit/filePaths";
 import styles from "./cockpit.module.css";
-import { type InboxGroup, LOOSE_KEY, STALE_MS } from "./inboxGroups";
+import {
+  type InboxGroup,
+  LOOSE_KEY,
+  REVIEW_LATE_MS,
+  REVIEW_PREFIX,
+  type ReviewLane,
+  STALE_MS,
+} from "./inboxGroups";
 import { CrewLamp, MapBadge, sortCrew } from "./Panel";
 import { ContextTag, KEY_SMALL } from "./parts";
 
 const LATE_MS = 3600_000;
 
 function groupName(g: InboxGroup): string {
-  return g.key === LOOSE_KEY ? "새 일" : (g.crew?.name ?? g.key);
+  if (g.key === LOOSE_KEY) return "새 일";
+  if (g.crew) return g.crew.name;
+  // 리뷰 칸에서 연 한 장: 승무원 목록에 없으면 crewId, 승무원 없이 왔으면 "새 일"
+  if (g.key.startsWith(REVIEW_PREFIX)) return g.tasks[0]?.crewId ?? "새 일";
+  return g.key;
 }
 
 function groupContext(g: InboxGroup): Context {
@@ -45,8 +57,93 @@ function ageTone(since: number, now: number): string {
 
 /* ───────────── 왼쪽: 승무원 목차 ───────────── */
 
+/** 결재함 맨 위 코드 리뷰 칸. 0건이면 숨긴다. 건수는 아래 "결재 n"에 이미 들어 있어 따로 더하지 않는다 */
+function ReviewLaneBox({
+  lane,
+  selected,
+  crew,
+  now,
+  onSelect,
+}: {
+  lane: ReviewLane;
+  selected: string | undefined;
+  crew: Crew[];
+  now: number;
+  onSelect: (key: string) => void;
+}) {
+  if (!lane.tasks.length) return null;
+  const late = lane.late > 0;
+  const nameOf = (t: Task) =>
+    (t.crewId && crew.find((c) => c.id === t.crewId)?.name) ||
+    t.crewId ||
+    t.from;
+  return (
+    <div
+      data-review-lane
+      data-review-late={late ? lane.late : undefined}
+      className={`shrink-0 rounded-md border px-1 pt-1 pb-1 ${
+        late
+          ? "border-[#ff8a7a]/35 bg-[#ff8a7a]/[0.06]"
+          : "border-[#b9a2ff]/25 bg-[#b9a2ff]/[0.05]"
+      }`}
+    >
+      <div
+        className={`flex items-center gap-2 px-1 text-[9.5px] font-semibold tracking-[0.22em] ${
+          late ? "text-[#ff8a7a]" : "text-[#cdbdff]/80"
+        }`}
+      >
+        <span>코드 리뷰 {lane.tasks.length}</span>
+        <span
+          className={`h-px flex-1 ${late ? "bg-[#ff8a7a]/25" : "bg-[#b9a2ff]/20"}`}
+        />
+        {late && (
+          <span className="tracking-normal">반나절 넘음 {lane.late}</span>
+        )}
+      </div>
+      <ul className="mt-0.5 max-h-[132px] space-y-px overflow-y-auto [scrollbar-color:rgba(255,255,255,.15)_transparent] [scrollbar-width:thin]">
+        {lane.tasks.map((t) => {
+          const key = `${REVIEW_PREFIX}${t.id}`;
+          const on = key === selected;
+          const old = now - t.since > REVIEW_LATE_MS;
+          return (
+            <li key={t.id}>
+              <button
+                type="button"
+                data-review-item={t.id}
+                aria-pressed={on}
+                onClick={() => onSelect(key)}
+                title={t.title}
+                className={`flex w-full min-w-0 items-center gap-1.5 rounded px-1.5 py-[3px] text-left text-[11.5px] transition ${
+                  on
+                    ? "bg-[#7fb8ff]/[0.13] shadow-[inset_2px_0_0_#7fb8ff]"
+                    : "hover:bg-white/[0.06]"
+                }`}
+              >
+                <span className="max-w-[38%] shrink-0 truncate font-semibold text-white/80">
+                  {nameOf(t)}
+                </span>
+                <span className="min-w-0 flex-1 truncate text-white/60">
+                  {t.title}
+                </span>
+                <span
+                  className={`shrink-0 font-mono text-[10.5px] tabular-nums ${
+                    old ? "text-[#ff8a7a]" : ageTone(t.since, now)
+                  }`}
+                >
+                  {elapsed(t.since, now)}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export function InboxIndex({
   groups,
+  reviews,
   selected,
   crew,
   now,
@@ -54,6 +151,8 @@ export function InboxIndex({
   onCrew,
 }: {
   groups: InboxGroup[];
+  /** 맨 위 코드 리뷰 칸(reviewLane) */
+  reviews: ReviewLane;
   selected: string | undefined;
   crew: Crew[];
   now: number;
@@ -70,6 +169,13 @@ export function InboxIndex({
       data-inbox-index
       className={`${styles.bay} flex h-full min-h-0 flex-col gap-1.5 overflow-hidden rounded-lg px-2 pt-2 pb-2`}
     >
+      <ReviewLaneBox
+        lane={reviews}
+        selected={selected}
+        crew={crew}
+        now={now}
+        onSelect={onSelect}
+      />
       <div className="flex items-center gap-2 px-0.5 text-[9.5px] font-semibold tracking-[0.22em] text-white/35">
         <span>승무원</span>
         <span className="h-px flex-1 bg-white/[0.07]" />
@@ -229,7 +335,7 @@ export function InboxSheet({
                   task={t}
                   now={now}
                   showFrom={t.from !== groupName(group)}
-                  showContext={group.key === LOOSE_KEY}
+                  showContext={!group.crew}
                 />
               ))}
               {reply && <ReplyNote key={reply.id} task={reply} now={now} />}
@@ -273,7 +379,11 @@ function SheetHeader({
   return (
     <header className="shrink-0 border-b border-white/[0.07] px-4 pt-2.5 pb-2">
       <div className="mb-1 flex items-center gap-2 text-[10px] font-semibold tracking-[0.24em] text-[#7fb8ff]/70">
-        <span>결재함</span>
+        <span>
+          {group.key.startsWith(REVIEW_PREFIX)
+            ? "결재함 · 코드 리뷰"
+            : "결재함"}
+        </span>
         <span className="h-px flex-1 bg-[#7fb8ff]/15" />
         <span className="font-mono tracking-normal text-white/45 tabular-nums">
           {group.tasks.length

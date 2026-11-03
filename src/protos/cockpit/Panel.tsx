@@ -16,7 +16,15 @@ import { VERDICT_LABEL, verdictDetail } from "@/ui/link/model";
 import { FuelGauge } from "@/ui/usage/FuelGauge";
 import styles from "./cockpit.module.css";
 import { InboxIndex, InboxSheet } from "./Inbox";
-import { inboxGroups, isNews, lastReplies, pickGroup } from "./inboxGroups";
+import {
+  inboxGroups,
+  isNews,
+  lastReplies,
+  pickGroup,
+  pickReview,
+  REVIEW_PREFIX,
+  reviewLane,
+} from "./inboxGroups";
 import { type Lamp, PILE_WARN, selecting, type useWarnings } from "./util";
 
 export type Warnings = ReturnType<typeof useWarnings>;
@@ -80,6 +88,7 @@ export function Annunciators({
   link,
   onList,
   onHail,
+  onReview,
 }: {
   tasks: Task[];
   hails: Hail[];
@@ -90,6 +99,8 @@ export function Annunciators({
   link?: Link;
   onList: (k: ListKind) => void;
   onHail: () => void;
+  /** 늦은 코드 리뷰 등을 누르면: 결재함 리뷰 칸의 가장 오래된 리뷰를 연다 */
+  onReview?: () => void;
 }) {
   const w = warnings;
   const jobsLabel = w.failed.length
@@ -118,6 +129,15 @@ export function Annunciators({
         hint="한 시간 넘게 기다린 일. 4시간을 넘기면 빨강. 누르면 그 목록"
         onClick={w.old.length ? () => onList("late") : undefined}
       />
+      {w.reviewLate > 0 && (
+        <Tile
+          id="review"
+          lamp={w.review}
+          label={`코드 리뷰 ${w.reviewLate}건이 반나절 넘게 기다려요`}
+          hint="사람이 봐야 할 코드 리뷰가 12시간 넘게 기다렸어요. 누르면 가장 오래된 리뷰 서류를 열어요(결재함 맨 위 코드 리뷰 칸)"
+          onClick={onReview}
+        />
+      )}
       <Tile
         id="jobs"
         lamp={w.jobs}
@@ -535,7 +555,11 @@ export function Dashboard({
   );
   const replies = useMemo(() => lastReplies(tasks), [tasks]);
   const decisions = useMemo(() => tasks.filter((t) => !isNews(t)), [tasks]);
-  const group = pickGroup(groups, picked);
+  const reviews = useMemo(() => reviewLane(tasks, now), [tasks, now]);
+  // 리뷰 칸에서 고른 서류가 있으면 그 한 장, 아니면 승무원 묶음
+  const group =
+    pickReview(reviews, picked, crewById, now) ?? pickGroup(groups, picked);
+  const firstReview = reviews.tasks[0];
   return (
     <div className={`relative flex h-full flex-col ${styles.panel}`}>
       {/* 차양(글레어실드): 유리 바로 아래 둥근 턱 + 경고등 줄 */}
@@ -550,11 +574,17 @@ export function Dashboard({
           link={link}
           onList={onList}
           onHail={() => onHail()}
+          onReview={
+            firstReview
+              ? () => onPick(`${REVIEW_PREFIX}${firstReview.id}`)
+              : undefined
+          }
         />
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(290px,350px)_minmax(0,1fr)_minmax(250px,300px)] grid-rows-[minmax(0,1fr)] gap-3 px-4 pt-[26px] pb-[22px]">
         <InboxIndex
           groups={groups}
+          reviews={reviews}
           selected={group?.key}
           crew={crew}
           now={now}
