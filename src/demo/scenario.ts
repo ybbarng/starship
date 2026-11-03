@@ -118,15 +118,13 @@ const BRIEFS: Record<string, NonNullable<Crew["brief"]>> = {
 };
 
 /**
- * 이 자리에서 보이는 데모 책상들. 답하거나 치우거나 미룬 기다림은 빠진다.
+ * 이 자리에서 보이는 데모 책상들. 답하거나 치운 기다림(dismissed)과 읽은 답만 빠진다.
+ * 미룬 기다림은 본부처럼 책상에 남고 Task만 빠진다(buildSnapshot). 전에는 책상 카드까지 사라져
+ * 선실의 "1시간 뒤로 미뤘어요"가 데모로는 보이지 않았다(2026-11-03).
  * 시각은 데모 시작(startedAt) 기준이라 내용이 같으면 몇 번을 물어도 같은 값이다.
  */
-export function demoDesks(
-  state: DemoState,
-  now = Date.now(),
-): Record<string, Desk> {
-  const hidden = (id: string) =>
-    state.dismissed.has(id) || (state.snoozed.get(id) ?? 0) > now;
+export function demoDesks(state: DemoState): Record<string, Desk> {
+  const hidden = (id: string) => state.dismissed.has(id);
   return Object.fromEntries(
     Object.entries(buildDemoDesks(state.startedAt)).map(([id, desk]) => [
       id,
@@ -351,10 +349,11 @@ export function buildSnapshot(
             ago: -(i + 1) * INCOMING_EVERY,
           })),
         ];
+  const snoozedNow = (id: string) => (state.snoozed.get(id) ?? 0) > now;
   const visible = seeds.filter(
-    (s) => !state.dismissed.has(s.id) && (state.snoozed.get(s.id) ?? 0) <= now,
+    (s) => !state.dismissed.has(s.id) && !snoozedNow(s.id),
   );
-  const desks = scenario === "empty" ? {} : demoDesks(state, now);
+  const desks = scenario === "empty" ? {} : demoDesks(state);
 
   const tasks: Task[] = visible
     .map(
@@ -375,7 +374,10 @@ export function buildSnapshot(
     )
     .concat(
       Object.entries(desks).flatMap(([id, desk]) =>
-        deskTasks(id, desk, crewContext(id), t0),
+        // 미룬 기다림은 책상에 남기고 Task만 뺀다(본부와 같다)
+        deskTasks(id, desk, crewContext(id), t0).filter(
+          (t) => !snoozedNow(t.id),
+        ),
       ),
     )
     .sort((a, b) => RANK[a.kind] - RANK[b.kind] || a.since - b.since);

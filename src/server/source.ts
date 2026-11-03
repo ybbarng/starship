@@ -214,16 +214,15 @@ const MapEnvelope = CrewMapResponse.extend({ map: z.unknown() });
 
 /**
  * 승무원 하나의 책상. 서버 연결 모드는 {base}/v1/crew/{id}/desk 를 그대로 중계한다.
- * 데모 모드는 자리(seat)의 상태를 써서, 답한 기다림이 책상에서도 빠진다.
+ * 데모 모드는 자리(seat)의 상태를 써서, 답하거나 치운 기다림이 책상에서도 빠진다(미룬 것은 남는다).
  */
 export async function getCrewDesk(
   crewId: string,
   seat = "default",
-  now = Date.now(),
 ): Promise<CrewDeskResponse> {
   const info = sourceInfo();
   if (info.mode === "demo") {
-    const desk = demoDesks(demoState(seat), now)[crewId];
+    const desk = demoDesks(demoState(seat))[crewId];
     return desk
       ? { desk: dedupeDesk(desk), deskAt: parseWhen(desk.updatedAt) }
       : { desk: null };

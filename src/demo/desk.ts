@@ -218,7 +218,7 @@ export function deskTasks(
   });
 }
 
-/** 답하거나 치우거나 미룬 기다림, 읽은 답을 뺀 책상. hidden은 Task id나 answerKey로 묻는다. */
+/** 답하거나 치운 기다림, 읽은 답을 뺀 책상. hidden은 Task id나 answerKey로 묻는다. */
 export function visibleDesk(
   crewId: string,
   desk: Desk,

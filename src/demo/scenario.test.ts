@@ -76,9 +76,11 @@ describe("데모 시각: 데모 시작 기준이라 내용이 같으면 같은 �
     expect(at(t0 + 20_000)).toBe((at(t0) ?? 0) + 20_000);
   });
 
-  it("책상도 요청 시각과 상관없이 같다", () => {
+  it("책상도 요청 시각과 상관없이 같다(미뤄도 책상은 그대로)", () => {
     const state = createDemoState(t0);
-    expect(demoDesks(state, t0 + 30 * 60_000)).toEqual(demoDesks(state, t0));
+    const before = demoDesks(state);
+    state.snoozed.set("desk:web-shop:coupon-entry", t0 + 30 * 60_000);
+    expect(demoDesks(state)).toEqual(before);
   });
 
   it("교신 도착 시각은 시작부터 INCOMING_EVERY마다", () => {
@@ -138,6 +140,22 @@ describe("데모 책상", () => {
       false,
     );
     expect(snap.crew.find((c) => c.id === "web-shop")?.desk?.waiting).toBe(4);
+  });
+
+  it("미룬 기다림은 본부처럼 Task만 빠지고 책상에는 남는다(끝나면 Task도 돌아온다)", () => {
+    const state = createDemoState(t0);
+    const id = "desk:web-shop:coupon-entry";
+    state.snoozed.set(id, t0 + 3_600_000);
+    const snap = buildSnapshot(state, "default", t0);
+    expect(snap.tasks.some((t) => t.id === id)).toBe(false);
+    expect(snap.crew.find((c) => c.id === "web-shop")?.desk?.waiting).toBe(5);
+    expect(
+      demoDesks(state)["web-shop"]?.waiting.some(
+        (w) => w.id === "coupon-entry",
+      ),
+    ).toBe(true);
+    const later = buildSnapshot(state, "default", t0 + 3_600_001);
+    expect(later.tasks.some((t) => t.id === id)).toBe(true);
   });
 
   it("데모 책상은 모두 형식 검사를 통과한다", () => {
