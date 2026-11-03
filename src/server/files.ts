@@ -248,26 +248,37 @@ export function parseRange(
 export { isLoopbackHost };
 
 /**
- * 서버를 이 컴퓨터 자신(-H 127.0.0.1 등)에만 열고 띄웠나. 차례로 본다:
- * ① STARSHIP_BIND 환경 변수(띄우는 쪽이 밝힌 값) ② 띄울 때 인자(-H·--hostname) ③ HOSTNAME 환경 변수.
- * 셋 다 없으면 모든 주소로 뜬 것으로 보고 false.
- * `next dev`는 서버를 자식 프로세스로 띄우며 인자를 넘기지 않아 ②가 보이지 않는다(next/dist/cli/next-dev.js). 그래서 ①을 둔다.
+ * 서버를 이 컴퓨터 자신(-H 127.0.0.1 등)에만 열고 띄웠나.
+ * ① 띄울 때 인자(-H·--hostname, 여러 개면 next처럼 마지막 것)가 있으면 그 값이 이 컴퓨터 자신이어야 하고,
+ *    STARSHIP_BIND도 있으면 그것까지 이 컴퓨터 자신일 때만 true. 인자가 실제로 묶은 주소라 밝힌 값보다 앞선다.
+ * ② 인자가 없으면 STARSHIP_BIND 환경 변수(띄우는 쪽이 밝힌 값) ③ 그것도 없으면 HOSTNAME 환경 변수.
+ * 다 없으면 모든 주소로 뜬 것으로 보고 false.
+ * `next dev`는 서버를 자식 프로세스로 띄우며 인자를 넘기지 않아 ①이 보이지 않는다(next/dist/cli/next-dev.js). 그래서 ②를 둔다.
+ * 전에는 ②를 ①보다 먼저 봐서, 스크립트가 붙인 STARSHIP_BIND=127.0.0.1 때문에 -H 0.0.0.0으로 띄워도 파일을 내줬다(2026-11-03).
  * 모든 주소로 뜨면 같은 Wi-Fi·VPN의 다른 기기가 Host를 꾸며 들어올 수 있어 파일을 내주지 않는다(2026-11-01 비서 지적).
  */
 export function boundToLoopback(
   argv: readonly string[] = process.argv,
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): boolean {
-  const bind = env.STARSHIP_BIND?.trim();
-  if (bind) return LOOPBACK.has(bind.toLowerCase());
+  const loop = (h: string) => LOOPBACK.has(h.trim().toLowerCase());
+  const bind = env.STARSHIP_BIND?.trim() || undefined;
+  const host = lastHostArg(argv);
+  if (host !== undefined)
+    return loop(host) && (bind === undefined || loop(bind));
+  if (bind !== undefined) return loop(bind);
+  return env.HOSTNAME !== undefined && loop(env.HOSTNAME);
+}
+
+/** 인자 가운데 마지막 -H·--hostname 값. next도 같은 이름을 여러 번 주면 마지막 것을 쓴다. 없으면 undefined */
+export function lastHostArg(argv: readonly string[]): string | undefined {
   let host: string | undefined;
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i] ?? "";
-    if (a === "-H" || a === "--hostname") host = argv[i + 1];
+    if (a === "-H" || a === "--hostname") host = argv[i + 1] ?? "";
     else if (a.startsWith("--hostname=")) host = a.slice("--hostname=".length);
   }
-  host ??= env.HOSTNAME;
-  return host !== undefined && LOOPBACK.has(host.toLowerCase());
+  return host;
 }
 
 /**

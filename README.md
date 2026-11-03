@@ -84,7 +84,7 @@ STARSHIP_FILE_ROOTS=~/Desktop:~/Downloads pnpm dev
 | `STARSHIP_USAGE_ACCOUNT_SWITCH` | 계정을 바꾼 날(`YYYY-MM-DD`). 연료 기록 노트에 그날 앞뒤 기록이 섞여 있다고 적는다 | 적지 않음 | `2026-11-01` |
 | `STARSHIP_STATE_DIR` | 사용량을 어디까지 읽었는지와 합계를 남길 폴더 | `~/.local/state/starship` | |
 | `STARSHIP_FILE_ROOTS` | 보기·열기를 허용할 폴더, `:`로 나눔 | 본부 모드는 모두 거절, 데모는 `public/demo-files`만 | `~/Desktop:~/Downloads` |
-| `STARSHIP_BIND` | 서버를 묶은 주소. 파일 보기·열기가 이 컴퓨터 안에서만 열렸는지 판단할 때 띄울 때 인자(`-H`)보다 먼저 본다 | 인자 → `HOSTNAME` 순으로 보고, 다 없으면 파일을 내주지 않음 | `127.0.0.1` |
+| `STARSHIP_BIND` | 서버를 묶은 주소. 파일 보기·열기가 이 컴퓨터 안에서만 열렸는지 판단할 때 쓴다. 띄울 때 인자(`-H`)가 보이면 둘 다 이 컴퓨터 자신이어야 열린다. `pnpm dev`는 마지막 `-H` 값으로 저절로 둔다 | 인자 → `HOSTNAME` 순으로 보고, 다 없으면 파일을 내주지 않음 | `127.0.0.1` |
 | `STARSHIP_DIST_DIR` | 빌드 폴더. 늘 켜 둔 앱의 `.next`를 덮지 않고 따로 빌드해 볼 때 | `.next` | `.next-check` |
 | `STARSHIP_DENYLIST` | (커밋 검사용) 금지어 목록 파일 | `~/.config/starship/denylist` | |
 

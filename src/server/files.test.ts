@@ -332,10 +332,37 @@ describe("boundToLoopback", () => {
     expect(boundToLoopback(child, { STARSHIP_BIND: "127.0.0.1" })).toBe(true);
     expect(boundToLoopback(child, { STARSHIP_BIND: " localhost " })).toBe(true);
   });
-  it("STARSHIP_BIND가 먼저다: 모든 주소로 밝히면 인자가 127.0.0.1이어도 false", () => {
+  it("인자와 STARSHIP_BIND가 둘 다 있으면 둘 다 이 컴퓨터 자신일 때만 true", () => {
+    const start127 = ["node", "next", "start", "-H", "127.0.0.1"];
+    expect(boundToLoopback(start127, { STARSHIP_BIND: "0.0.0.0" })).toBe(false);
+    expect(boundToLoopback(start127, { STARSHIP_BIND: "127.0.0.1" })).toBe(
+      true,
+    );
+    // pnpm dev -H 0.0.0.0: 스크립트가 붙인 STARSHIP_BIND=127.0.0.1보다 실제로 묶은 인자를 믿는다
     expect(
-      boundToLoopback(["node", "next", "start", "-H", "127.0.0.1"], {
+      boundToLoopback(["node", "next", "dev", "-H", "0.0.0.0"], {
+        STARSHIP_BIND: "127.0.0.1",
+      }),
+    ).toBe(false);
+  });
+  it("-H가 여러 개면 마지막 것(next가 실제로 쓰는 값)을 본다", () => {
+    const argv = ["node", "next", "dev", "-H", "127.0.0.1", "-p", "7790"];
+    expect(boundToLoopback([...argv, "-H", "0.0.0.0"], {})).toBe(false);
+    expect(
+      boundToLoopback([...argv, "-H", "0.0.0.0"], {
+        STARSHIP_BIND: "127.0.0.1",
+      }),
+    ).toBe(false);
+    expect(boundToLoopback([...argv, "--hostname=0.0.0.0"], {})).toBe(false);
+    expect(
+      boundToLoopback(["node", "next", "-H", "0.0.0.0", "-H", "localhost"], {}),
+    ).toBe(true);
+  });
+  it("인자가 없을 때만 STARSHIP_BIND를 HOSTNAME보다 먼저 본다", () => {
+    expect(
+      boundToLoopback(["node", "start-server.js"], {
         STARSHIP_BIND: "0.0.0.0",
+        HOSTNAME: "127.0.0.1",
       }),
     ).toBe(false);
   });
