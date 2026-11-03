@@ -3,7 +3,7 @@
 // 승무원 지도는 GET {base}/v1/crew/{id}/map, 책상은 GET {base}/v1/crew/{id}/desk 로 준다.
 // 자세한 설명은 docs/protocol.md.
 import { z } from "zod";
-import { lenientArray } from "./common";
+import { lenientArray, WebUrl } from "./common";
 import { Desk } from "./desk";
 import { ProjectMap } from "./map";
 
@@ -104,7 +104,7 @@ export const Task = z.object({
   /** answer로 고를 수 있는 선택지. */
   choices: z.array(z.string().min(1)).optional(),
   /** 원래 서비스에서 여는 주소. */
-  url: z.url().optional(),
+  url: WebUrl.optional(),
 });
 export type Task = z.infer<typeof Task>;
 
@@ -124,7 +124,7 @@ export const Hail = z.object({
   /** 이 교신으로 생긴 할 일. 있으면 할 일 동작으로 답한다. */
   taskId: z.string().min(1).optional(),
   crewId: z.string().min(1).optional(),
-  url: z.url().optional(),
+  url: WebUrl.optional(),
 });
 export type Hail = z.infer<typeof Hail>;
 
@@ -388,7 +388,10 @@ export const ActionResult = z.object({
   ok: z.boolean(),
   /** 화면에 잠깐 띄울 한 줄. */
   note: z.string().optional(),
-  /** 브라우저에서 열 주소(focus가 원래 서비스로 가야 할 때). */
-  openUrl: z.url().optional(),
+  /**
+   * 브라우저에서 열 주소(focus가 원래 서비스로 가야 할 때). http(s)만.
+   * 동작은 이미 끝났으니 주소가 틀리면 결과 전체를 버리지 않고 주소만 뺀다.
+   */
+  openUrl: WebUrl.optional().catch(undefined),
 });
 export type ActionResult = z.infer<typeof ActionResult>;

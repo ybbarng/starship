@@ -9,6 +9,7 @@
 // - 3단이 있는 구역은 "묶음 블록(module)" 하나로 두고, 그 안을 손자 구역의 가로 띠(band)로 나눈다.
 //   띠도 같은 순서로 아래부터 쌓는다. 묶음 블록 왼쪽에는 이름을 세로로 적는 좁은 판이 붙는다.
 // - 버린 구역은 탑에서 빼고, showDropped일 때만 탑 옆 폐자재 통(chips)에 작게 놓는다.
+import { parseWhen } from "@/protocol/common";
 import {
   childrenOf,
   droppedIds,
@@ -122,7 +123,7 @@ type Node = {
 };
 
 function sinceOf(r: Region): number {
-  const t = r.since ? Date.parse(r.since) : Number.NaN;
+  const t = r.since ? parseWhen(r.since) : Number.NaN;
   return Number.isNaN(t) ? Number.NEGATIVE_INFINITY : t;
 }
 

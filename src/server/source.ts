@@ -16,6 +16,7 @@ import {
   demoDesks,
   type Scenario,
 } from "@/demo/scenario";
+import { parseWhen } from "@/protocol/common";
 import { answerKey, parseDesk } from "@/protocol/desk";
 import { type ProjectMap, parseMap } from "@/protocol/map";
 import {
@@ -184,7 +185,7 @@ export async function getCrewDesk(
   const info = sourceInfo();
   if (info.mode === "demo") {
     const desk = demoDesks(demoState(seat), now)[crewId];
-    return desk ? { desk, deskAt: Date.parse(desk.updatedAt) } : { desk: null };
+    return desk ? { desk, deskAt: parseWhen(desk.updatedAt) } : { desk: null };
   }
   const res = await fetch(
     `${info.base}/v1/crew/${encodeURIComponent(crewId)}/desk`,

@@ -12,6 +12,7 @@
 // - 칸을 받는 것은 자식이 없는 구역(잎)뿐이다. 자식이 있는 구역은 자손 칸을 모은 덩어리로 본다.
 // - 버린 구역도 칸을 받는다(그리는 쪽이 숨긴다). 그래야 "버린 구역 보기"를 켜고 꺼도 다른 칸이 그대로다.
 // 맨 위 구역을 더하거나 빼면 모든 지역의 부채꼴 각도가 다시 나뉜다(드문 일). 설계: docs/frontier.md "배치".
+import { parseWhen } from "@/protocol/common";
 import { childrenOf, type ProjectMap, type Region } from "@/protocol/map";
 
 export type Hex = { q: number; r: number };
@@ -152,7 +153,7 @@ function foundAt(
   guard = 0,
 ): number | undefined {
   if (r.found !== undefined) {
-    const t = Date.parse(r.found);
+    const t = parseWhen(r.found);
     return Number.isNaN(t) ? undefined : t;
   }
   const up = r.parent !== undefined ? byId.get(r.parent) : undefined;

@@ -125,7 +125,7 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
 | `since` | 언제부터 기다렸나 |
 | `actions` | `focus` 그곳으로 가기 · `answer` 바로 답하기 · `snooze` 미루기 · `dismiss` 치우기 · `handoff` 비서에게 넘기기 |
 | `choices` | `answer`로 고를 선택지 |
-| `url` | 원래 서비스 주소 |
+| `url` | 원래 서비스 주소. http(s)만 받는다(`javascript:`·`data:`·`file:`은 형식 검사에 걸려 그 할 일만 빠진다). Hail의 `url`, ActionResult의 `openUrl`, 지도 구역 링크의 `url`도 같다 |
 
 **정렬은 서버가 정한다.** 권장: 세션이 멈춰 있는 것(permission·question·input) → 세션이 끝난 것(reply) → 사람이 부른 것 → 나머지, 같은 단계에서는 오래 기다린 순.
 

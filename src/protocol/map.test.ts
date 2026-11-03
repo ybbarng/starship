@@ -251,4 +251,24 @@ describe("isNewFound", () => {
     expect(isNewFound(region("a", { found: "2026-10-10" }), now)).toBe(false);
     expect(isNewFound(region("a"), now)).toBe(false);
   });
+
+  it("날짜만 적은 found는 이 컴퓨터의 자정부터 센다", () => {
+    const found = "2026-10-22";
+    const midnight = new Date(2026, 9, 22).getTime();
+    expect(isNewFound(region("a", { found }), midnight + 7 * 86_400_000)).toBe(
+      true,
+    );
+    expect(
+      isNewFound(region("a", { found }), midnight + 7 * 86_400_000 + 1),
+    ).toBe(false);
+  });
+});
+
+describe("구역 링크 주소", () => {
+  it("http(s)가 아닌 url은 걸린다", () => {
+    const bad = map([
+      region("a", { links: [{ label: "x", url: "javascript:alert(1)" }] }),
+    ]);
+    expect(parseMap(bad).ok).toBe(false);
+  });
 });
