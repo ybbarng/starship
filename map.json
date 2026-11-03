@@ -525,6 +525,29 @@
       "since": "2026-11-01"
     },
     {
+      "id": "fuel-weekly-limit",
+      "title": "주간 연료: 계정 한도와 영역 몫",
+      "parent": "fuel",
+      "status": "done",
+      "size": 2,
+      "summary": "본부 주간·5시간 한도를 연료실 주 연료통(T-0), 연료 기록 노트 띠, 조종석 계기 한 줄로. 쓴 몫은 7일 추정 비용 비율로 업무·개인·기타에 나눈다(근사)",
+      "since": "2026-11-03",
+      "found": "2026-11-03",
+      "links": [
+        {
+          "label": "주간 연료",
+          "path": "docs/usage.md"
+        }
+      ],
+      "signs": [
+        {
+          "id": "share-approx",
+          "type": "risk",
+          "title": "영역 몫은 자정 기준 7일 통계로 나눈 근사라 리셋 구간과 몇 시간 어긋난다"
+        }
+      ]
+    },
+    {
       "id": "ops",
       "title": "운영",
       "status": "building",

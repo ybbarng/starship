@@ -107,6 +107,29 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
 - Starship은 받은 `desk`를 다시 검사한다(waiting id 중복, decide 선택지 2개 미만, check 항목 0개, http(s)가 아닌 주소). 걸리면 `desk: null`로 바꾸고 그 문제를 `problems`에 더한다.
 - **답은 Task로 보낸다.** 서버는 기다림 하나하나를 스냅샷의 Task로도 내보내고, 그 id를 `desk:<crewId>:<waitId>`로 둔다. 선실 카드는 그 Task에 `answer`를 보낸다. 고를 것(`choices`)은 decide가 선택지 `label`들, approve가 `["승인","보류"]`, check가 `["확인함","고칠 것 있음"]`이고, answer는 글로만 답한다. 할 일의 `source`는 기다림의 `topic`이 `code-review`면 `{ kind: "review" }`, 아니면 `{ kind: "session" }`이다(`deskSource`). 출처가 `review`인 책상 할 일로는 교신을 만들지 않는다. 고른 것에 글을 덧붙이면 `"고칠 것 있음 — 버튼 색이 흐려요"`처럼 ` — `로 잇는다(규칙은 `desk.md` "답하기"). 답을 받은 서버는 그 기다림을 책상과 할 일에서 뺀다.
 
+### `GET {base}/v1/usage/limits` → `UsageLimits`
+
+계정 사용 한도(2026-11-03). 연료실의 주 연료통, 연료 기록 노트의 주간 연료 띠, 조종석 연료 계기의 짧은 줄이 읽는다. 스키마 원본은 [`src/protocol/limits.ts`](../src/protocol/limits.ts)이고, 화면 설명은 [`usage.md`](usage.md) "주간 연료"에 있다.
+
+```jsonc
+{
+  "protocol": "starship/1",
+  "at": 1792900000000,          // 본부가 이 값을 마지막으로 받은 때(Unix 밀리초)
+  "limits": [
+    { "id": "week", "label": "주간", "usedPct": 50, "resetsAt": 1792925200000 },
+    { "id": "five-hour", "label": "5시간", "usedPct": 30, "resetsAt": 1792908400000 }
+  ]
+}
+```
+
+- `id`는 `week`(주간), `five-hour`(5시간), `week-opus`처럼 모델별 주간이 올 수 있다. 모르는 id도 받아 `label`(없으면 id)로 적는다.
+- `usedPct`는 쓴 몫(%)이다. 0~100 밖이면 잘라 받는다. `resetsAt`은 다시 차는 시각이고 없을 수 있다. 시각이 초 단위로 오면 밀리초로 바꾼다.
+- 항목 하나가 틀리면 그 항목만 빼고 나머지를 쓴다.
+- 값은 세션이 화면을 바꿀 때마다 갱신돼, 아무도 안 쓰면 멈춘다. Starship은 `at`이 30분보다 오래되면 "n분 전 값"으로 흐리게 보인다.
+- 리셋 시각이 지난 한도는 본부가 뺀다. `limits`가 비면 "리셋됨 · 새 값 기다리는 중"을 보인다. Starship도 리셋 시각이 지난 항목은 보이지 않는다.
+- 404거나 본부가 없으면(시간 제한 4초) 칸을 숨긴다. Starship 서버는 본부 값을 1분(실패는 15초) 기억한다.
+- Starship의 `GET /api/v1/usage/limits`는 이 응답에 `ok`(본부 값을 받았나)와 `source`(`demo`·`remote`)를 더해 준다(`UsageLimitsResponse`). Starship은 계정 토큰을 다루지 않는다. 값을 구하는 일은 본부가 맡는다.
+
 ## 개념
 
 ### Task — 할 일
