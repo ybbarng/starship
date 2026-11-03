@@ -279,13 +279,27 @@ export function FrontierView({
     if (flight.current !== null) cancelAnimationFrame(flight.current);
     flight.current = null;
   }, []);
+  // 브라우저 기억은 움직임이 멈춘 뒤 한 번만(끌기·비행·휠 동안 프레임마다 sessionStorage에 쓰지 않는다).
+  // 사람이 움직인 카메라만 그 열쇠로 적고, 선실을 떠나면 남은 것을 바로 적는다
+  const pendingSave = useRef<{ key: string; cam: Camera } | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushSave = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = null;
+    const p = pendingSave.current;
+    pendingSave.current = null;
+    if (p) saveCamera(p.key, p.cam);
+  }, []);
+  useEffect(() => flushSave, [flushSave]);
   const setCam = useCallback(
     (c: Camera) => {
       setRawCam(c);
-      saveCamera(storeKey, c);
       setForkPop(null);
+      pendingSave.current = { key: storeKey, cam: c };
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(flushSave, 250);
     },
-    [storeKey],
+    [storeKey, flushSave],
   );
   /** 부드럽게 날아간다(0.35초). 움직임을 줄이는 설정이면 바로 옮긴다 */
   const flyTo = useCallback(
