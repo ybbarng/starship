@@ -1168,14 +1168,38 @@ function LogBook() {
 
 /* ───────────── 속도 기록지 ───────────── */
 
+/**
+ * 오늘 0~23시 24칸. 서버는 지금 시각까지의 칸만 보내므로, 남은 시간은 빈 칸으로 채운다
+ * (자정 직후 0시 한 칸이 폭 전체를 채우던 일, 2026-11-04 사용자 지적).
+ */
+export function dayRows(
+  hours: UsageResponse["hours"],
+  now = Date.now(),
+): { at: number; work: number; personal: number; other: number }[] {
+  const last = hours.reduce((m, h) => Math.max(m, h.at), 0) || now;
+  const start = new Date(last);
+  start.setHours(0, 0, 0, 0);
+  const byHour = new Map<number, UsageResponse["hours"][number]>();
+  for (const h of hours) {
+    const d = new Date(h.at);
+    if (d.getTime() >= start.getTime()) byHour.set(d.getHours(), h);
+  }
+  return Array.from({ length: 24 }, (_, hour) => {
+    const d = new Date(start);
+    d.setHours(hour);
+    const h = byHour.get(hour);
+    return {
+      at: d.getTime(),
+      work: (h?.work ?? 0) / 60,
+      personal: (h?.personal ?? 0) / 60,
+      other: (h?.other ?? 0) / 60,
+    };
+  });
+}
+
 /** 시간별 속도 기록: 그 시간 평균 분당 출력(시간 합 ÷ 60), 영역별로 쌓는다 */
 function HourLog({ data }: { data: UsageResponse }) {
-  const rows = data.hours.map((h) => ({
-    at: h.at,
-    work: h.work / 60,
-    personal: h.personal / 60,
-    other: h.other / 60,
-  }));
+  const rows = dayRows(data.hours);
   const max = Math.max(1, ...rows.map((h) => h.work + h.personal + h.other));
   const grid = [0.25, 0.5, 0.75, 1];
   return (
