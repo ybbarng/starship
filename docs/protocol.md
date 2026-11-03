@@ -12,6 +12,8 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
 | (없음) | 데모 모드. 지어낸 데이터로 돈다 |
 | `STARSHIP_SERVER_URL` | 프로토콜 서버 주소(예: `http://127.0.0.1:7787/starship`). Starship 서버가 이 주소로 요청을 대신 보낸다 |
 
+본부와 상관없는 설정(사용량·파일 보기 등)은 [README "환경 변수"](../README.md#환경-변수)에 모아 두었다.
+
 브라우저는 Starship 자신의 `/api/v1/*`만 부르고, Starship 서버가 프로토콜 서버로 넘긴다. 그래서 프로토콜 서버는 브라우저 Origin을 따로 허용할 필요가 없다. Starship의 `POST /api/v1/actions`는 같은 출처(Origin = Host)의 요청만 받는다.
 
 ## 끝점
