@@ -16,6 +16,7 @@ import {
   type Task,
 } from "@/protocol/v1";
 import type { UsageRange, UsageResponse } from "@/usage/model";
+import { failNote } from "./actionNote";
 import { useToast } from "./toast";
 
 /** 데모 시나리오(?demo=, ?link=)와 자리(페이지 경로)를 서버에 넘긴다. */
@@ -62,7 +63,9 @@ async function postAction(req: ActionRequest): Promise<ActionResult> {
     body: JSON.stringify(req),
   });
   const body = ActionResult.safeParse(await res.json().catch(() => null));
-  return body.success ? body.data : { ok: false, note: `실패 (${res.status})` };
+  return body.success
+    ? body.data
+    : { ok: false, note: failNote(req, res.status) };
 }
 
 async function fetchCrewMap(crewId: string): Promise<CrewMapResponse> {
@@ -186,7 +189,11 @@ export function useBridge() {
   };
 }
 
-/** 할 일·승무원 동작. 결과 한 줄을 토스트로 띄우고 상태를 다시 읽는다. */
+/**
+ * 할 일·승무원 동작. 결과 한 줄을 토스트로 띄우고 상태를 다시 읽는다.
+ * 동작마다 결과(ActionResult)를 Promise로 돌려준다. 본부에 닿지 못해도 거부(reject)하지 않고
+ * ok:false로 돌려주니, 부르는 쪽은 ok일 때만 글을 비우거나 접으면 된다.
+ */
 export function useAct() {
   const client = useQueryClient();
   const toast = useToast((s) => s.show);
@@ -199,15 +206,17 @@ export function useAct() {
       client.invalidateQueries({ queryKey: ["crew-desk"] });
       client.invalidateQueries({ queryKey: ["crew-map"] });
     },
-    onError: () => toast("요청을 보내지 못했어요", "error"),
+    onError: (_e, req) => toast(failNote(req), "error"),
   });
+  const send = (req: ActionRequest): Promise<ActionResult> =>
+    mutation.mutateAsync(req).catch(() => ({ ok: false }));
   return {
     task: (
       task: Task,
       action: Extract<ActionRequest, { target: "task" }>["action"],
       answer?: string,
     ) =>
-      mutation.mutate({
+      send({
         target: "task",
         id: task.id,
         action,
@@ -215,13 +224,13 @@ export function useAct() {
         until: action === "snooze" ? Date.now() + 3_600_000 : undefined,
       }),
     crew: (crew: Crew, action: Crew["actions"][number]) =>
-      mutation.mutate({ target: "crew", id: crew.id, action }),
+      send({ target: "crew", id: crew.id, action }),
     /** 책상의 답해 둔 것을 읽음으로(서버가 책상에서 뺀다) */
     answerRead: (crewId: string, id: string) =>
-      mutation.mutate({ target: "answer", crewId, id, action: "read" }),
+      send({ target: "answer", crewId, id, action: "read" }),
     /** 지도 갈림길에 답하기(세션에 전하고, map.json은 세션이 고친다) */
     sign: (crewId: string, region: string, id: string, answer: string) =>
-      mutation.mutate({
+      send({
         target: "sign",
         crewId,
         region,

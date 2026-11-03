@@ -5,7 +5,7 @@ import type { Crew, CrewStatus, Hail, Link, Task } from "@/protocol/v1";
 import { formatSpeed } from "@/sky/telemetry";
 import { useTelemetry } from "@/sky/useTelemetry";
 import { useDestination, useVoyage } from "@/sky/voyage";
-import { ago, sourceLabel, Tip } from "@/ui/kit";
+import { ago, CREW_STATUS_LABEL, sourceLabel, Tip } from "@/ui/kit";
 import { VERDICT_LABEL, verdictDetail } from "@/ui/link/model";
 // 계기판: 유리창 아래 짜임새 있는 판. 장식 램프 없이, 등과 단추마다 뜻이 있다.
 //   맨 위 차양(글레어실드) = 경고등 줄(등마다 글, 누르면 해당 목록)
@@ -15,6 +15,7 @@ import { VERDICT_LABEL, verdictDetail } from "@/ui/link/model";
 //   오른쪽 = 교신 수신등·칩, 항법 소형 표시(행성 단추·더 먼 곳·이동 중 속도)
 import { FuelGauge } from "@/ui/usage/FuelGauge";
 import styles from "./cockpit.module.css";
+import { agoShort, HQ_CLOCK_MS, hqConnected } from "./hqLink";
 import { InboxIndex, InboxSheet } from "./Inbox";
 import {
   inboxGroups,
@@ -25,7 +26,13 @@ import {
   REVIEW_PREFIX,
   reviewLane,
 } from "./inboxGroups";
-import { type Lamp, PILE_WARN, selecting, type useWarnings } from "./util";
+import {
+  type Lamp,
+  PILE_WARN,
+  selecting,
+  useNow,
+  type useWarnings,
+} from "./util";
 
 export type Warnings = ReturnType<typeof useWarnings>;
 
@@ -62,8 +69,9 @@ function Tile({
         data-warn={id}
         data-lamp-state={lamp}
         onClick={onClick}
-        disabled={!onClick}
-        className={`${styles.tile} ${tone} flex h-[24px] min-w-0 items-center justify-center gap-1.5 rounded-[3px] px-2.5 text-[11px] font-semibold tracking-[0.04em] whitespace-nowrap enabled:hover:brightness-125 disabled:cursor-default`}
+        // 누를 것이 없는 등도 키보드로 가서 말풍선(뜻)을 읽을 수 있게 disabled 대신 aria-disabled
+        aria-disabled={!onClick || undefined}
+        className={`${styles.tile} ${tone} flex h-[24px] min-w-0 items-center justify-center gap-1.5 rounded-[3px] px-2.5 text-[11px] font-semibold tracking-[0.04em] whitespace-nowrap not-aria-disabled:hover:brightness-125 aria-disabled:cursor-default`}
       >
         <span className="truncate">{label}</span>
         {value && <span className="font-mono tabular-nums">{value}</span>}
@@ -72,19 +80,36 @@ function Tile({
   );
 }
 
-/** 3초 전 · 2분 전 */
-function agoShort(at: number, now: number): string {
-  const s = Math.max(0, Math.round((now - at) / 1000));
-  return s < 60 ? `${s}초 전` : `${Math.round(s / 60)}분 전`;
+/** 본부 연결 등. 화면 시계(30초)와 따로 2초 시계로 끊김과 "마지막으로 받은 때"를 센다. */
+function HqTile({ error, lastAt }: { error: boolean; lastAt: number }) {
+  const now = useNow(HQ_CLOCK_MS);
+  const connected = hqConnected(error, lastAt, now);
+  return (
+    <Tile
+      id="link"
+      lamp={connected ? "off" : "alert"}
+      label={connected ? "본부 연결 정상" : "본부 연결 끊김"}
+      hint={[
+        "본부 = 비서 서버. 선원·할 일·교신·관제 링크 데이터를 받아 오는 곳(5초마다).",
+        lastAt > 0
+          ? `마지막으로 받은 때: ${agoShort(lastAt, now)}`
+          : "아직 한 번도 받지 못했어요",
+        connected
+          ? ""
+          : "15초 넘게 받지 못해 켜졌어요. 지금 화면은 마지막으로 받은 때의 데이터예요. 다시 받으면 저절로 꺼져요.",
+      ]
+        .filter(Boolean)
+        .join("\n")}
+    />
+  );
 }
 
 export function Annunciators({
   tasks,
   hails,
   warnings,
-  connected,
+  hqError,
   lastAt,
-  now,
   link,
   onList,
   onHail,
@@ -93,9 +118,9 @@ export function Annunciators({
   tasks: Task[];
   hails: Hail[];
   warnings: Warnings;
-  connected: boolean;
+  /** 본부에서 상태를 받다 오류가 났는지. 끊김 판정은 연결 등이 자기 시계로 한다 */
+  hqError: boolean;
   lastAt: number;
-  now: number;
   link?: Link;
   onList: (k: ListKind) => void;
   onHail: () => void;
@@ -153,22 +178,7 @@ export function Annunciators({
         hint="사람이 부른 교신. 누르면 화상 창"
         onClick={hails.length ? onHail : undefined}
       />
-      <Tile
-        id="link"
-        lamp={connected ? "off" : "alert"}
-        label={connected ? "본부 연결 정상" : "본부 연결 끊김"}
-        hint={[
-          "본부 = 비서 서버. 선원·할 일·교신·관제 링크 데이터를 받아 오는 곳(5초마다).",
-          lastAt > 0
-            ? `마지막으로 받은 때: ${agoShort(lastAt, now)}`
-            : "아직 한 번도 받지 못했어요",
-          connected
-            ? ""
-            : "15초 넘게 받지 못해 켜졌어요. 지금 화면은 마지막으로 받은 때의 데이터예요. 다시 받으면 저절로 꺼져요.",
-        ]
-          .filter(Boolean)
-          .join("\n")}
-      />
+      <HqTile error={hqError} lastAt={lastAt} />
       {link && link.verdict !== "ok" && (
         <Tile
           id="relay"
@@ -216,8 +226,11 @@ export function CrewLamp({ status }: { status: CrewStatus }) {
         : status === "idle"
           ? "bg-[#5d6677]"
           : "border border-white/25 bg-transparent";
+  // 색만으로 나누지 않게 스크린 리더에는 상태를 글로 준다
   return (
     <span
+      role="img"
+      aria-label={CREW_STATUS_LABEL[status]}
       className={`inline-block h-[7px] w-[7px] shrink-0 rounded-full ${cls}`}
     />
   );
@@ -515,7 +528,7 @@ export function Dashboard({
   crew,
   crewById,
   warnings,
-  connected,
+  hqError,
   lastAt,
   link,
   now,
@@ -534,7 +547,8 @@ export function Dashboard({
   crew: Crew[];
   crewById: Map<string, Crew>;
   warnings: Warnings;
-  connected: boolean;
+  /** 본부에서 상태를 받다 오류가 났는지 */
+  hqError: boolean;
   /** 본부에서 상태를 마지막으로 받은 때 */
   lastAt: number;
   link?: Link;
@@ -568,9 +582,8 @@ export function Dashboard({
           tasks={decisions}
           hails={hails}
           warnings={warnings}
-          connected={connected}
+          hqError={hqError}
           lastAt={lastAt}
-          now={now}
           link={link}
           onList={onList}
           onHail={() => onHail()}

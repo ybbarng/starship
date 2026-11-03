@@ -164,6 +164,8 @@ function HailButtons({ hail, task }: { hail: Hail; task: Task | undefined }) {
           data-action={b.action}
           data-hail-action
           onClick={b.onClick}
+          disabled={b.busy}
+          aria-busy={b.busy}
           className={`${styles.key} ${b.action === "focus" ? styles.keyPrimary : "text-white/85"} rounded-md px-3 py-1 text-[13px] font-semibold`}
         >
           {b.action === "focus" ? "응답" : b.label}

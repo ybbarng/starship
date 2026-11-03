@@ -3,6 +3,7 @@
 // "약간의 저항을 넘겨 스크롤하면" 다음 장면으로. 휠·키보드·터치를 모아 문턱을 넘으면 장면을 바꾸고,
 // 0..1 사이 progress를 부드럽게 옮겨 준다(조종석이 작아지는 연출에 쓴다).
 import { useCallback, useEffect, useRef, useState } from "react";
+import { keyStaysPut } from "./scrollKeys";
 
 export function useScrollStage({
   stages = 2,
@@ -74,7 +75,15 @@ export function useScrollStage({
       feed(e.deltaY);
     };
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement | null)?.closest("input,textarea")) return;
+      // 휠과 같이: 대화상자·스스로 스크롤하는 목록·화살표를 쓰는 조작 요소에 있는 키는 넘기지 않는다.
+      if (
+        keyStaysPut({
+          target: e.target as HTMLElement | null,
+          dialogOpen: !!document.querySelector('[role="dialog"]'),
+          modifier: e.altKey || e.ctrlKey || e.metaKey,
+        })
+      )
+        return;
       if (e.key === "PageDown" || e.key === "ArrowDown") feed(threshold + 1);
       if (e.key === "PageUp" || e.key === "ArrowUp") feed(-threshold - 1);
     };

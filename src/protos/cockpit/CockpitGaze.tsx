@@ -321,11 +321,8 @@ export function CockpitGaze() {
           crew={bridge.crew}
           crewById={bridge.crewById}
           warnings={warnings}
-          // 본부(비서 서버)를 다시 띄우는 몇 초 동안 깜빡이지 않게, 15초 넘게 못 받았을 때만 끊김으로 본다.
-          connected={
-            !bridge.error ||
-            (bridge.updatedAt > 0 && now - bridge.updatedAt < 15_000)
-          }
+          // 끊김 판정(15초 유예)은 연결 등이 2초 시계로 한다(30초 시계로는 늦고 "0초 전"에 머물렀다)
+          hqError={!!bridge.error}
           lastAt={bridge.updatedAt}
           link={bridge.link}
           now={now}

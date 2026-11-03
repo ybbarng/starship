@@ -2,7 +2,6 @@
 
 // 할 일 버튼 줄. 프로토콜 actions에 있는 것만(useTaskButtons). 치우는 동작이면 항로 칸을 걸어 둔다.
 import { useState } from "react";
-import { useAct } from "@/data/hooks";
 import type { Task } from "@/protocol/v1";
 import { useTaskButtons } from "@/ui/kit";
 import { clears, useRoute } from "./route";
@@ -22,9 +21,9 @@ export function ActionRow({
   size?: "sm" | "md";
   className?: string;
 }) {
-  const act = useAct();
   const expect = useRoute((s) => s.expect);
-  const { buttons, answering, setAnswering } = useTaskButtons(task);
+  const { buttons, answering, setAnswering, busy, sendAnswer } =
+    useTaskButtons(task);
   const [text, setText] = useState("");
   if (!task) return null;
   const small = size === "sm" ? " !px-2.5 !py-1 !text-xs" : "";
@@ -32,11 +31,12 @@ export function ActionRow({
     return (
       <form
         className={`flex items-center gap-1.5 ${className}`}
-        onSubmit={(e) => {
+        onSubmit={async (e) => {
           e.preventDefault();
-          if (!text.trim()) return;
+          if (!text.trim() || busy) return;
           expect(task.id);
-          act.task(task, "answer", text.trim());
+          // 본부가 받았을 때만 비우고 닫는다(못 받으면 쓴 글을 남긴다)
+          if (!(await sendAnswer(text.trim())).ok) return;
           setText("");
           setAnswering(false);
         }}
@@ -49,7 +49,12 @@ export function ActionRow({
           placeholder="답을 적고 Enter"
           className="min-w-0 flex-1 rounded-lg border border-white/20 bg-black/40 px-3 py-1.5 text-sm text-white outline-none focus:border-amber-300/70"
         />
-        <button type="submit" className={PRIMARY + small}>
+        <button
+          type="submit"
+          className={PRIMARY + small}
+          disabled={busy}
+          aria-busy={busy}
+        >
           보내기
         </button>
         <button
@@ -69,6 +74,8 @@ export function ActionRow({
           key={b.key}
           type="button"
           data-action={b.action}
+          disabled={b.busy}
+          aria-busy={b.busy}
           onClick={() => {
             // 글로 답하기는 입력칸이 열릴 뿐이라 보낼 때 건다
             const opensForm = b.action === "answer" && b.choice === undefined;

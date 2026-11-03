@@ -13,7 +13,10 @@ const TONE = {
 export function Toasts({ className = "" }: { className?: string }) {
   const items = useToast((s) => s.items);
   return (
+    // 스크린 리더가 새로 뜬 한 줄을 읽게 한다. 오류만 바로 끼어들어 읽는다(role=alert).
     <div
+      role="status"
+      aria-live="polite"
       className={twMerge(
         "pointer-events-none fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 flex-col items-center gap-2",
         className,
@@ -23,6 +26,8 @@ export function Toasts({ className = "" }: { className?: string }) {
         <div
           key={t.id}
           data-toast
+          data-tone={t.tone}
+          role={t.tone === "error" ? "alert" : undefined}
           className={`rounded-full border bg-black/80 px-4 py-2 text-sm text-white shadow-lg backdrop-blur ${TONE[t.tone]}`}
         >
           {t.text}
