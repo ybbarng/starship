@@ -19,6 +19,7 @@ export function AnswerList({
   answers: Answered[];
   now: number;
 }) {
+  const act = useAct();
   // 읽음을 누르면 서버 답을 기다리지 않고 바로 접는다
   const [read, setRead] = useState<Set<string>>(new Set());
   const shown = answers
@@ -34,10 +35,20 @@ export function AnswerList({
         {shown.map((a) => (
           <AnswerCard
             key={a.id}
-            crewId={crewId}
             answer={a}
             now={now}
-            onRead={() => setRead((s) => new Set(s).add(a.id))}
+            onRead={async () => {
+              setRead((s) => new Set(s).add(a.id));
+              // 본부가 읽음을 받지 못했으면 다시 펼친다(안 그러면 서버엔 남았는데 화면에서만 영영 숨는다).
+              // 카드는 접히면 사라지니 결과는 남아 있는 목록 쪽에서 받는다.
+              const result = await act.answerRead(crewId, a.id);
+              if (result.ok) return;
+              setRead((s) => {
+                const next = new Set(s);
+                next.delete(a.id);
+                return next;
+              });
+            }}
           />
         ))}
       </ul>
@@ -46,17 +57,14 @@ export function AnswerList({
 }
 
 function AnswerCard({
-  crewId,
   answer,
   now,
   onRead,
 }: {
-  crewId: string;
   answer: Answered;
   now: number;
   onRead: () => void;
 }) {
-  const act = useAct();
   const [open, setOpen] = useState(false);
   const long = answer.a.length > 240 || answer.a.split("\n").length > 5;
   const files = findPaths(answer.a);
@@ -99,10 +107,7 @@ function AnswerCard({
         <button
           type="button"
           data-answer-read
-          onClick={() => {
-            onRead();
-            act.answerRead(crewId, answer.id);
-          }}
+          onClick={onRead}
           className="rounded border border-white/15 px-2 py-0.5 text-[11.5px] text-white/70 hover:bg-white/10 hover:text-white"
         >
           읽음
