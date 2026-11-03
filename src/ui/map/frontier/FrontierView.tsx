@@ -28,7 +28,14 @@ import { Animal, animalFor, poseFor } from "@/ui/crew";
 import { REGION_STATUS_LABEL } from "@/ui/map/labels";
 import type { MapViewProps } from "@/ui/map/MapView";
 import { ForkAnswer } from "../ForkAnswer";
-import { PARTY_MS, Party, WALK_MS, WaitBubble, Walker } from "./alive";
+import {
+  PARTY_MS,
+  Party,
+  partyTextY,
+  WALK_MS,
+  WaitBubble,
+  Walker,
+} from "./alive";
 import {
   type Box,
   boxOf,
@@ -56,6 +63,7 @@ import {
   zoomAt,
   zoomRange,
 } from "./camera";
+import { CRANE_CELLS, cellSeed, dugOf, rigCount, spread } from "./decor";
 import styles from "./frontier.module.css";
 import { FrontierLegend } from "./Legend";
 import { planetFor } from "./planet";
@@ -76,6 +84,7 @@ import {
   add,
   clip,
   corners,
+  dodgeY,
   EDGE_DIRS,
   type Hex,
   hexKey,
@@ -103,7 +112,8 @@ export const TERRITORY_COLORS = [
 /** 상태별 땅 바탕 */
 export const GROUND: Record<RegionStatus, string> = {
   fog: "#454c5e",
-  building: "#6a4627",
+  // 밝은 파헤친 흙: 막힘(어두운 붉은 갈색)·완공(초록)·안개(회색)와 밝기부터 다르다
+  building: "#9a7444",
   done: "#2e7350",
   blocked: "#5e2329",
   dropped: "#262a33",
@@ -154,6 +164,20 @@ function worldCenterOf(
     x: ps.reduce((a, p) => a + p.x, 0) / ps.length,
     y: ps.reduce((a, p) => a + p.y, 0) / ps.length,
   };
+}
+
+/**
+ * 키를 친 곳이 지도 단축키를 받지 않는 곳인가. 깃발 답 창·되감기 막대 안이면 그 이름,
+ * 그 밖의 글 칸(input·textarea·select·contenteditable)이면 "field", 아니면 null.
+ */
+function keyOwnerOf(
+  t: EventTarget | null,
+): "fork-pop" | "replay-bar" | "field" | null {
+  if (!(t instanceof Element)) return null;
+  if (t.closest("[data-fork-pop]")) return "fork-pop";
+  if (t.closest("[data-replay-bar]")) return "replay-bar";
+  if (t.closest("input,textarea,select,[contenteditable]")) return "field";
+  return null;
 }
 
 /** 누른 곳이 땅·이름표·단추가 아닌 빈 곳인가 */
@@ -255,13 +279,27 @@ export function FrontierView({
     if (flight.current !== null) cancelAnimationFrame(flight.current);
     flight.current = null;
   }, []);
+  // 브라우저 기억은 움직임이 멈춘 뒤 한 번만(끌기·비행·휠 동안 프레임마다 sessionStorage에 쓰지 않는다).
+  // 사람이 움직인 카메라만 그 열쇠로 적고, 선실을 떠나면 남은 것을 바로 적는다
+  const pendingSave = useRef<{ key: string; cam: Camera } | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushSave = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = null;
+    const p = pendingSave.current;
+    pendingSave.current = null;
+    if (p) saveCamera(p.key, p.cam);
+  }, []);
+  useEffect(() => flushSave, [flushSave]);
   const setCam = useCallback(
     (c: Camera) => {
       setRawCam(c);
-      saveCamera(storeKey, c);
       setForkPop(null);
+      pendingSave.current = { key: storeKey, cam: c };
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(flushSave, 250);
     },
-    [storeKey],
+    [storeKey, flushSave],
   );
   /** 부드럽게 날아간다(0.35초). 움직임을 줄이는 설정이면 바로 옮긴다 */
   const flyTo = useCallback(
@@ -312,8 +350,11 @@ export function FrontierView({
     const el = ref.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      // 도움말 위에서는 도움말을 스크롤한다(지도 확대로 쓰지 않는다)
-      if (e.target instanceof Element && e.target.closest("[data-map-legend]"))
+      // 도움말·깃발 답 창 위에서는 그 창을 스크롤한다(지도 확대로 쓰지 않는다)
+      if (
+        e.target instanceof Element &&
+        e.target.closest("[data-map-legend],[data-fork-pop]")
+      )
         return;
       e.preventDefault();
       stopFlight();
@@ -458,17 +499,37 @@ export function FrontierView({
   const goHere = () => {
     if (map.here && visible(map.here)) visit(map.here, true);
   };
+  // 도움말(왼쪽 위)과 되감기 막대(위 가운데)는 넓은 도움말이 막대를 가리니 하나만 연다
+  const toggleLegend = () => {
+    if (!legend) setReplayOpen(false);
+    setLegend(!legend);
+  };
+  const toggleReplay = () => {
+    if (!replayOpen) setLegend(false);
+    setReplayOpen(!replayOpen);
+  };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     const k = e.key;
+    // 깃발 답 창·되감기 막대·글 칸에서 친 키는 지도 단축키가 아니다(답 글의 "f"가 다음 갈림길로 새지 않게).
+    // Esc만 받아 그 창을 닫는다
+    const owner = keyOwnerOf(e.target);
+    if (owner) {
+      if (k !== "Escape") return;
+      if (owner === "fork-pop") setForkPop(null);
+      else if (owner === "replay-bar") setReplayOpen(false);
+      else return;
+      e.preventDefault();
+      return;
+    }
     let done = true;
     if (k === "+" || k === "=") zoomBy(ZOOM_STEP);
     else if (k === "-" || k === "_") zoomBy(1 / ZOOM_STEP);
     else if (k === "0") showAll();
     else if (k === "h" || k === "H") goHere();
     else if (k === "f" || k === "F") nextFork();
-    else if (k === "?") setLegend((v) => !v);
+    else if (k === "?") toggleLegend();
     else if (k === "Escape") {
       if (forkPop) setForkPop(null);
       else if (legend) setLegend(false);
@@ -592,7 +653,7 @@ export function FrontierView({
           <CamButton
             name="help"
             title="이 지도 읽는 법 (?)"
-            onClick={() => setLegend((v) => !v)}
+            onClick={toggleLegend}
           >
             ? 도움말
           </CamButton>
@@ -602,7 +663,7 @@ export function FrontierView({
             name="replay"
             title="개척 되감기: 지도가 지나온 모습"
             boxed
-            onClick={() => setReplayOpen((v) => !v)}
+            onClick={toggleReplay}
           >
             ⏪ 되감기
           </CamButton>
@@ -1464,24 +1525,13 @@ function Scene({
           <stop offset="0%" stopColor={planet.air} stopOpacity="0.32" />
           <stop offset="100%" stopColor={planet.air} stopOpacity="0" />
         </linearGradient>
-        <pattern
-          id={`soil${uid}`}
-          width={Math.max(4, s * 0.28)}
-          height={Math.max(4, s * 0.28)}
-          patternUnits="userSpaceOnUse"
-          patternTransform="rotate(28)"
-        >
-          <rect
-            width={Math.max(4, s * 0.28)}
-            height={Math.max(1.2, s * 0.07)}
-            fill="#3a2414"
-          />
-        </pattern>
+        {/* 먼지 무늬는 땅을 따라 움직인다(화면에 붙어 땅 위로 미끄러지지 않게) */}
         <pattern
           id={`dust${uid}`}
           width="7"
           height="7"
           patternUnits="userSpaceOnUse"
+          patternTransform={`translate(${ox.toFixed(1)} ${oy.toFixed(1)})`}
         >
           <circle cx="1.5" cy="1.5" r="0.9" fill="#d8dce8" opacity="0.35" />
           <circle cx="5" cy="4.6" r="0.7" fill="#d8dce8" opacity="0.25" />
@@ -1631,7 +1681,14 @@ function Scene({
                         s={ds}
                       />
                     ))}
-                  <CellDecor st={st} p={p} s={s} ds={ds} uid={uid} />
+                  <CellDecor
+                    st={st}
+                    p={p}
+                    s={s}
+                    ds={ds}
+                    uid={uid}
+                    seed={cellSeed(c.q, c.r)}
+                  />
                   {fresh && (
                     <polygon
                       points={poly(p, 0.7)}
@@ -1733,13 +1790,29 @@ function Scene({
             (l) => visible(l.region.id) && statusOf(l.region) === "building",
           )
           .map((l) => {
+            // 3칸마다 장비 하나를 승무원·내 깃발이 없는 칸에 고르게. 큰 땅은 첫 장비가 크레인
             const sp = spots.get(l.region.id);
-            const slots = sp?.slots.slice(0, l.cells.length) ?? [];
-            const p =
-              slots.find(
-                (x) => x !== hereCenter && !flagSpots.some((f) => f.p === x),
-              ) ?? sp?.slots[l.cells.length];
-            return p ? <Rig key={l.region.id} x={p.x} y={p.y} s={ds} /> : null;
+            const free = (sp?.slots.slice(0, l.cells.length) ?? []).filter(
+              (x) => x !== hereCenter && !flagSpots.some((f) => f.p === x),
+            );
+            const fallback = sp?.slots[l.cells.length];
+            const at = spread(
+              free.length ? free : fallback ? [fallback] : [],
+              rigCount(l.cells.length),
+            );
+            const crane = l.cells.length >= CRANE_CELLS;
+            return (
+              <g key={l.region.id} data-rigs={at.length}>
+                {at.map((p, i) =>
+                  crane && i === 0 ? (
+                    <Crane key="crane" x={p.x} y={p.y} s={ds} />
+                  ) : (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: 고르게 고른 칸 차례
+                    <Rig key={i} x={p.x} y={p.y} s={ds} />
+                  ),
+                )}
+              </g>
+            );
           })}
       </g>
 
@@ -1858,11 +1931,28 @@ function Scene({
       )}
 
       {/* 완공 폭죽 */}
+      {/* "완공!" 글은 지역·구역 이름표를 덮지 않게 위(없으면 아래)로 비킨다 */}
       {parties.map((pt) => {
         const c = centerOf(pt.id);
-        return c ? (
-          <Party key={`${pt.id}-${pt.t0}`} x={c.x} y={c.y} s={s} />
-        ) : null;
+        if (!c) return null;
+        const tw = textWidth("완공!", 13) + 8;
+        // 글은 떠오르며 위아래로 10px쯤 움직인다. 그만큼 넉넉히 잡는다
+        const box = {
+          x: c.x - tw / 2,
+          y: partyTextY(c.y, s) - 23,
+          w: tw,
+          h: 30,
+        };
+        const y = dodgeY(box, [...terrLabels, ...placedAll], bounds);
+        return (
+          <Party
+            key={`${pt.id}-${pt.t0}`}
+            x={c.x}
+            y={c.y}
+            s={s}
+            textY={partyTextY(c.y, s) + (y - box.y)}
+          />
+        );
       })}
 
       {/* 걸어오는 승무원(걷는 동안은 제자리 동물 대신) */}
@@ -2087,6 +2177,7 @@ export function CellDecor({
   s,
   ds,
   uid,
+  seed = 0,
 }: {
   st: RegionStatus;
   p: P;
@@ -2094,6 +2185,8 @@ export function CellDecor({
   /** 장식 크기(칸이 커져도 상한이 있다) */
   ds: number;
   uid: string;
+  /** 칸 좌표로 정한 씨앗(decor.ts cellSeed). 공사 칸의 고랑·흙더미·말뚝이 칸마다 다르다 */
+  seed?: number;
 }) {
   const pts = corners(p.x, p.y, s)
     .map((v) => `${v.x.toFixed(1)},${v.y.toFixed(1)}`)
@@ -2120,10 +2213,7 @@ export function CellDecor({
         </g>
       </g>
     );
-  if (st === "building")
-    return (
-      <polygon points={pts} fill={`url(#soil${uid})`} pointerEvents="none" />
-    );
+  if (st === "building") return <Dug p={p} s={s} seed={seed} />;
   if (st === "done") return <Dome x={p.x} y={p.y} s={ds} />;
   if (st === "dropped")
     return (
@@ -2175,6 +2265,103 @@ function Dome({ x, y, s }: { x: number; y: number; s: number }) {
         fill="#fff4b5"
         opacity="0.8"
       />
+    </g>
+  );
+}
+
+/**
+ * 공사 칸: 파헤친 흙에 짧은 고랑 2~3개(수평에 가깝게, 칸 좌표로 그려 땅을 따라 움직인다),
+ * 칸에 따라 흙더미와 주황 깃발 말뚝. 사선 줄무늬는 "주의·금지"로 읽혀 쓰지 않는다(2026-11-03 검토)
+ */
+function Dug({ p, s, seed }: { p: P; s: number; seed: number }) {
+  const d = dugOf(seed);
+  const rows = d.furrows === 3 ? [-0.38, 0, 0.38] : [-0.2, 0.22];
+  const groove = Math.max(0.8, s * 0.075);
+  const fine = s >= 10;
+  return (
+    <g pointerEvents="none" data-dug>
+      <g
+        transform={`rotate(${d.tilt} ${p.x.toFixed(1)} ${p.y.toFixed(1)})`}
+        fill="none"
+        strokeLinecap="round"
+      >
+        {rows.map((ry, i) => {
+          const x0 = p.x + s * (-0.42 + (i % 2) * 0.12);
+          const x1 = x0 + s * 0.58;
+          const y = p.y + s * ry;
+          const mid = `${((x0 + x1) / 2).toFixed(1)} ${(y - s * 0.07).toFixed(1)}`;
+          return (
+            <g key={ry}>
+              <path
+                d={`M${x0.toFixed(1)} ${(y - groove * 0.9).toFixed(1)}Q${mid} ${x1.toFixed(1)} ${(y - groove * 0.9).toFixed(1)}`}
+                stroke="#d2ad78"
+                strokeWidth={groove * 0.6}
+                opacity="0.7"
+              />
+              <path
+                d={`M${x0.toFixed(1)} ${y.toFixed(1)}Q${mid} ${x1.toFixed(1)} ${y.toFixed(1)}`}
+                stroke="#5b3e1f"
+                strokeWidth={groove}
+              />
+            </g>
+          );
+        })}
+      </g>
+      {fine && d.mound && (
+        <path
+          d={`M${p.x + s * 0.18} ${p.y + s * 0.5}Q${p.x + s * 0.4} ${p.y + s * 0.18} ${p.x + s * 0.62} ${p.y + s * 0.5}Z`}
+          fill="#7c5631"
+          stroke="#c99d63"
+          strokeWidth={Math.max(0.6, s * 0.03)}
+        />
+      )}
+      {fine && d.stake && (
+        <g>
+          <line
+            x1={p.x - s * 0.5}
+            y1={p.y + s * 0.42}
+            x2={p.x - s * 0.5}
+            y2={p.y - s * 0.02}
+            stroke="#f1e3c8"
+            strokeWidth={Math.max(0.9, s * 0.04)}
+          />
+          <path
+            d={`M${p.x - s * 0.5} ${p.y - s * 0.02}L${p.x - s * 0.28} ${p.y + s * 0.06}L${p.x - s * 0.5} ${p.y + s * 0.14}Z`}
+            fill="#ff8a1f"
+          />
+        </g>
+      )}
+    </g>
+  );
+}
+
+/** 큰 공사 땅의 크레인: 격자 기둥과 팔, 매달린 짐 */
+export function Crane({ x, y, s }: { x: number; y: number; s: number }) {
+  const u = s / 20;
+  const lattice = [-3, -9, -15, -21, -27]
+    .map((t) => `M-1.6 ${t}L1.6 ${t - 3}L-1.6 ${t - 6}`)
+    .join("");
+  return (
+    <g
+      data-crane
+      transform={`translate(${x} ${y + 6 * u}) scale(${u})`}
+      fill="none"
+      strokeLinecap="round"
+    >
+      <rect x="-5" y="-1" width="10" height="3" rx="1" fill="#1f1a14" />
+      <path d="M-1.6 -1V-33M1.6 -1V-33" stroke="#f2b13a" strokeWidth="1.4" />
+      <path d={lattice} stroke="#f2b13a" strokeWidth="0.7" />
+      <path
+        d="M-7 -33H17M0 -38L17 -33M0 -38L-7 -33"
+        stroke="#f2b13a"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <rect x="-8" y="-35" width="4" height="4" fill="#8a5a1c" />
+      <g className={styles.sway}>
+        <path d="M13 -33V-22" stroke="#e6e0d0" strokeWidth="0.6" />
+        <rect x="10.5" y="-22" width="5" height="3.5" fill="#c9862c" />
+      </g>
     </g>
   );
 }

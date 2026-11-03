@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildBigDemoMap, buildDemoMap } from "@/demo/map";
 import type { ProjectMap } from "@/protocol/map";
 import {
+  dodgeY,
   EDGE_DIRS,
   type FrontierLayout,
   hexKey,
@@ -314,5 +315,26 @@ describe("이름표 자리", () => {
     expect(placed.length).toBeLessThan(asks.length);
     for (const a of placed)
       for (const b of placed) if (a !== b) expect(overlaps(a, b)).toBe(false);
+  });
+});
+
+describe("dodgeY: 잠깐 뜨는 글을 이름표에서 비키기", () => {
+  const bounds = { x: 0, y: 0, w: 800, h: 600 };
+  const party = { x: 100, y: 200, w: 40, h: 18 };
+  it("겹치지 않으면 그대로", () => {
+    expect(dodgeY(party, [{ x: 300, y: 200, w: 80, h: 22 }], bounds)).toBe(200);
+  });
+  it("이름표와 겹치면 위로 비킨다", () => {
+    const label = { x: 90, y: 195, w: 120, h: 22 };
+    const y = dodgeY(party, [label], bounds);
+    expect(y).toBeLessThan(200);
+    expect(overlaps({ ...party, y }, label)).toBe(false);
+  });
+  it("위가 화면 끝이면 아래로", () => {
+    const top = { ...party, y: 4 };
+    const label = { x: 90, y: 0, w: 120, h: 24 };
+    const y = dodgeY(top, [label], bounds);
+    expect(y).toBeGreaterThan(4);
+    expect(overlaps({ ...top, y }, label)).toBe(false);
   });
 });

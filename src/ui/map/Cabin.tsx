@@ -134,10 +134,10 @@ export function Cabin({
               </div>
             )}
           </Center>
-          <aside className="flex w-[380px] shrink-0 flex-col gap-5 overflow-y-auto border-l border-white/[0.07] px-4 py-4">
+          <SidePanel className="flex flex-col gap-5">
             <CrewTasks crewId={crewId} desk={desk} tasks={tasks} now={now} />
             {crew?.brief && <CrewBrief brief={crew.brief} now={now} />}
-          </aside>
+          </SidePanel>
         </div>
       )}
       <Toasts />
@@ -296,7 +296,7 @@ function MapRoom({
           )}
         </footer>
       </div>
-      <aside className="w-[380px] shrink-0 overflow-y-auto border-l border-white/[0.07] px-4 py-4">
+      <SidePanel>
         <div
           data-side-tabs
           className="mb-4 flex gap-1 rounded-md bg-white/[0.04] p-0.5 text-[12.5px]"
@@ -346,8 +346,72 @@ function MapRoom({
         ) : (
           <Overview map={map} forks={forks} talks={talks} onSelect={select} />
         )}
-      </aside>
+      </SidePanel>
     </div>
+  );
+}
+
+const SIDE_COLLAPSED = "starship.cabin.side-collapsed";
+
+/**
+ * 오른쪽 옆판. 1100px 아래 창에서는 380px → 320px로 줄이고, 접으면 얇은 띠만 남아 지도가 넓어진다.
+ * 접힘은 이 브라우저에 기억한다(저장소를 못 쓰면 기억하지 않는다).
+ */
+function SidePanel({
+  className = "",
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const [collapsed, setCollapsed] = useState(false);
+  useEffect(() => {
+    try {
+      setCollapsed(localStorage.getItem(SIDE_COLLAPSED) === "1");
+    } catch {
+      // 저장소를 못 쓰면 늘 펼친다
+    }
+  }, []);
+  const set = (v: boolean) => {
+    setCollapsed(v);
+    try {
+      if (v) localStorage.setItem(SIDE_COLLAPSED, "1");
+      else localStorage.removeItem(SIDE_COLLAPSED);
+    } catch {
+      // 기억하지 못해도 지금 화면은 바뀐다
+    }
+  };
+  if (collapsed)
+    return (
+      <aside className="flex w-8 shrink-0 flex-col items-center border-l border-white/[0.07] py-3">
+        <button
+          type="button"
+          data-side-expand
+          onClick={() => set(false)}
+          title="옆판 펼치기"
+          aria-label="옆판 펼치기"
+          className="rounded px-1 py-2 text-[12px] text-white/55 hover:bg-white/[0.06] hover:text-white"
+        >
+          «
+        </button>
+      </aside>
+    );
+  return (
+    <aside
+      className={`relative w-[320px] shrink-0 overflow-y-auto border-l border-white/[0.07] px-4 py-4 min-[1100px]:w-[380px] ${className}`}
+    >
+      <button
+        type="button"
+        data-side-collapse
+        onClick={() => set(true)}
+        title="옆판 접기: 지도를 넓게"
+        aria-label="옆판 접기"
+        className="absolute top-1 left-0.5 z-10 rounded px-1 text-[12px] leading-tight text-white/30 hover:bg-white/[0.06] hover:text-white"
+      >
+        »
+      </button>
+      {children}
+    </aside>
   );
 }
 

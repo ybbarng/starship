@@ -189,3 +189,23 @@
     opacity: 0.85;
   }
 }
+
+/* 큰 공사 땅: 크레인 짐이 천천히 흔들린다 */
+.sway {
+  transform-box: view-box;
+  transform-origin: 13px -33px;
+  animation: sway 2.4s ease-in-out infinite alternate;
+}
+@keyframes sway {
+  from {
+    transform: rotate(-4deg);
+  }
+  to {
+    transform: rotate(4deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sway {
+    animation: none;
+  }
+}

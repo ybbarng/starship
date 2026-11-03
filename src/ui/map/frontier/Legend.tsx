@@ -2,6 +2,7 @@
 
 // 개척지 지도 도움말: 땅·표지·조작이 무엇을 뜻하는지(2026-11-02 사용자 요청 "화면이 뭘 의미하는지 잘 모르겠다").
 // 그림은 지도가 쓰는 조각(FrontierView의 GROUND·CellDecor·깃발 등)을 그대로 작게 그린다. 설계: docs/frontier.md "도움말".
+import { useEffect, useRef } from "react";
 import type { RegionStatus } from "@/protocol/map";
 import type { Crew } from "@/protocol/v1";
 import { Animal, animalFor, poseFor } from "@/ui/crew";
@@ -30,19 +31,10 @@ const poly = (s = S) =>
     .map((v) => `${v.x.toFixed(1)},${v.y.toFixed(1)}`)
     .join(" ");
 
-/** 지도와 같은 무늬 정의(공사 흙·안개 먼지) */
+/** 지도와 같은 무늬 정의(안개 먼지) */
 function Defs() {
   return (
     <defs>
-      <pattern
-        id={`soil${UID}`}
-        width="4.5"
-        height="4.5"
-        patternUnits="userSpaceOnUse"
-        patternTransform="rotate(28)"
-      >
-        <rect width="4.5" height="1.2" fill="#3a2414" />
-      </pattern>
       <pattern
         id={`dust${UID}`}
         width="7"
@@ -85,7 +77,11 @@ function Tile({
 
 const LANDS: { st: RegionStatus; name: string; say: string }[] = [
   { st: "fog", name: "안개", say: "아직 손대지 않은 일. 윤곽만 알아요" },
-  { st: "building", name: "공사중", say: "지금 하고 있는 일(굴착기)" },
+  {
+    st: "building",
+    name: "공사중",
+    say: "지금 하고 있는 일(파헤친 밝은 흙·굴착기, 큰 땅엔 크레인)",
+  },
   { st: "done", name: "완공", say: "끝난 일(불 켜진 돔)" },
   { st: "blocked", name: "막힘", say: "무언가에 막혀 멈춘 일(붉은 울타리)" },
   { st: "dropped", name: "버림", say: "하지 않기로 한 일. 기본은 숨겨요" },
@@ -126,6 +122,32 @@ export function FrontierLegend({
   crew?: Crew;
   onClose: () => void;
 }) {
+  // 열려 있는 동안은 초점이 어디 있든 Esc로 닫는다. 지도가 먼저 받아 다른 창을 닫았으면(preventDefault) 건드리지 않는다
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !e.defaultPrevented) onCloseRef.current();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
+  // 열 때 닫기 단추에 초점: 지도 밖을 누른 뒤에 열려도 Esc·Tab이 도움말에서 시작한다
+  // 닫히면 초점을 열기 전 자리(대개 지도)로 돌려 지도 키가 이어서 먹게 한다
+  useEffect(() => {
+    const before =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
+    closeRef.current?.focus({ preventScroll: true });
+    return () => {
+      const now = document.activeElement;
+      const lost = !now || now === document.body || !now.isConnected;
+      if (lost && before?.isConnected && before !== document.body)
+        before.focus({ preventScroll: true });
+    };
+  }, []);
   return (
     <div
       data-map-legend
@@ -139,6 +161,7 @@ export function FrontierLegend({
       <div className="flex items-center gap-2 border-b border-white/10 px-3 py-2">
         <span className="font-semibold text-white">이 지도 읽는 법</span>
         <button
+          ref={closeRef}
           type="button"
           onClick={onClose}
           aria-label="도움말 닫기"

@@ -78,12 +78,29 @@ export function Walker({
   );
 }
 
+/** "완공!" 글 자리: 폭죽 가운데 위쪽(글 기준선 y). 이름표와 겹치면 Scene이 textY로 비킨다 */
+export function partyTextY(y: number, s: number): number {
+  return y - partyR(s) * 0.55;
+}
+const partyR = (s: number) => Math.max(18, Math.min(60, s * 1.6));
+
 /** 완공 폭죽: 땅 가운데서 불꽃이 퍼지고 "완공!"이 떠오른다. 한 번만. */
-export function Party({ x, y, s }: { x: number; y: number; s: number }) {
+export function Party({
+  x,
+  y,
+  s,
+  textY,
+}: {
+  x: number;
+  y: number;
+  s: number;
+  /** "완공!" 글 기준선. 없으면 partyTextY */
+  textY?: number;
+}) {
   useEffect(() => {
     markBusy(PARTY_MS + 200);
   }, []);
-  const r = Math.max(18, Math.min(60, s * 1.6));
+  const r = partyR(s);
   const sparks = Array.from({ length: 12 }, (_, i) => {
     const a = (i / 12) * Math.PI * 2;
     const d = r * (0.8 + (i % 3) * 0.2);
@@ -124,7 +141,7 @@ export function Party({ x, y, s }: { x: number; y: number; s: number }) {
       <text
         className={styles.partyText}
         x={x}
-        y={y - r * 0.55}
+        y={textY ?? partyTextY(y, s)}
         textAnchor="middle"
         fontSize="13"
         fontWeight="700"
