@@ -2,8 +2,8 @@
 
 // 빠른 말풍선. 브라우저 기본 툴팁(title)은 1초 넘게 걸려서, 마우스를 올리면 0.12초 만에 뜨는 것을 따로 둔다.
 // 키보드로 안에 있는 단추에 포커스가 가도 뜬다. 화면 가장자리에서 잘리지 않게 붙는 쪽(align)을 고른다.
-// 스크린 리더는 aria-describedby로 같은 글을 읽는다.
-import { type ReactNode, useId } from "react";
+// 스크린 리더는 자식 단추의 aria-describedby로 같은 글을 읽는다.
+import { cloneElement, isValidElement, type ReactNode, useId } from "react";
 
 export function Tip({
   text,
@@ -29,12 +29,22 @@ export function Tip({
         ? "right-0"
         : "left-1/2 -translate-x-1/2";
   const y = side === "top" ? "bottom-full mb-1.5" : "top-full mt-1.5";
+  // aria-describedby는 포커스를 받는 자식(보통 단추)에 달아야 스크린 리더가 읽는다. 감싼 span에 달면 읽지 않는다.
+  // 자식이 요소 하나가 아니면(글 등) 감싼 span에 둔다.
+  const one = isValidElement<{ "aria-describedby"?: string }>(children);
   return (
     <span
       className={`group/tip relative inline-flex ${className}`}
-      aria-describedby={id}
+      aria-describedby={one ? undefined : id}
     >
-      {children}
+      {one
+        ? cloneElement(children, {
+            "aria-describedby":
+              [children.props["aria-describedby"], id]
+                .filter(Boolean)
+                .join(" ") || undefined,
+          })
+        : children}
       <span
         id={id}
         role="tooltip"

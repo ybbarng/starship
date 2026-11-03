@@ -54,8 +54,9 @@ function Tile({
         data-warn={id}
         data-lamp-state={lamp}
         onClick={onClick}
-        disabled={!onClick}
-        className={`${styles.tile} ${tone} flex h-[24px] min-w-0 items-center justify-center gap-1.5 rounded-[3px] px-2.5 text-[11px] font-semibold tracking-[0.04em] whitespace-nowrap enabled:hover:brightness-125 disabled:cursor-default`}
+        // 누를 것이 없는 등도 키보드로 가서 말풍선(뜻)을 읽을 수 있게 disabled 대신 aria-disabled
+        aria-disabled={!onClick || undefined}
+        className={`${styles.tile} ${tone} flex h-[24px] min-w-0 items-center justify-center gap-1.5 rounded-[3px] px-2.5 text-[11px] font-semibold tracking-[0.04em] whitespace-nowrap not-aria-disabled:hover:brightness-125 aria-disabled:cursor-default`}
       >
         <span className="truncate">{label}</span>
         {value && <span className="font-mono tabular-nums">{value}</span>}
