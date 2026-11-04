@@ -203,7 +203,7 @@ function TopLine({
   );
 }
 
-/** 옆판: 할 일(책상 + 책상 밖 일 + 마지막 답변) · 지도(개요·구역) · 브리핑. 역할은 docs/crew-views.md */
+/** 현황판: 할 일(책상 + 책상 밖 일 + 마지막 답변) · 지도(개요·구역) · 브리핑. 역할은 docs/crew-views.md */
 type SideTab = "tasks" | "map" | "brief";
 
 function MapRoom({
@@ -357,7 +357,7 @@ function MapRoom({
 const SIDE_COLLAPSED = "starship.cabin.side-collapsed";
 
 /**
- * 오른쪽 옆판. 1100px 아래 창에서는 380px → 320px로 줄이고, 접으면 얇은 띠만 남아 지도가 넓어진다.
+ * 오른쪽 현황판. 1100px 아래 창에서는 380px → 320px로 줄이고, 접으면 얇은 띠만 남아 지도가 넓어진다.
  * 접힘은 이 브라우저에 기억한다(저장소를 못 쓰면 기억하지 않는다).
  */
 function SidePanel({
@@ -391,8 +391,8 @@ function SidePanel({
           type="button"
           data-side-expand
           onClick={() => set(false)}
-          title="옆판 펼치기"
-          aria-label="옆판 펼치기"
+          title="현황판 펼치기"
+          aria-label="현황판 펼치기"
           className="rounded px-1 py-2 text-[12px] text-white/55 hover:bg-white/[0.06] hover:text-white"
         >
           «
@@ -407,8 +407,8 @@ function SidePanel({
         type="button"
         data-side-collapse
         onClick={() => set(true)}
-        title="옆판 접기: 지도를 넓게"
-        aria-label="옆판 접기"
+        title="현황판 접기: 지도를 넓게"
+        aria-label="현황판 접기"
         className="absolute top-1 left-0.5 z-10 rounded px-1 text-[12px] leading-tight text-white/30 hover:bg-white/[0.06] hover:text-white"
       >
         »

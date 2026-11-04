@@ -172,7 +172,7 @@ export function WaitBubble({
   const w = 14 + label.length * 6.5;
   return (
     <g pointerEvents="none" className={styles.bob} data-wait-bubble>
-      <title>{`나를 기다리는 것 ${n}개 · 옆판 '할 일'`}</title>
+      <title>{`나를 기다리는 것 ${n}개 · 현황판 '할 일'`}</title>
       <path
         d={`M${x - 3} ${y + 8}L${x} ${y + 13}L${x + 3} ${y + 8}Z`}
         fill="#ffd84a"

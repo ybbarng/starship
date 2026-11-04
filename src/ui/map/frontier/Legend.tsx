@@ -322,7 +322,7 @@ export function FrontierLegend({
                   </svg>
                 }
                 name="말풍선"
-                say="나를 기다리는 것 수. 옆판 '할 일'에 있어요"
+                say="나를 기다리는 것 수. 현황판 '할 일'에 있어요"
               />
               <Row
                 pic={

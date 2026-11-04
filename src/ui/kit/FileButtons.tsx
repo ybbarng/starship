@@ -42,7 +42,7 @@ export function useOpenFile(path: string) {
  */
 export function FileButtons({ path }: { path: string }) {
   const { open, busy } = useOpenFile(path);
-  // 좁은 옆판(320px)에서는 파일 이름이 줄어들고 단추는 제 크기를 지킨다(2026-11-03)
+  // 좁은 현황판(320px)에서는 파일 이름이 줄어들고 단추는 제 크기를 지킨다(2026-11-03)
   return (
     <span
       data-file={path}
