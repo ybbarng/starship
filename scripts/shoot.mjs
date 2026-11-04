@@ -30,8 +30,21 @@ const cruiseLimit =
 
 const browser = await chromium.launch({
   channel: "chrome",
+  chromiumSandbox: true,
   args: ["--use-angle=metal", "--enable-gpu", "--ignore-gpu-blocklist"],
 });
+// 내장 Chromium CVE(2026-11): 고친 버전보다 낮은 브라우저로는 열지 않는다.
+const MIN_CHROME = [156, 0, 8078, 73];
+const version = browser.version();
+const parts = version.split(".").map(Number);
+const diff = MIN_CHROME.map((m, i) => (parts[i] ?? 0) - m).find((d) => d !== 0);
+if (diff !== undefined && diff < 0) {
+  await browser.close();
+  console.error(
+    `브라우저 ${version}은(는) 너무 낮습니다. ${MIN_CHROME.join(".")} 이상의 Chrome을 쓰세요.`,
+  );
+  process.exit(1);
+}
 const page = await browser.newPage({
   viewport: { width: w, height: h },
   deviceScaleFactor: 1,
