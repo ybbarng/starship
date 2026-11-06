@@ -36,6 +36,8 @@ type CrewSeed = {
   status: Crew["status"];
   activity?: string;
   onDeck: boolean;
+  /** 작업팀이면 소장의 승무원 id(docs/protocol.md foreman) */
+  foreman?: string;
 };
 
 const CREW: CrewSeed[] = [
@@ -46,6 +48,22 @@ const CREW: CrewSeed[] = [
     status: "working",
     activity: "장바구니 쿠폰 계산 고치는 중",
     onDeck: true,
+  },
+  // 현장 방식(2026-11-06): web-shop이 소장, 아래 둘이 그 작업팀. 하나는 소장 지도의 구역에서, 하나는 구역 없이 일한다
+  {
+    id: "web-shop-coupon",
+    context: "work",
+    status: "needs-you",
+    onDeck: true,
+    foreman: "web-shop",
+  },
+  {
+    id: "web-shop-mobile",
+    context: "work",
+    status: "working",
+    activity: "작은 화면 결제 단추 자리 살피는 중",
+    onDeck: true,
+    foreman: "web-shop",
   },
   { id: "pixel-forge", context: "work", status: "needs-you", onDeck: true },
   {
@@ -452,6 +470,7 @@ export function buildSnapshot(
             ? bigMapSummary
             : undefined,
       desk: desk ? summarizeDesk(desk) : undefined,
+      ...(c.foreman ? { foreman: c.foreman } : {}),
     };
   });
 

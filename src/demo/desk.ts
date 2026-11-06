@@ -1,5 +1,6 @@
 // 데모 책상: 지어낸 세션들이 나를 기다리는 것과 지금 하는 일.
 // web-shop은 네 종류(decide·check·approve·answer)와 코드 리뷰(topic code-review)가 다 있고 지도도 있다. orbit-notes는 지도 없이 책상만 있다.
+// web-shop-coupon·web-shop-mobile은 web-shop의 작업팀이다(Crew.foreman, 지도는 소장 것을 같이 쓴다).
 // 기다림 하나하나는 스냅샷의 Task로도 나간다(id desk:<crewId>:<waitId>). 답하면 책상에서도 빠진다.
 
 import { parseWhen } from "@/protocol/common";
@@ -176,6 +177,50 @@ export function buildDemoDesks(now = Date.now()): Record<string, Desk> {
         },
       ],
       doing: [],
+    },
+    // web-shop의 작업팀 둘(현장 방식, docs/desk.md "일터"). 쿠폰팀은 소장 지도의 구역에서 일해 그 칸에 서고,
+    // 모바일팀은 구역을 적지 않아 착륙선 옆에 선다.
+    "web-shop-coupon": {
+      desk: "starship-desk/1",
+      updatedAt: iso(now, 5),
+      waiting: [
+        {
+          id: "stack-order",
+          type: "decide",
+          title: "쿠폰 두 장을 어떤 순서로 깎을지 고르기",
+          detail: "정률을 먼저 깎으면 손님이 조금 더 아껴요.",
+          since: iso(now, 18),
+          options: [
+            {
+              id: "rate-first",
+              label: "정률 먼저, 정액은 나중",
+              recommended: true,
+            },
+            { id: "amount-first", label: "정액 먼저, 정률은 나중" },
+          ],
+          after: "고른 순서로 계산을 고치고 시험을 돌려요",
+        },
+      ],
+      doing: [
+        {
+          id: "stack-calc",
+          title: "쿠폰 겹쳐 쓰기 계산 고치는 중",
+          since: iso(now, 20),
+          region: "server-coupon",
+        },
+      ],
+    },
+    "web-shop-mobile": {
+      desk: "starship-desk/1",
+      updatedAt: iso(now, 7),
+      waiting: [],
+      doing: [
+        {
+          id: "small-screen",
+          title: "작은 화면 결제 단추 자리 살피는 중",
+          since: iso(now, 9),
+        },
+      ],
     },
   };
 }
