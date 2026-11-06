@@ -1,6 +1,11 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useMemo } from "react";
 import {
   type ActionRequest,
@@ -125,6 +130,20 @@ export function useCrewDesk(crewId: string) {
     queryKey: ["crew-desk", crewId],
     queryFn: () => fetchCrewDesk(crewId),
     refetchInterval: 5_000,
+  });
+}
+
+/**
+ * 여러 승무원 책상을 한꺼번에(소장 지도의 작업팀 그림, docs/frontier.md "작업팀").
+ * useCrewDesk와 같은 열쇠라 같은 책상을 두 번 묻지 않는다. 돌려주는 차례는 ids 차례.
+ */
+export function useCrewDesks(ids: readonly string[]) {
+  return useQueries({
+    queries: ids.map((id) => ({
+      queryKey: ["crew-desk", id],
+      queryFn: () => fetchCrewDesk(id),
+      refetchInterval: 5_000,
+    })),
   });
 }
 

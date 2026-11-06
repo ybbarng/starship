@@ -76,6 +76,7 @@ import {
   saveSeen,
   seenOf,
 } from "./seen";
+import { placeTeams, type TeamOnMap } from "./teams";
 import { type Weather, weatherOf } from "./weather";
 
 const LEGEND_SEEN = "starship.frontier.legend-seen";
@@ -192,6 +193,7 @@ export function FrontierView({
   onSelect,
   showDropped,
   now,
+  teams,
 }: MapViewProps) {
   const ref = useRef<HTMLElement>(null);
   const [size, setSize] = useState({ w: 0, h: 0 });
@@ -623,6 +625,7 @@ export function FrontierView({
           onVisit={(id) => visit(id, false)}
           showDropped={showDropped}
           now={now}
+          teams={replaying ? undefined : teams}
         />
       )}
       <div
@@ -861,6 +864,7 @@ function Scene({
   replay = false,
   walkMs = WALK_MS,
   onFork,
+  teams,
 }: {
   w: number;
   h: number;
@@ -891,6 +895,8 @@ function Scene({
   walkMs?: number;
   /** 내 갈림길 깃발을 눌렀다(없으면 깃발을 누를 수 없다) */
   onFork?: (region: string, signId: string, at: P) => void;
+  /** 이 지도를 같이 쓰는 작업팀(teams.ts). 되감기 중에는 세우지 않는다 */
+  teams?: TeamOnMap[];
 }) {
   const visible = (id: string) => showDropped || !dropped.has(id);
   const byId = new Map(map.regions.map((r) => [r.id, r]));
@@ -1025,6 +1031,26 @@ function Scene({
   /** 프로젝트마다 다른 행성(planet.ts) */
   const planet = planetFor(crew?.id ?? map.title);
 
+  /* ── 작업팀: 책상 일터(doing[].region) 칸에, 없으면 착륙선 옆에(teams.ts) ── */
+  const teamSize = animalSize * 0.72;
+  const teamLift = ds * 0.45;
+  // 잎 구역은 가운데 칸, 묶음 구역(자식이 있는 구역)은 무게중심. 소장 그림(지금 여기)과 같은 규칙
+  const spotOf = (id: string): P | undefined =>
+    visible(id) ? (spots.get(id)?.slots[0] ?? centerOf(id)) : undefined;
+  const teamSpots = placeTeams(
+    teams ?? [],
+    (id) => spotOf(id) !== undefined,
+    hereCenter ? map.here : null,
+  ).map((t) => {
+    const base = (t.region ? spotOf(t.region) : undefined) ?? {
+      // 착륙장 오른쪽 아래 가장자리
+      x: ox + s * 1.75,
+      y: oy + s * 1.1,
+    };
+    const at = { x: base.x + t.dx * teamSize, y: base.y };
+    return { ...t, at, world: { x: (at.x - ox) / s, y: (at.y - oy) / s } };
+  });
+
   /* ── 살아 있는 지도: 지난번 본 것과 달라졌으면 걷고, 완공을 축하한다(seen.ts, alive.tsx) ── */
   const who = crew?.id ?? map.title;
   const toWorld = (p: P): P => ({ x: (p.x - ox) / s, y: (p.y - oy) / s });
@@ -1073,6 +1099,36 @@ function Scene({
     return () => clearTimeout(t);
   }, [parties]);
 
+  // 작업팀 일터가 바뀌면 승무원처럼 걸어간다. 처음 보는 작업팀은 제자리에 바로 선다.
+  // 땅 좌표로 비교해서 지도를 끌거나 확대해도 걷지 않는다.
+  const teamWhere = useRef(new Map<string, P>());
+  const [teamWalks, setTeamWalks] = useState<
+    Map<string, { from: P; to: P; t0: number }>
+  >(() => new Map());
+  const teamKey = teamSpots
+    .map((t) => `${t.crew.id}@${t.world.x.toFixed(3)},${t.world.y.toFixed(3)}`)
+    .join("|");
+  // biome-ignore lint/correctness/useExhaustiveDependencies: 작업팀 자리(teamKey)가 바뀔 때만
+  useEffect(() => {
+    const prev = teamWhere.current;
+    const next = new Map(teamSpots.map((t) => [t.crew.id, t.world]));
+    teamWhere.current = next;
+    if (reducedMotion()) return;
+    const t0 = performance.now();
+    const moved = teamSpots.flatMap((t) => {
+      const from = prev.get(t.crew.id);
+      if (!from) return [];
+      if (Math.hypot(from.x - t.world.x, from.y - t.world.y) < 1e-3) return [];
+      return [[t.crew.id, { from, to: t.world, t0 }] as const];
+    });
+    if (moved.length) setTeamWalks((cur) => new Map([...cur, ...moved]));
+  }, [teamKey]);
+  useEffect(() => {
+    if (!teamWalks.size) return;
+    const t = setTimeout(() => setTeamWalks(new Map()), walkMs + 100);
+    return () => clearTimeout(t);
+  }, [teamWalks, walkMs]);
+
   /* ── 장애물: 착륙선, 동물, 내 깃발 ── */
   const center = { x: ox, y: oy };
   const obstacles: Rect[] = [
@@ -1085,6 +1141,13 @@ function Scene({
       y: hereCenter.y - animalSize * 1.2,
       w: animalSize,
       h: animalSize * 1.2,
+    });
+  for (const t of teamSpots)
+    obstacles.push({
+      x: t.at.x - teamSize / 2,
+      y: t.at.y + teamLift - teamSize * 1.25,
+      w: teamSize,
+      h: teamSize * 1.25 + 14,
     });
   const flagSpots: { id: string; p: P }[] = [];
   for (const sp of spots.values()) {
@@ -2017,6 +2080,67 @@ function Scene({
         </g>
       )}
 
+      {/* 작업팀: 소장 지도를 같이 쓰는 세션(teams.ts). 걷는 동안은 Walker가 대신 그린다 */}
+      {teamSpots.map((t) => {
+        const walking = teamWalks.get(t.crew.id);
+        const name = `작업팀 ${t.crew.name}`;
+        if (walking)
+          return (
+            <Walker
+              key={t.crew.id}
+              from={walking.from}
+              to={walking.to}
+              t0={walking.t0}
+              ms={walkMs}
+              ox={ox}
+              oy={oy}
+              s={s}
+              size={teamSize}
+              lift={teamLift}
+            >
+              <TeamAnimal crew={t.crew} size={teamSize} />
+            </Walker>
+          );
+        const foot = t.at.y + teamLift;
+        return (
+          <g
+            key={t.crew.id}
+            pointerEvents="none"
+            data-team={t.crew.id}
+            data-team-region={t.region ?? "lander"}
+          >
+            <title>{`${name} · ${t.region ? (byId.get(t.region)?.title ?? t.region) : "착륙선 옆(일터를 적지 않음)"}`}</title>
+            <ellipse
+              cx={t.at.x}
+              cy={foot - teamLift * 0.16}
+              rx={teamSize * 0.3}
+              ry={teamSize * 0.09}
+              fill="#000"
+              opacity="0.3"
+            />
+            <g
+              transform={`translate(${t.at.x - teamSize / 2} ${foot - teamSize * 1.25})`}
+            >
+              <TeamAnimal crew={t.crew} size={teamSize} />
+            </g>
+            <text
+              x={t.at.x}
+              // 이웃 이름표와 겹치지 않게 한 줄씩 엇갈린다
+              y={foot + 11 + (t.nth % 2) * 12}
+              textAnchor="middle"
+              fontSize="10.5"
+              fontWeight="700"
+              fill="#e8ecf6"
+              stroke="#0a0a10"
+              strokeWidth="3"
+              paintOrder="stroke"
+            >
+              {name}
+            </text>
+          </g>
+        );
+      })}
+
       {/* 지역 이름표 */}
       {terrLabels.map((l) => (
         // biome-ignore lint/a11y/useSemanticElements: SVG 안이라 button을 쓸 수 없다
@@ -2611,6 +2735,20 @@ function HereAnimal({ crew, size }: { crew?: Crew; size: number }) {
       size={size}
       furniture={false}
       label={`${crew.name} 선원, 지금 여기`}
+    />
+  );
+}
+
+/** 작업팀 그림: 그 작업팀의 동물(animalFor). 소장 그림보다 작게 */
+function TeamAnimal({ crew, size }: { crew: Crew; size: number }) {
+  return (
+    <Animal
+      kind={animalFor(crew.id)}
+      pose={crew.status === "off" ? "sleep" : poseFor(crew.status)}
+      context={crew.context}
+      size={size}
+      furniture={false}
+      label={`작업팀 ${crew.name}`}
     />
   );
 }

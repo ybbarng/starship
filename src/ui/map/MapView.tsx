@@ -12,6 +12,7 @@ import {
 } from "@/protocol/map";
 import type { Crew } from "@/protocol/v1";
 import { Animal, animalFor, poseFor } from "@/ui/crew";
+import type { TeamOnMap } from "./frontier/teams";
 import {
   REGION_STATUS_COLOR,
   REGION_STATUS_ICON,
@@ -35,6 +36,8 @@ export type MapViewProps = {
   /** 버린 구역도 그릴까(아래쪽 "버린 구역 보기") */
   showDropped: boolean;
   now: number;
+  /** 이 지도를 같이 쓰는 작업팀과 그 책상(현장 방식). 개척지만 그림을 세운다(docs/frontier.md "작업팀") */
+  teams?: TeamOnMap[];
 };
 
 export function MapView({

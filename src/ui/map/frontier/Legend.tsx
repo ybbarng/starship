@@ -293,6 +293,21 @@ export function FrontierLegend({
               />
               <Row
                 pic={
+                  <div className="flex h-[34px] w-[34px] shrink-0 items-end justify-center">
+                    <Animal
+                      kind={animalFor("작업팀")}
+                      pose="stand"
+                      context={crew?.context ?? "work"}
+                      size={22}
+                      furniture={false}
+                    />
+                  </div>
+                }
+                name="작업팀(작은 승무원)"
+                say="이 지도를 같이 쓰는 작업팀. 책상에 적은 일터 칸에 서고, 일터가 없으면 착륙선 옆에 서요. 일터가 바뀌면 걸어가요"
+              />
+              <Row
+                pic={
                   <svg
                     width={D}
                     height={D}
