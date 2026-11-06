@@ -97,6 +97,11 @@ export const Doing = z.object({
   since: When.optional(),
   /** 이 일에서 사용자가 미리 승인한 바깥 일(push·게시 등) 한두 줄. 선실 카드에 "승인받은 것"으로 보인다(2026-11-03 전역 규칙) */
   approved: z.string().min(1).max(500).optional(),
+  /**
+   * 이 일을 하는 지도 구역 id. 작업팀은 소장 지도의 구역이다(2026-11-06, docs/desk.md "일터").
+   * 지도 그림은 region이 있는 첫 항목의 칸에 선다. 없거나 지도에 없는 id면 착륙선 옆에 선다.
+   */
+  region: z.string().min(1).max(200).optional(),
 });
 export type Doing = z.infer<typeof Doing>;
 

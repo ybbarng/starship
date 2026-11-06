@@ -4,7 +4,7 @@
   "goal": "세션들을 우주선 승무원으로 보며, 나를 기다리는 것·하는 일·쓴 연료를 한 화면(조종석)에서 묻지 않고 보고 답한다",
   "baselineAt": "2026-10-25",
   "updatedAt": "2026-11-03T14:19:00.698Z",
-  "here": "window-3d-sky",
+  "here": "site-teams",
   "regions": [
     {
       "id": "protocol",
@@ -484,6 +484,25 @@
         {
           "label": "crew-views.md",
           "path": "docs/crew-views.md"
+        }
+      ]
+    },
+    {
+      "id": "site-teams",
+      "title": "현장 작업팀 그림",
+      "status": "building",
+      "size": 2,
+      "summary": "작업팀(Crew.foreman)을 소장 아래로 접고, 소장 지도에 작업팀 그림을 doing[].region 칸에 세운다. 서버 foreman은 비서",
+      "since": "2026-11-06",
+      "found": "2026-11-06",
+      "links": [
+        {
+          "label": "desk.md 일터",
+          "path": "docs/desk.md"
+        },
+        {
+          "label": "protocol.md",
+          "path": "docs/protocol.md"
         }
       ]
     },

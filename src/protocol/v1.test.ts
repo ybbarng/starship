@@ -90,6 +90,23 @@ describe("Snapshot: 틀린 항목만 빼기", () => {
     expect(Snapshot.safeParse(base({ tasks: "없음" })).success).toBe(false);
   });
 
+  it("작업팀 승무원의 foreman(소장 id)을 버리지 않는다", () => {
+    const crew = (id: string, over: Record<string, unknown> = {}) => ({
+      id,
+      name: id,
+      context: "personal",
+      status: "working",
+      onDeck: true,
+      actions: ["focus"],
+      ...over,
+    });
+    const snap = Snapshot.parse(
+      base({ crew: [crew("game"), crew("cube", { foreman: "game" })] }),
+    );
+    expect(snap.crew.map((c) => c.foreman)).toEqual([undefined, "game"]);
+    expect(snap.problems).toBeUndefined();
+  });
+
   it("한 번 읽은 결과를 다시 읽어도 같다(화면이 한 번 더 parse한다)", () => {
     const once = Snapshot.parse(
       base({ tasks: [task("t1"), task("t2", { actions: ["fly"] })] }),

@@ -367,6 +367,34 @@ describe("parseDesk", () => {
       expect(result.problems[0]).toMatch(/^doing\[0\] \(id ship\): approved/);
     });
   });
+
+  describe("하는 일의 일터(region)", () => {
+    // 작업팀이 소장 지도의 구역 id를 적는다(docs/desk.md "일터")
+    const build = {
+      id: "replay",
+      title: "선실 되감기 속도 고르기 붙이기",
+      since: "2026-11-06T10:20:00+09:00",
+      region: "cabin-replay",
+    };
+
+    it("있으면 버리지 않고 그대로 읽는다", () => {
+      const result = parseDesk(desk([], [build]));
+      expect(result.ok && result.desk.doing[0]?.region).toBe("cabin-replay");
+    });
+
+    it("없어도 된다(기본 구조 승무원)", () => {
+      const { region: _, ...plain } = build;
+      const result = parseDesk(desk([], [plain]));
+      expect(result.ok && result.desk.doing[0]?.region).toBeUndefined();
+      expect(result.problems).toEqual([]);
+    });
+
+    it("빈 글이면 그 일만 뺀다", () => {
+      const result = parseDesk(desk([], [{ ...build, region: "" }, build]));
+      expect(result.desk?.doing).toHaveLength(1);
+      expect(result.problems[0]).toMatch(/^doing\[0\] \(id replay\): region/);
+    });
+  });
 });
 
 describe("할 일과 이어 주기", () => {

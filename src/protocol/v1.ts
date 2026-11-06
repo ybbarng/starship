@@ -153,6 +153,11 @@ export const Crew = z.object({
   since: Millis.optional(),
   /** 창(터미널)이 열려 있나. 열린 승무원은 크게, 나머지는 작게. */
   onDeck: z.boolean(),
+  /**
+   * 이 승무원이 작업팀이면 그 현장 소장의 승무원 id. 작업팀에만 붙는다(2026-11-06, docs/protocol.md).
+   * 화면은 작업팀을 소장 아래로 접고, 소장 지도에 작업팀 그림을 세운다.
+   */
+  foreman: z.string().min(1).optional(),
   brief: z
     .object({
       summary: z.string(),

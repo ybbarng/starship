@@ -174,6 +174,7 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
 | `status` | `working` 일하는 중 · `needs-you` 나를 기다림 · `idle` 쉼(세션은 있음) · `off` 세션 없음 |
 | `activity` | 지금 하는 일 한 줄 |
 | `onDeck` | 창(터미널)이 열려 있나. 열린 승무원은 크게, 나머지는 작게 |
+| `foreman`(선택) | 이 승무원이 작업팀이면 그 현장 소장의 승무원 id(2026-11-06). 작업팀에만 붙는다. 화면은 작업팀을 소장 아래로 접고, 소장 지도에 작업팀 그림을 세운다. 작업팀이 짓는 구역은 작업팀 책상의 `doing[].region`이다([desk.md](desk.md)) |
 | `brief` | 요약·오늘·다음·위험 |
 | `actions` | `focus` 그 창으로 가기 · `brief` 브리핑 다시 만들기 |
 | `map` | 선택. 지도 요약 `{ progress, regions, found, forksForMe, stale }`. 진행률(0..1), 버림을 뺀 구역 수, 그 가운데 발견 구역 수, 내가 정할 열린 갈림길 수, 지도가 오래됐나. 계산 규칙은 `src/protocol/map.ts`의 `summarizeMap` |
