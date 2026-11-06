@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Task } from "@/protocol/v1";
-import { waitingTotal } from "./AppBadge";
+import { isInstalledApp, waitingTotal } from "./AppBadge";
 
 const NOW = Date.parse("2026-11-03T11:00:00+09:00");
 
@@ -76,5 +76,20 @@ describe("waitingTotal: Dock 배지 숫자 = 결재 수 + 답해 둔 것", () =>
 
   it("아무것도 없으면 0", () => {
     expect(waitingTotal([], [])).toBe(0);
+  });
+});
+
+describe("배지를 거는 곳", () => {
+  /** 브라우저가 이 표시 방식만 맞다고 답하는 matchMedia */
+  const mode = (m: string) => (q: string) => q === `(display-mode: ${m})`;
+
+  it("설치한 앱(standalone)에서는 건다", () => {
+    expect(isInstalledApp(mode("standalone"))).toBe(true);
+    expect(isInstalledApp(mode("window-controls-overlay"))).toBe(true);
+  });
+
+  it("보통 탭(Electron 앱의 내장 탭 포함)에서는 걸지 않는다", () => {
+    expect(isInstalledApp(mode("browser"))).toBe(false);
+    expect(isInstalledApp(mode("minimal-ui"))).toBe(false);
   });
 });
