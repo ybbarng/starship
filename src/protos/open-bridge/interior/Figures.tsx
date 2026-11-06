@@ -7,7 +7,7 @@
 import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 import type { Crew, Task } from "@/protocol/v1";
 import { Animal, animalFor, type Pose } from "@/ui/crew";
-import { CONTEXT_COLOR, CREW_STATUS_LABEL, elapsed } from "@/ui/kit";
+import { CREW_STATUS_LABEL, elapsed } from "@/ui/kit";
 import { type Deck, FIXTURES, SLAB } from "./geometry";
 import type { ModuleLayout } from "./layout";
 
@@ -195,7 +195,6 @@ export function ModuleCrew({
   layout,
   decisions,
   clock,
-  selectedId,
   onSelect,
   onGroup,
 }: {
@@ -204,7 +203,6 @@ export function ModuleCrew({
   /** 승무원별 결재(decisionsByCrew) */
   decisions: ReadonlyMap<string, Task[]>;
   clock: number;
-  selectedId: string | null;
   onSelect: (id: string) => void;
   onGroup: (title: string, crew: Crew[]) => void;
 }) {
@@ -252,7 +250,6 @@ export function ModuleCrew({
     <>
       {/* 자리(책상) 단추 */}
       {desks.map((d) => {
-        const sel = d.crew.id === selectedId;
         const count = decisions.get(d.crew.id)?.length ?? 0;
         const waiting = count > 0;
         const light = STATUS_LIGHT[lightOf(d.crew, waiting)];
@@ -270,10 +267,6 @@ export function ModuleCrew({
               width: d.x1 - d.x0 - 2,
               top: deck.top + 16,
               height: f - deck.top - 16 + SLAB,
-              boxShadow: sel
-                ? `0 0 0 2px ${CONTEXT_COLOR[d.crew.context]}, 0 0 16px ${CONTEXT_COLOR[d.crew.context]}55`
-                : undefined,
-              background: sel ? "rgba(255,255,255,0.05)" : undefined,
             }}
           >
             <span className="absolute inset-0 rounded-md bg-white/0 transition group-hover:bg-white/[0.05]" />
@@ -380,10 +373,6 @@ export function ModuleCrew({
             width: s.size + 4,
             top: s.y - s.size * 1.2,
             height: s.size * 1.2 + 4,
-            boxShadow:
-              s.crew.id === selectedId
-                ? `0 0 0 2px ${CONTEXT_COLOR[s.crew.context]}`
-                : undefined,
           }}
         />
       ))}

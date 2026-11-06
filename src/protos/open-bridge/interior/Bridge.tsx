@@ -1,20 +1,14 @@
 "use client";
 
 // 갑판 1 함교·통신실의 글과 단추. 왼쪽 = 내 자리(조종석 축소판, 여기서 조종석으로 돌아간다),
-// 오른쪽 = 통신 콘솔(실제 교신 지연·지구까지 거리, 들어온 교신 줄 → 누르면 도킹 베이 해치가 열린다).
+// 오른쪽 = 통신 콘솔(실제 교신 지연·지구까지 거리, 도킹 베이에 붙은 교신선 수).
+// 교신 줄은 두지 않는다. 교신은 갑판 4 도킹 베이 한 곳에서 본다(docs/crew-views.md, 2026-11-06).
 // 시계·거리는 선내가 보일 때(active)만 돈다. 조종석에서는 선내가 display:none으로 숨어도 마운트돼 있어서다.
 import type { Task } from "@/protocol/v1";
 import { formatDistance, formatLightTime } from "@/sky/telemetry";
 import { useKoreaTime, useTelemetry } from "@/sky/useTelemetry";
 import { useDestination } from "@/sky/voyage";
-import { ago, CONTEXT_COLOR } from "@/ui/kit";
-import type { Berth } from "./berths";
-import { selecting } from "./Figures";
 import { DECKS, LADDER } from "./geometry";
-import { SHIP } from "./ships";
-
-/** 통신 콘솔에 보이는 교신 줄 수. 넘치면 머리의 "전체 n ▸"로 목록을 연다 */
-const COMMS_ROWS = 3;
 
 /** 한국 시각(1초마다). 선내가 보일 때만 마운트한다 */
 function KoreaClock() {
@@ -37,11 +31,8 @@ export function BridgeDeck({
   now,
   mine,
   hailCount,
-  berths,
-  clock,
+  docked,
   onCockpit,
-  onHatch,
-  onMore,
 }: {
   /** 선내가 보일 때만 true. false면 시계·거리를 멈춘다 */
   active: boolean;
@@ -50,12 +41,9 @@ export function BridgeDeck({
   /** 내 차례 = 결재 수(decisionCount). 조종석 결재함과 같다 */
   mine: number;
   hailCount: number;
-  berths: Berth[];
-  clock: number;
+  /** 도킹 베이에 붙은 교신선 수 */
+  docked: number;
   onCockpit: () => void;
-  onHatch: (id: string) => void;
-  /** 교신 전체 목록 */
-  onMore: () => void;
 }) {
   const d = DECKS.bridge;
   const f = d.floor;
@@ -115,66 +103,27 @@ export function BridgeDeck({
           height: 60,
         }}
       >
-        <div className="flex justify-between gap-2 border-b border-white/10 px-1.5 text-[9px] leading-[14px] text-[#cbb6ff]">
-          <span className="shrink-0">
-            통신 · 도킹 {berths.length}척
-            {berths.length > COMMS_ROWS && (
-              <button
-                type="button"
-                data-comms-more
-                onClick={onMore}
-                className="ml-1 rounded px-1 font-semibold text-[#ffd84a] hover:bg-white/10"
-              >
-                전체 {berths.length} ▸
-              </button>
-            )}
-          </span>
-          <span className="truncate text-white/55">
-            {active ? <EarthLink /> : null}
-          </span>
+        <div className="border-b border-white/10 px-1.5 text-[9px] leading-[14px] text-[#cbb6ff]">
+          통신 · 지구 회선
         </div>
-        {berths.length === 0 ? (
-          <div className="px-1.5 pt-2 text-[10px] text-white/40">
-            조용함 — 들어온 교신 없음
-          </div>
-        ) : (
-          <ul className="px-0.5 pt-0.5">
-            {berths.slice(0, COMMS_ROWS).map((b) => (
-              <li key={b.id}>
-                {/* biome-ignore lint/a11y/useKeyWithClickEvents: 도킹 베이 포트 단추가 같은 일을 키보드로 받는다 */}
-                {/* biome-ignore lint/a11y/noStaticElementInteractions: 글을 끌어 고를 수 있게 단추로 감싸지 않는다 */}
-                <div
-                  data-hail={b.id}
-                  onClick={() => !selecting() && onHatch(b.id)}
-                  className="flex cursor-pointer items-center gap-1 rounded px-1 text-[10px] leading-[14px] hover:bg-white/10"
-                >
-                  <span
-                    className="h-1.5 w-1.5 shrink-0 rounded-full"
-                    style={{ background: SHIP[b.kind].color }}
-                  />
-                  <b
-                    className="shrink-0"
-                    style={{ color: CONTEXT_COLOR[b.context] }}
-                  >
-                    {b.from}
-                  </b>
-                  <span className="min-w-0 flex-1 truncate text-white/75">
-                    {b.line}
-                  </span>
-                  <span className="shrink-0 text-white/40">
-                    {ago(b.since, clock)}
-                  </span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+        <div className="px-1.5 pt-1 text-[10.5px] leading-[15px] text-white/80">
+          {active ? <EarthLink /> : null}
+        </div>
+        <div className="px-1.5 text-[10px] leading-[14px] text-white/55">
+          {docked > 0 ? (
+            <>
+              도킹 베이에 교신선 <b className="text-[#b896ff]">{docked}</b>척 ▾
+            </>
+          ) : (
+            "조용함 — 들어온 교신 없음"
+          )}
+        </div>
       </div>
       <div
         className="pointer-events-none absolute text-[8.5px] text-white/40"
         style={{ left: commsX + 8, top: f - 27 }}
       >
-        통신 콘솔 · 줄을 누르면 도킹 베이 해치가 열려요
+        통신 콘솔 · 교신은 아래 도킹 베이에서
       </div>
     </>
   );

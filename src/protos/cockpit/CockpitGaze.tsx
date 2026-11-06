@@ -425,7 +425,7 @@ export function CockpitGaze() {
           active={stage === 1}
           onCockpit={() => goTo(0)}
           onInbox={(id) => {
-            // 선내 서랍 "결재함에서 열기": 조종석으로 올라가 그 승무원 묶음을 연다
+            // 선내에서 결재가 있는 선원을 누르면: 조종석으로 올라가 그 승무원 묶음을 연다
             setInboxPick(id);
             goTo(0);
           }}

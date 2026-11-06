@@ -4,6 +4,7 @@
 // 네 갑판은 가운데 사다리와 바닥 해치로 이어지고, 선체 곡면·리벳·창·배관·환기구가 단면을 감싼다.
 // 선원(프로젝트)은 자리와 자세로 상태를 보이고, 사람이 부른 교신선은 도킹 베이 포트에 붙는다.
 // 설계 좌표(W × H)로 그린 장면을 화면 크기에 맞춰 통째로 늘이고 줄인다. 서랍·해치 모달은 늘이지 않는다.
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useBridge } from "@/data/hooks";
 import type { Crew } from "@/protocol/v1";
@@ -104,10 +105,17 @@ export function Interior({
     () => bridge.tasks.find((t) => !isNews(t)),
     [bridge.tasks],
   );
-  const selectedId = drawer?.type === "crew" ? drawer.id : null;
-  const select = useCallback((id: string) => {
-    setDrawer({ type: "crew", id });
-  }, []);
+  // 선원을 누르면: 결재가 있으면 조종석 결재함의 그 묶음, 없으면 선실(현황판).
+  // 한 선원의 결재·브리핑을 선내에서 따로 그리지 않는다(docs/crew-views.md, 2026-11-06)
+  const router = useRouter();
+  const select = useCallback(
+    (id: string) => {
+      setDrawer(null);
+      if (onInbox && decisions.has(id)) onInbox(id);
+      else router.push(`/crew/${encodeURIComponent(id)}`);
+    },
+    [decisions, onInbox, router],
+  );
   const group = useCallback((title: string, crew: Crew[]) => {
     setDrawer({ type: "group", title, ids: crew.map((c) => c.id) });
   }, []);
@@ -205,18 +213,14 @@ export function Interior({
           now={first}
           mine={mine}
           hailCount={bridge.hails.length}
-          berths={berths}
-          clock={clock}
+          docked={berths.length}
           onCockpit={onCockpit}
-          onHatch={setHatchId}
-          onMore={moreHails}
         />
         <ModuleCrew
           deck={DECKS.work}
           layout={layouts.work}
           decisions={decisions}
           clock={clock}
-          selectedId={selectedId}
           onSelect={select}
           onGroup={group}
         />
@@ -225,7 +229,6 @@ export function Interior({
           layout={layouts.home}
           decisions={decisions}
           clock={clock}
-          selectedId={selectedId}
           onSelect={select}
           onGroup={group}
         />
@@ -268,7 +271,6 @@ export function Interior({
           clock={clock}
           onSelect={select}
           onHatch={setHatchId}
-          onInbox={onInbox ?? (() => onCockpit())}
           onClose={() => setDrawer(null)}
         />
       )}
