@@ -31,6 +31,7 @@ import {
   type ReviewLane,
   STALE_MS,
 } from "./inboxGroups";
+import { type InboxRow, nestedCrewIds, teamsByForeman } from "./inboxTeams";
 import { CrewLamp, MapBadge, sortCrew } from "./Panel";
 import { ContextTag, KEY_SMALL } from "./parts";
 
@@ -144,8 +145,216 @@ function ReviewLaneBox({
   );
 }
 
+/** 목차 한 줄: 승무원 묶음 하나. 작업팀은 소장 줄 아래에 들여서 "작업팀" 꼬리표를 단다 */
+function GroupItem({
+  g,
+  on,
+  now,
+  tag,
+  onSelect,
+}: {
+  g: InboxGroup;
+  on: boolean;
+  now: number;
+  /** "소장"·"작업팀" 꼬리표(현장 방식). 없으면 달지 않는다 */
+  tag?: "소장" | "작업팀";
+  onSelect: (key: string) => void;
+}) {
+  return (
+    <button
+      type="button"
+      data-inbox-group={g.key}
+      data-inbox-team={tag === "작업팀" ? "" : undefined}
+      aria-pressed={on}
+      onClick={() => onSelect(g.key)}
+      className={`relative block w-full rounded-md px-2 py-1.5 text-left transition ${
+        on
+          ? "bg-[#7fb8ff]/[0.13] shadow-[inset_2px_0_0_#7fb8ff]"
+          : "hover:bg-white/[0.06]"
+      }`}
+    >
+      <span className="flex min-w-0 items-center gap-1.5 text-[12px]">
+        {g.crew ? (
+          <CrewLamp status={g.crew.status} />
+        ) : (
+          <span className="h-[7px] w-[7px] shrink-0 rounded-full border border-dashed border-white/40" />
+        )}
+        <span
+          className="h-2.5 w-[3px] shrink-0 rounded-sm"
+          style={{ background: CONTEXT_COLOR[groupContext(g)] }}
+        />
+        {tag && <RoleTag tag={tag} />}
+        <span
+          className={`truncate font-semibold ${on ? "text-white" : "text-white/85"}`}
+        >
+          {groupName(g)}
+        </span>
+        {g.answers > 0 && (
+          <span
+            data-group-answers
+            title={`답해 둔 것 ${g.answers}`}
+            className={`${g.tasks.length ? "" : "ml-auto"} shrink-0 rounded-full bg-[#7ce0ff]/20 px-1.5 text-[10.5px] leading-[15px] font-bold text-[#bfefff] tabular-nums`}
+          >
+            답 {g.answers}
+          </span>
+        )}
+        {g.tasks.length > 0 && (
+          <span
+            className={`${g.answers ? "" : "ml-auto"} shrink-0 rounded-full bg-[#ffd84a] px-1.5 text-[10.5px] leading-[15px] font-bold text-hull-950 tabular-nums`}
+          >
+            {g.tasks.length}
+          </span>
+        )}
+      </span>
+      <span className="mt-0.5 flex min-w-0 items-center gap-1.5 pl-[19px] text-[10.5px]">
+        <span className="min-w-0 flex-1 truncate text-white/40">
+          {g.key === LOOSE_KEY
+            ? "감시·알림·리뷰 등 승무원 없이 온 일"
+            : (g.crew?.activity ?? "")}
+        </span>
+        {g.stale > 0 && (
+          <span className="shrink-0 text-[#ff8a7a]">묵음 {g.stale}</span>
+        )}
+        {g.tasks.length > 0 && (
+          <span
+            className={`shrink-0 font-mono tabular-nums ${ageTone(g.oldest, now)}`}
+          >
+            {ago(g.oldest, now)}
+          </span>
+        )}
+      </span>
+    </button>
+  );
+}
+
+function RoleTag({ tag }: { tag: "소장" | "작업팀" }) {
+  return (
+    <span
+      className={`shrink-0 rounded px-1 text-[9.5px] leading-[14px] font-semibold ${
+        tag === "소장"
+          ? "bg-[#e9b872]/20 text-[#f3d3a0]"
+          : "bg-white/[0.08] text-white/60"
+      }`}
+    >
+      {tag}
+    </span>
+  );
+}
+
+/**
+ * 작업팀을 둔 소장 줄: 소장 묶음(결재가 없으면 소장 이름만), 그 아래 작업팀을 들여 접어 둔다.
+ * 결재가 있는 작업팀이 있으면 펼쳐 두고, 결재 없는 작업팀만 있으면 접어 둔다. 고른 작업팀은 늘 보인다.
+ */
+function ForemanRow({
+  row,
+  selected,
+  now,
+  onSelect,
+  onCrew,
+}: {
+  row: InboxRow;
+  selected: string | undefined;
+  now: number;
+  onSelect: (key: string) => void;
+  onCrew: (id: string) => void;
+}) {
+  const boss = row.foreman;
+  const [picked, setOpen] = useState<boolean | null>(null);
+  const holdsSelected = row.teams.some((g) => g.key === selected);
+  const open = holdsSelected || (picked ?? row.teams.length > 0);
+  const count = row.teams.length + row.idleTeams.length;
+  const teamDecisions = row.teams.reduce((n, g) => n + g.tasks.length, 0);
+  if (!boss) return null;
+  return (
+    <div data-inbox-foreman={boss.id}>
+      {row.group ? (
+        <GroupItem
+          g={row.group}
+          on={row.group.key === selected}
+          now={now}
+          tag="소장"
+          onSelect={onSelect}
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => onCrew(boss.id)}
+          title={`${boss.name} 승무원 정보`}
+          className="flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] hover:bg-white/[0.06]"
+        >
+          <CrewLamp status={boss.status} />
+          <span
+            className="h-2.5 w-[3px] shrink-0 rounded-sm"
+            style={{ background: CONTEXT_COLOR[boss.context] }}
+          />
+          <RoleTag tag="소장" />
+          <span className="truncate font-semibold text-white/70">
+            {boss.name}
+          </span>
+          <span className="ml-auto shrink-0 text-[10.5px] text-white/35">
+            결재 없음
+          </span>
+        </button>
+      )}
+      <button
+        type="button"
+        data-team-fold={boss.id}
+        aria-expanded={open}
+        disabled={holdsSelected}
+        onClick={() => setOpen(!open)}
+        className="ml-[22px] flex items-center gap-1 rounded px-1.5 py-px text-[10.5px] text-white/45 hover:bg-white/[0.06] hover:text-white/75 disabled:hover:bg-transparent"
+      >
+        <span aria-hidden>{open ? "▾" : "▸"}</span>
+        작업팀 {count}
+        {!open && teamDecisions > 0 && (
+          <span className="text-[#ffd84a]">· 결재 {teamDecisions}</span>
+        )}
+      </button>
+      {open && (
+        <ul
+          data-team-list={boss.id}
+          className="mt-px ml-[18px] space-y-px border-l border-white/[0.08] pl-1.5"
+        >
+          {row.teams.map((g) => (
+            <li key={g.key}>
+              <GroupItem
+                g={g}
+                on={g.key === selected}
+                now={now}
+                tag="작업팀"
+                onSelect={onSelect}
+              />
+            </li>
+          ))}
+          {row.idleTeams.map((c) => (
+            <li key={c.id}>
+              <button
+                type="button"
+                data-crew-lamp={c.id}
+                data-status={c.status}
+                onClick={() => onCrew(c.id)}
+                title={`${c.name} · ${c.activity ?? ""}`}
+                className="flex w-full min-w-0 items-center gap-1.5 rounded px-2 py-1 text-left text-[11px] text-white/55 hover:bg-white/[0.06]"
+              >
+                <CrewLamp status={c.status} />
+                <RoleTag tag="작업팀" />
+                <span className="shrink-0 truncate">{c.name}</span>
+                <span className="min-w-0 flex-1 truncate text-white/35">
+                  {c.activity ?? ""}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function InboxIndexView({
   groups,
+  rows,
+  crewById,
   reviews,
   selected,
   crew,
@@ -154,6 +363,9 @@ function InboxIndexView({
   onCrew,
 }: {
   groups: InboxGroup[];
+  /** 목차 줄: 작업팀을 소장 아래로 들인 것(inboxTeams.ts nestTeams) */
+  rows: InboxRow[];
+  crewById: ReadonlyMap<string, Crew>;
   /** 맨 위 코드 리뷰 칸(reviewLane) */
   reviews: ReviewLane;
   selected: string | undefined;
@@ -162,8 +374,12 @@ function InboxIndexView({
   onSelect: (key: string) => void;
   onCrew: (id: string) => void;
 }) {
-  const busy = new Set(groups.map((g) => g.key));
+  const busy = nestedCrewIds(rows, crewById);
+  const teamCount = new Map(
+    [...teamsByForeman(crewById)].map(([id, list]) => [id, list.length]),
+  );
   const others = sortCrew(crew.filter((c) => !busy.has(c.id)));
+  // 건수는 묶음(groups)으로 센다. 작업팀을 들여도 그대로다(docs/crew-views.md "건수")
   const total = groups.reduce((n, g) => n + g.tasks.length, 0);
   // "곳"은 결재가 있는 묶음만(답해 둔 것만 있는 승무원은 세지 않는다)
   const places = groups.filter((g) => g.tasks.length > 0).length;
@@ -193,76 +409,28 @@ function InboxIndexView({
         className="min-h-0 flex-1 overflow-y-auto [scrollbar-color:rgba(255,255,255,.15)_transparent] [scrollbar-width:thin]"
       >
         <ul className="space-y-[3px]">
-          {groups.map((g) => {
-            const on = g.key === selected;
-            return (
-              <li key={g.key}>
-                <button
-                  type="button"
-                  data-inbox-group={g.key}
-                  aria-pressed={on}
-                  onClick={() => onSelect(g.key)}
-                  className={`relative block w-full rounded-md px-2 py-1.5 text-left transition ${
-                    on
-                      ? "bg-[#7fb8ff]/[0.13] shadow-[inset_2px_0_0_#7fb8ff]"
-                      : "hover:bg-white/[0.06]"
-                  }`}
-                >
-                  <span className="flex min-w-0 items-center gap-1.5 text-[12px]">
-                    {g.crew ? (
-                      <CrewLamp status={g.crew.status} />
-                    ) : (
-                      <span className="h-[7px] w-[7px] shrink-0 rounded-full border border-dashed border-white/40" />
-                    )}
-                    <span
-                      className="h-2.5 w-[3px] shrink-0 rounded-sm"
-                      style={{ background: CONTEXT_COLOR[groupContext(g)] }}
-                    />
-                    <span
-                      className={`truncate font-semibold ${on ? "text-white" : "text-white/85"}`}
-                    >
-                      {groupName(g)}
-                    </span>
-                    {g.answers > 0 && (
-                      <span
-                        data-group-answers
-                        title={`답해 둔 것 ${g.answers}`}
-                        className={`${g.tasks.length ? "" : "ml-auto"} shrink-0 rounded-full bg-[#7ce0ff]/20 px-1.5 text-[10.5px] leading-[15px] font-bold text-[#bfefff] tabular-nums`}
-                      >
-                        답 {g.answers}
-                      </span>
-                    )}
-                    {g.tasks.length > 0 && (
-                      <span
-                        className={`${g.answers ? "" : "ml-auto"} shrink-0 rounded-full bg-[#ffd84a] px-1.5 text-[10.5px] leading-[15px] font-bold text-hull-950 tabular-nums`}
-                      >
-                        {g.tasks.length}
-                      </span>
-                    )}
-                  </span>
-                  <span className="mt-0.5 flex min-w-0 items-center gap-1.5 pl-[19px] text-[10.5px]">
-                    <span className="min-w-0 flex-1 truncate text-white/40">
-                      {g.key === LOOSE_KEY
-                        ? "감시·알림·리뷰 등 승무원 없이 온 일"
-                        : (g.crew?.activity ?? "")}
-                    </span>
-                    {g.stale > 0 && (
-                      <span className="shrink-0 text-[#ff8a7a]">
-                        묵음 {g.stale}
-                      </span>
-                    )}
-                    {g.tasks.length > 0 && (
-                      <span
-                        className={`shrink-0 font-mono tabular-nums ${ageTone(g.oldest, now)}`}
-                      >
-                        {ago(g.oldest, now)}
-                      </span>
-                    )}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
+          {rows.map((r) => (
+            <li key={r.key}>
+              {r.foreman ? (
+                <ForemanRow
+                  row={r}
+                  selected={selected}
+                  now={now}
+                  onSelect={onSelect}
+                  onCrew={onCrew}
+                />
+              ) : (
+                r.group && (
+                  <GroupItem
+                    g={r.group}
+                    on={r.group.key === selected}
+                    now={now}
+                    onSelect={onSelect}
+                  />
+                )
+              )}
+            </li>
+          ))}
           {groups.length === 0 && (
             <li className="px-2 py-3 text-[12px] text-white/40">
               <EmptyLine />
@@ -275,23 +443,31 @@ function InboxIndexView({
               나머지 승무원 {others.length}
             </div>
             <div className="grid grid-cols-2 gap-x-1 gap-y-[2px]">
-              {others.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  data-crew-lamp={c.id}
-                  data-status={c.status}
-                  title={`${c.name} · ${c.activity ?? ""}`}
-                  onClick={() => onCrew(c.id)}
-                  className={`relative flex min-w-0 items-center gap-1.5 rounded px-1.5 py-[3px] text-left text-[11px] transition hover:bg-white/[0.07] ${
-                    c.status === "off" ? "text-white/35" : "text-white/65"
-                  }`}
-                >
-                  <CrewLamp status={c.status} />
-                  <span className="truncate">{c.name}</span>
-                  <MapBadge crew={c} compact />
-                </button>
-              ))}
+              {others.map((c) => {
+                const teams = teamCount.get(c.id) ?? 0;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    data-crew-lamp={c.id}
+                    data-status={c.status}
+                    title={`${c.name} · ${c.activity ?? ""}${teams ? ` · 작업팀 ${teams}` : ""}`}
+                    onClick={() => onCrew(c.id)}
+                    className={`relative flex min-w-0 items-center gap-1.5 rounded px-1.5 py-[3px] text-left text-[11px] transition hover:bg-white/[0.07] ${
+                      c.status === "off" ? "text-white/35" : "text-white/65"
+                    }`}
+                  >
+                    <CrewLamp status={c.status} />
+                    <span className="truncate">{c.name}</span>
+                    {teams > 0 && (
+                      <span className="shrink-0 text-[10px] text-white/40">
+                        팀 {teams}
+                      </span>
+                    )}
+                    <MapBadge crew={c} compact />
+                  </button>
+                );
+              })}
             </div>
           </>
         )}

@@ -29,6 +29,7 @@ import {
   repick,
   reviewLane,
 } from "./inboxGroups";
+import { nestTeams, rowGroups } from "./inboxTeams";
 import {
   type Lamp,
   PILE_WARN,
@@ -572,10 +573,13 @@ export const Dashboard = memo(function Dashboard({
     () => inboxGroups(tasks, crewById, now),
     [tasks, crewById, now],
   );
+  // 작업팀은 소장 줄 아래로 들인다(inboxTeams.ts). 고르기·[ ] 키도 목차에 보이는 차례(ordered)를 따른다
+  const rows = useMemo(() => nestTeams(groups, crewById), [groups, crewById]);
+  const ordered = useMemo(() => rowGroups(rows), [rows]);
   const replies = useMemo(() => lastReplies(tasks), [tasks]);
   const decisions = useMemo(() => tasks.filter((t) => !isNews(t)), [tasks]);
   const reviews = useMemo(() => reviewLane(tasks, now), [tasks, now]);
-  const order = useMemo(() => inboxOrder(reviews, groups), [reviews, groups]);
+  const order = useMemo(() => inboxOrder(reviews, ordered), [reviews, ordered]);
   // 고른 묶음이 사라지면(다 처리하면) 지난 순서에서 이웃을 고른다(inboxGroups.ts repick).
   // 그리는 이번 판에 바로 쓰고, 고른 상태에도 적어 옛 열쇠가 남지 않게 한다.
   const lastOrder = useRef(order);
@@ -588,8 +592,9 @@ export const Dashboard = memo(function Dashboard({
   // pickReview는 부를 때마다 새 묶음을 만들어서, 결재 서류(InboxSheet memo)가 매번 다시 그려지지 않게 묶어 둔다
   const group = useMemo(
     () =>
-      pickReview(reviews, current, crewById, now) ?? pickGroup(groups, current),
-    [reviews, current, crewById, now, groups],
+      pickReview(reviews, current, crewById, now) ??
+      pickGroup(ordered, current),
+    [reviews, current, crewById, now, ordered],
   );
   const firstReview = reviews.tasks[0];
   return (
@@ -613,6 +618,8 @@ export const Dashboard = memo(function Dashboard({
       <div className="grid min-h-0 flex-1 grid-cols-[minmax(290px,350px)_minmax(0,1fr)_minmax(250px,300px)] grid-rows-[minmax(0,1fr)] gap-3 px-4 pt-[26px] pb-[22px]">
         <InboxIndex
           groups={groups}
+          rows={rows}
+          crewById={crewById}
           reviews={reviews}
           selected={group?.key}
           crew={crew}
