@@ -492,7 +492,7 @@
       "title": "현장 작업팀 그림",
       "status": "building",
       "size": 2,
-      "summary": "작업팀(Crew.foreman)을 소장 아래로 접고, 소장 지도에 작업팀 그림을 doing[].region 칸에 세운다. 서버 foreman은 비서",
+      "summary": "화면은 데모로 됨: 결재함 목차가 작업팀을 소장 줄 아래로 접고, 소장 지도에 작업팀 그림이 doing[].region 칸(없으면 착륙선 옆)에 서서 걸어가며, 작업팀 선실은 소장 지도를 보인다. 남은 것: 서버(비서)가 foreman을 싣기",
       "since": "2026-11-06",
       "found": "2026-11-06",
       "links": [
@@ -503,6 +503,14 @@
         {
           "label": "protocol.md",
           "path": "docs/protocol.md"
+        },
+        {
+          "label": "crew-views.md 작업팀",
+          "path": "docs/crew-views.md"
+        },
+        {
+          "label": "frontier.md 작업팀",
+          "path": "docs/frontier.md"
         }
       ]
     },
