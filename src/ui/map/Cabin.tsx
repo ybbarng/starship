@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { type ComponentType, useEffect, useMemo, useState } from "react";
-import { useBridge, useCrewDesk, useCrewMap } from "@/data/hooks";
+import { useBridge, useCrewDesk, useCrewDesks, useCrewMap } from "@/data/hooks";
 import { useSent } from "@/data/sent";
 // 선실: 승무원(프로젝트) 하나의 방. 가운데 지도 한 장, 위쪽 줄에 진행률·늘어난 구역·갱신 시각,
 // 오른쪽 판에 고른 구역의 자세한 내용. 설계: docs/map.md "화면: 선실".
@@ -24,6 +24,7 @@ import { CrewTasks, crewTaskCount } from "@/ui/desk/CrewTasks";
 import { Toasts } from "@/ui/kit";
 import { agoLabel } from "@/ui/kit/labels";
 import { FrontierView } from "./frontier/FrontierView";
+import { MAX_TEAMS, type TeamOnMap } from "./frontier/teams";
 import { SIGN_ICON } from "./labels";
 import { MapView, type MapViewProps } from "./MapView";
 import { RegionPanel } from "./RegionPanel";
@@ -42,8 +43,14 @@ export function Cabin({
   backHref?: string;
 }) {
   const bridge = useBridge();
-  const query = useCrewMap(crewId);
   const crew = bridge.crewById.get(crewId);
+  // 작업팀이면 지도는 소장 것을 같이 쓴다(소장 id로 읽는다). 할 일·브리핑은 작업팀 자기 것(docs/crew-views.md "작업팀")
+  const foremanId =
+    crew?.foreman && crew.foreman !== crewId ? crew.foreman : undefined;
+  const mapCrewId = foremanId ?? crewId;
+  const mapCrew = foremanId ? bridge.crewById.get(foremanId) : crew;
+  const query = useCrewMap(mapCrewId);
+  const teams = useMapTeams(mapCrewId, bridge.crew);
   const now = useMinuteClock();
   const data = query.data;
   const map = data?.map ?? null;
@@ -72,6 +79,21 @@ export function Cabin({
           </div>
         ) : (
           <span className="font-semibold">{crewId}</span>
+        )}
+        {foremanId && (
+          <span
+            data-team-of={foremanId}
+            className="flex shrink-0 items-center gap-1.5 rounded-full border border-[#e9b872]/30 bg-[#e9b872]/[0.08] px-2.5 py-0.5 text-[12px] text-white/70"
+          >
+            작업팀 · 소장 {mapCrew?.name ?? foremanId}
+            <Link
+              href={`/crew/${encodeURIComponent(foremanId)}`}
+              data-foreman-link={foremanId}
+              className="font-semibold text-[#f3d3a0] hover:underline"
+            >
+              소장 선실로 →
+            </Link>
+          </span>
         )}
         {map && (
           <TopLine
@@ -115,6 +137,9 @@ export function Cabin({
           map={map}
           crew={crew}
           crewId={crewId}
+          mapCrew={mapCrew}
+          mapCrewId={mapCrewId}
+          teams={teams}
           desk={desk}
           tasks={tasks}
           now={now}
@@ -127,7 +152,9 @@ export function Cabin({
               <>지도를 받아 오지 못했어요 · {String(query.error.message)}</>
             ) : (
               <div className="text-center">
-                <div className="text-lg text-white/75">지도가 아직 없어요</div>
+                <div className="text-lg text-white/75">
+                  {foremanId ? "소장 지도가 아직 없어요" : "지도가 아직 없어요"}
+                </div>
                 <p className="mt-2 text-[13px] text-white/45">
                   이 프로젝트 저장소에 <code>map.json</code>
                   (starship-map/1)을 두면 여기에 펼쳐져요.
@@ -210,6 +237,9 @@ function MapRoom({
   map,
   crew,
   crewId,
+  mapCrew,
+  mapCrewId,
+  teams,
   desk,
   tasks,
   now,
@@ -218,6 +248,11 @@ function MapRoom({
   map: ProjectMap;
   crew?: Crew;
   crewId: string;
+  /** 지도 주인(작업팀 선실이면 소장, 아니면 이 승무원) */
+  mapCrew?: Crew;
+  mapCrewId: string;
+  /** 이 지도를 같이 쓰는 작업팀과 그 책상 */
+  teams: TeamOnMap[];
   desk: Desk | null;
   tasks: Task[];
   now: number;
@@ -263,7 +298,8 @@ function MapRoom({
         <div className="min-h-0 flex-1 p-3">
           <View
             map={map}
-            crew={crew}
+            crew={mapCrew}
+            teams={teams}
             selected={visibleSelected?.id ?? null}
             onSelect={(id) => {
               setTab("map");
@@ -344,7 +380,7 @@ function MapRoom({
             region={visibleSelected}
             dropped={dropped.has(visibleSelected.id)}
             now={now}
-            crewId={crewId}
+            crewId={mapCrewId}
           />
         ) : (
           <Overview map={map} forks={forks} talks={talks} onSelect={select} />
@@ -522,6 +558,22 @@ function Center({ children }: { children: React.ReactNode }) {
       {children}
     </div>
   );
+}
+
+/**
+ * 이 지도를 같이 쓰는 작업팀(foreman이 지도 주인인 승무원, 스냅숏 차례로 넷까지)과 그 책상.
+ * 책상은 선실이 쓰는 엔드포인트(/v1/crew/{id}/desk)로 읽는다.
+ */
+function useMapTeams(mapCrewId: string, crew: readonly Crew[]): TeamOnMap[] {
+  const members = useMemo(
+    () =>
+      crew
+        .filter((c) => c.foreman === mapCrewId && c.id !== mapCrewId)
+        .slice(0, MAX_TEAMS),
+    [crew, mapCrewId],
+  );
+  const desks = useCrewDesks(members.map((c) => c.id));
+  return members.map((c, i) => ({ crew: c, desk: desks[i]?.data?.desk }));
 }
 
 function useMinuteClock(): number {
