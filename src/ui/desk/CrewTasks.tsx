@@ -46,16 +46,24 @@ export function CrewTasks({
   desk,
   tasks,
   now,
+  off = false,
 }: {
   crewId: string;
   desk: Desk | null;
   tasks: Task[];
   now: number;
+  /** 세션이 꺼졌나. 닫을 때도 사용자가 정할 기다림은 책상에 남고(2026-11-09), 선실에서 단 답은 다시 열 때 들어간다. */
+  off?: boolean;
 }) {
   const others = tasks.filter((t) => !isNews(t) && !fromDesk(t));
   const reply = lastReplies(tasks).get(crewId);
   return (
     <div className="flex min-w-0 flex-col gap-5" data-crew-tasks>
+      {off && desk?.waiting.length ? (
+        <p className="text-[12.5px] text-white/50" data-crew-off-note>
+          세션이 꺼져 있어요. 답은 다음에 세션을 열 때 전해져요.
+        </p>
+      ) : null}
       {desk?.answers?.length ? (
         <AnswerList crewId={crewId} answers={desk.answers} now={now} />
       ) : null}

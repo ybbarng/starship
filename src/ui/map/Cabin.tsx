@@ -163,7 +163,13 @@ export function Cabin({
             )}
           </Center>
           <SidePanel className="flex flex-col gap-5">
-            <CrewTasks crewId={crewId} desk={desk} tasks={tasks} now={now} />
+            <CrewTasks
+              crewId={crewId}
+              desk={desk}
+              tasks={tasks}
+              now={now}
+              off={crew?.status === "off"}
+            />
             {crew?.brief && <CrewBrief brief={crew.brief} now={now} />}
           </SidePanel>
         </div>
@@ -371,7 +377,13 @@ function MapRoom({
           ))}
         </div>
         {tab === "tasks" ? (
-          <CrewTasks crewId={crewId} desk={desk} tasks={tasks} now={now} />
+          <CrewTasks
+            crewId={crewId}
+            desk={desk}
+            tasks={tasks}
+            now={now}
+            off={crew?.status === "off"}
+          />
         ) : tab === "brief" && crew?.brief ? (
           <CrewBrief brief={crew.brief} now={now} />
         ) : visibleSelected ? (
