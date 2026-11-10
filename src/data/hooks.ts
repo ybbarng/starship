@@ -7,6 +7,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { SecureResponse } from "@/protocol/secure";
 import {
   type ActionRequest,
   ActionResult,
@@ -160,6 +161,26 @@ export function useUsage(range: UsageRange) {
     },
     refetchInterval: 5 * 60_000,
     placeholderData: (prev) => prev,
+  });
+}
+
+/** 보안 구역 기록(신청서·호출). 5초마다 새로 읽는다. 실패하면 서버가 준 이유를 오류 글로. */
+export function useSecure() {
+  return useQuery({
+    queryKey: ["secure"],
+    queryFn: async (): Promise<SecureResponse> => {
+      const res = await fetch("/api/v1/secure", { cache: "no-store" });
+      const body: unknown = await res.json().catch(() => null);
+      if (!res.ok) {
+        const error =
+          typeof body === "object" && body && "error" in body
+            ? String((body as { error: unknown }).error)
+            : `보안 기록 ${res.status}`;
+        throw new Error(error);
+      }
+      return SecureResponse.parse(body);
+    },
+    refetchInterval: 5_000,
   });
 }
 

@@ -105,7 +105,14 @@ export function tokenizeArgs(sub: string, args: readonly string[]): ArgToken[] {
       continue;
     }
     if (nameNext) {
-      out.push(name(arg, hasRef(arg) ? maskRefsIn(arg) : maskRef(arg)));
+      // --fields label=칸이름 처럼 등호가 있으면 등호 앞(label=)은 그대로 둔다
+      const eq = arg.indexOf("=");
+      const short = hasRef(arg)
+        ? maskRefsIn(arg)
+        : eq > 0
+          ? `${arg.slice(0, eq + 1)}${maskRef(arg.slice(eq + 1))}`
+          : maskRef(arg);
+      out.push(name(arg, short));
       nameNext = false;
       continue;
     }

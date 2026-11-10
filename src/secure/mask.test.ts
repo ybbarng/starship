@@ -83,6 +83,14 @@ describe("tokenizeArgs: 인자를 화면 조각으로", () => {
     ]);
   });
 
+  it("--fields label=칸이름은 label= 뒤만 가린다", () => {
+    expect(tokenizeArgs("item", ["--fields", "label=DEPLOY_HOST"])[1]).toEqual({
+      kind: "name",
+      full: "label=DEPLOY_HOST",
+      short: "label=DEPL•••ST",
+    });
+  });
+
   it("값처럼 보이는 인자와 서버가 지운 자리는 hidden이고 글자를 담지 않는다", () => {
     const t = tokenizeArgs("item", [
       "edit",
