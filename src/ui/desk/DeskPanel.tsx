@@ -147,7 +147,10 @@ function WaitCard({
     await act.task(task, "snooze");
   };
   const send = async (choice?: string) => {
-    const answer = deskAnswer(choice, text);
+    // 고르기에서 안 없이 말만 보내면 "의견: …"으로 보낸다. 세션이 어느 안을 고른 것으로 읽지 않게(2026-11-10, 비서와 맞춘 형식)
+    const plain = deskAnswer(choice, text);
+    const answer =
+      wait.type === "decide" && !choice && plain ? `의견: ${plain}` : plain;
     if (!task || !answer) return;
     const result = await act.task(task, "answer", answer);
     // 못 받았으면 쓴 글을 그대로 두어 다시 보낼 수 있게
