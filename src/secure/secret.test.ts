@@ -52,6 +52,12 @@ describe("looksSecret: 긴 무작위 문자열만 걸린다", () => {
     expect(looksSecret("/Users/someone/projects/web-shop2026")).toBe(false);
   });
 
+  it("슬래시·더하기가 섞인 base64 값도 걸린다", () => {
+    expect(looksSecret(`${TOKEN.slice(0, 16)}/${TOKEN.slice(16)}+aB==`)).toBe(
+      true,
+    );
+  });
+
   it("낱말을 이은 이름은 걸리지 않는다", () => {
     expect(looksSecret("WEB_SHOP_DEPLOY_TOKEN_PROD")).toBe(false);
     expect(looksSecret("blog.deploy.production.v2")).toBe(false);

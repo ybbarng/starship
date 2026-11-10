@@ -27,15 +27,16 @@ export function entropy(s: string): number {
 
 /**
  * 긴 무작위 문자열(토큰·비밀번호·키)처럼 보이나.
- * 20자 이상, 빈칸·슬래시·op:// 없음, 그리고 점·밑줄·붙임표로 나눈 가장 긴 덩어리가
+ * 20자 이상, 빈칸·op:// 없음, 그리고 점·밑줄·붙임표·슬래시로 나눈 가장 긴 덩어리가
  * 16자 이상이면서 소문자·대문자·숫자 중 두 가지 이상 섞이고 엔트로피가 높을 때.
  * 덩어리를 보는 까닭: blog.deploy.production.v2 같은 이름은 글자 종류가 섞여도 짧은 낱말을 이은 것이다.
+ * 슬래시가 들었다고 통째로 건너뛰지 않는다: base64 값에는 /와 +가 섞인다(2026-11-10). 경로는 덩어리가 짧은 낱말이라 걸리지 않는다.
  */
 export function looksSecret(s: string): boolean {
   if (s.length < MIN_LEN) return false;
-  if (/[\s/]/.test(s) || s.includes("op:")) return false;
+  if (/\s/.test(s) || s.includes("op:")) return false;
   const chunk = s
-    .split(/[._-]/)
+    .split(/[._\-/]/)
     .reduce((a, b) => (b.length > a.length ? b : a), "");
   if (chunk.length < MIN_CHUNK) return false;
   const kinds = [/[a-z]/, /[A-Z]/, /[0-9]/].filter((re) =>
