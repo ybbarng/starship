@@ -1,5 +1,6 @@
 "use client";
 
+import NextLink from "next/link";
 import { memo, useEffect, useMemo, useRef } from "react";
 import { useBridgeStatus } from "@/data/hooks";
 import type { Crew, CrewStatus, Hail, Link, Task } from "@/protocol/v1";
@@ -642,6 +643,14 @@ export const Dashboard = memo(function Dashboard({
           />
           <div className="mt-auto flex flex-col gap-2">
             <FuelGauge />
+            <NextLink
+              href="/secure"
+              data-secure-link
+              className={`flex items-baseline justify-between rounded-lg px-3 py-1.5 text-[11px] text-white/55 hover:text-white ${styles.bay}`}
+            >
+              보안 구역
+              <span className="text-white/35">1Password 기록 →</span>
+            </NextLink>
             <NavMini onPicker={onPicker} />
           </div>
         </div>
