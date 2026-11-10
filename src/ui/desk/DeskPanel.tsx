@@ -155,7 +155,8 @@ function WaitCard({
     mark(sentKey, answer);
     setText("");
   };
-  const choiceButton = (label: string, primary = false) => (
+  // shown: 단추에 보일 글. 고르기 안은 안 이름을 되풀이하면 단추로 안 보여서 "이 안으로"만 쓴다(2026-11-10). 보내는 답은 label 그대로
+  const choiceButton = (label: string, primary = false, shown = label) => (
     <button
       key={label}
       type="button"
@@ -167,7 +168,7 @@ function WaitCard({
           : "bg-white/[0.08] text-white/85 hover:bg-white/[0.14]"
       }`}
     >
-      {label}
+      {shown}
     </button>
   );
 
@@ -249,7 +250,7 @@ function WaitCard({
                 <div className="mt-1.5 flex items-center gap-2">
                   {o.url && <OpenLink href={o.url}>데모 열기</OpenLink>}
                   <span className="ml-auto">
-                    {choiceButton(o.label, o.recommended)}
+                    {choiceButton(o.label, o.recommended, "이 안으로")}
                   </span>
                 </div>
               </li>
@@ -299,7 +300,11 @@ function WaitCard({
               onChange={(e) => setText(e.target.value)}
               rows={wait.type === "answer" ? 2 : 1}
               placeholder={
-                wait.type === "answer" ? "답을 적어 주세요" : "덧붙일 말(선택)"
+                wait.type === "answer"
+                  ? "답을 적어 주세요"
+                  : wait.type === "decide"
+                    ? "덧붙일 말(선택) · 안을 고르면 함께 가요"
+                    : "덧붙일 말(선택)"
               }
               className="resize-none rounded border border-white/[0.1] bg-black/30 px-2 py-1 text-[12.5px] text-white/90 placeholder:text-white/30 focus:border-white/30 focus:outline-none"
             />
@@ -320,6 +325,18 @@ function WaitCard({
                   className="rounded bg-white/90 px-2.5 py-1 text-[12px] font-semibold text-hull-950 hover:bg-white disabled:opacity-40"
                 >
                   보내기
+                </button>
+              )}
+              {/* 고르기에서 어느 안도 아닌 답(다른 안, 질문)을 보낼 길. 말을 적었을 때만 보인다(2026-11-10) */}
+              {wait.type === "decide" && text.trim() && (
+                <button
+                  type="button"
+                  disabled={act.pending}
+                  onClick={() => void send()}
+                  data-send-note
+                  className="rounded bg-white/[0.08] px-2.5 py-1 text-[12px] font-semibold text-white/85 hover:bg-white/[0.14] disabled:opacity-40"
+                >
+                  말만 보내기
                 </button>
               )}
               {task?.actions.includes("snooze") && (
