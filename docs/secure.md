@@ -4,7 +4,7 @@
 
 들어가는 길은 조종석 오른쪽 연료 계기 아래 "보안 구역" 줄이다. 휴대폰에서도 같은 주소로 본다.
 
-코드: [`src/protocol/secure.ts`](../src/protocol/secure.ts)(형식), [`src/server/secure.ts`](../src/server/secure.ts)·[`src/app/api/v1/secure/route.ts`](../src/app/api/v1/secure/route.ts)(중계와 값 지우기), [`src/secure/`](../src/secure/)(판정·가림·묶기 순수 함수), [`src/ui/secure/`](../src/ui/secure/)(화면), [`src/demo/secure.ts`](../src/demo/secure.ts)(데모 기록).
+코드: [`src/protocol/secure.ts`](../src/protocol/secure.ts)(형식), [`src/server/secure.ts`](../src/server/secure.ts)·[`src/app/api/v1/secure/route.ts`](../src/app/api/v1/secure/route.ts)(중계와 값 지우기)·[`src/app/api/v1/secure/ack/route.ts`](../src/app/api/v1/secure/ack/route.ts)(확인함 표시), [`src/secure/`](../src/secure/)(판정·가림·묶기 순수 함수), [`src/ui/secure/`](../src/ui/secure/)(화면), [`src/demo/secure.ts`](../src/demo/secure.ts)(데모 기록).
 
 ## 화면
 
@@ -21,6 +21,27 @@
 
 - `decision`이 `denied`: "hook이 막은 호출이에요"
 - AI의 wrapper 기록인데 `requestId`가 없음: "신청서 없이 나간 호출이에요". wrapper 기록은 `op`가 실제로 실행될 때 남으니, 신청서 없이 실행까지 갔다는 뜻이다. hook 기록에 신청서가 없는 것만으로는 빨갛게 하지 않는다. 그때는 hook이 막았는지(`denied`)로 판단한다.
+- 값을 건드리지 않는 호출은 신청서가 없어도 빨갛게 하지 않는다(`isHarmlessCall`). `op --version`처럼 판본이나 도움말만 본 호출이다. 하위 명령(`command.sub`)이 빈 글이고, 인자가 하나 이상이며 모두 `--version`·`-v`·`--help`·`-h`·`help` 중 하나일 때만 그렇게 본다. 인자가 없거나 다른 인자가 하나라도 섞이면 빨갛게 둔다. 놓치는 것보다 한 줄 더 빨간 편이 낫기 때문이다. `denied`는 이 경우에도 늘 빨갛다.
+
+맨 위 신청서 제목 옆에 "확인 안 한 빨간 줄 N건"을 보인다. 기간·거르기와 상관없이 받은 기록 전체로 센다. 0건이면 빨간 강조 없이 흐린 글로 둔다.
+
+## 확인함
+
+빨간 줄이 쌓이면 새 빨간 줄이 묻힌다. 그래서 사용자가 살펴본 빨간 줄은 "확인함"으로 표시한다. 표시해도 **기록은 지우지 않는다**. 줄은 빨간 강조를 거두고 흐리게 남으며, 빨간 까닭과 "✓ 확인함 · 시각", "되돌리기" 단추를 보인다.
+
+- 누르면 그 줄에 묶인 모든 기록 id(hook·wrapper)를 보낸다. 줄은 빨간 까닭이 있는 기록이 모두 확인됐을 때만 확인함으로 보이고, 시각은 그중 가장 늦은 것이다(`rowAck`). 그래서 묶인 기록 하나만 확인된 줄은 여전히 빨갛다.
+- 키보드로도 누를 수 있다. 실패하면 줄 아래에 짧게 이유를 적는다.
+- **저장 위치는 비서**다. 맥과 휴대폰이 같은 비서 기록을 읽으니 어디서 눌러도 같은 상태가 보인다. Starship은 표시를 따로 저장하지 않는다.
+- 데모 모드는 Starship 서버 메모리에 두고 데모 기록에 입힌다. 화면 확인용이라 서버를 다시 띄우면 사라진다. 서버 연결 모드에서는 이 메모리를 쓰지 않는다.
+
+Starship 끝점: `POST /api/v1/secure/ack`, 본문 `{ "ids": string[], "undo"?: true }`. id는 1~50개. 같은 출처 요청만 받고(아니면 403), 본문은 64KB까지(넘으면 413), 형식이 틀리면 400. 성공하면 `{ source, acked, undone, unknown }`, 비서가 실패하면 502와 이유.
+
+비서 끝점(Starship이 부른다):
+
+- `GET {origin}/api/secure`의 `calls[]` 항목에 선택 칸 `ack: { "at": ISO 또는 밀리초, "by"?: string }`. 없거나 `null`이면 확인 안 함.
+- `POST {origin}/api/secure/ack`, 본문 `{ "ids": string[], "undo"?: true, "by": "starship" }` → 200 `{ "acked"?: string[], "undone"?: string[], "unknown"?: string[] }`. 같은 id를 다시 표시해도 처음 시각이 남는다(멱등). 비서는 `Origin`이 자기 origin이 아니거나 `content-type: application/json`이 없으면 403으로 막으니, Starship은 두 헤더를 싣는다. 시간 제한은 10초.
+- 비서가 이 끝점을 모르면(404) "비서가 아직 확인 표시를 받지 못해요"를 502로 돌려준다. 이때 기록 보기는 그대로 된다.
+- 표시한 뒤에는 함께 쓰던 보안 기록(1.5초)을 버려 다음 읽기가 새 상태를 받는다.
 
 ## 값 보호
 
