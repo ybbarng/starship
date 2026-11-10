@@ -15,11 +15,14 @@ export const Instant = z
   .transform((v) => (typeof v === "number" ? Math.round(v) : parseWhen(v)));
 
 const Text = z.string();
-/** 비어 있어도 되는 글. null도 받아 없는 것으로 본다. */
-const MaybeText = z
-  .string()
-  .nullish()
-  .transform((v) => v ?? undefined);
+/** 빠져도 되는 칸. null도 받아 없는 것으로 본다(출력에서는 선택 칸). */
+function opt<T extends z.ZodType>(s: T) {
+  return s
+    .nullish()
+    .transform((v) => v ?? undefined)
+    .optional();
+}
+const MaybeText = opt(z.string());
 
 export const SecureSession = z.object({
   /** 세션을 가리키는 열쇠. 같은 세션의 기록을 묶을 때 쓴다 */
@@ -69,25 +72,14 @@ export const SecureCall = z.object({
   actor: SecureActor,
   /** hook: Claude Code가 명령을 실행하기 전에 남김. wrapper: op 자체를 감싼 스크립트가 남김 */
   via: z.enum(["hook", "wrapper"]),
-  session: SecureSession.nullish().transform((v) => v ?? undefined),
-  context: SecureContext.nullish().transform((v) => v ?? undefined),
+  session: opt(SecureSession),
+  context: opt(SecureContext),
   command: z.object({ sub: Text, args: z.array(Text) }),
   /** 이 호출이 기댄 신청서 id. 없으면 null */
   requestId: Text.nullish().transform((v) => v ?? null),
-  decision: z
-    .enum(["allowed", "denied"])
-    .nullish()
-    .transform((v) => v ?? undefined),
-  exit: z
-    .number()
-    .int()
-    .nullish()
-    .transform((v) => v ?? undefined),
-  ms: z
-    .number()
-    .nonnegative()
-    .nullish()
-    .transform((v) => v ?? undefined),
+  decision: opt(z.enum(["allowed", "denied"])),
+  exit: opt(z.number().int()),
+  ms: opt(z.number().nonnegative()),
 });
 export type SecureCall = z.infer<typeof SecureCall>;
 
