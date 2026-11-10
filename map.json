@@ -590,7 +590,7 @@
     {
       "id": "secure",
       "title": "보안 구역",
-      "status": "building",
+      "status": "done",
       "size": 2,
       "summary": "AI 세션의 1Password CLI 신청서와 호출 기록을 본다. 팝업이 떴을 때 지금 유효한 신청서만 보고 승인할지 정한다. 본 빨간 줄은 확인함으로 표시해 흐리게 둔다(기록은 지우지 않음)",
       "since": "2026-11-10",
@@ -607,18 +607,6 @@
         {
           "label": "화면",
           "path": "src/ui/secure/SecurePage.tsx"
-        }
-      ],
-      "signs": [
-        {
-          "id": "secure-real-data",
-          "type": "risk",
-          "title": "비서의 /api/secure가 아직 만드는 중이라 데모 기록으로만 확인했다"
-        },
-        {
-          "id": "secure-ack-real",
-          "type": "risk",
-          "title": "확인함 표시를 비서 /api/secure/ack에 실제로 보내 보지 않았다. 데모와 단위 시험으로만 확인했다"
         }
       ]
     },
