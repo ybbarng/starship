@@ -65,6 +65,10 @@ export const SecureContext = z.object({
 });
 export type SecureContext = z.infer<typeof SecureContext>;
 
+/** 확인함 표시: 언제(at), 누가(by, 예: "starship"). */
+export const SecureAck = z.object({ at: Instant, by: MaybeText });
+export type SecureAck = z.infer<typeof SecureAck>;
+
 /** 호출 기록 하나. AI 호출 하나에 hook 기록과 wrapper 기록이 둘 다 생길 수 있다. */
 export const SecureCall = z.object({
   id: Text.min(1),
@@ -80,8 +84,28 @@ export const SecureCall = z.object({
   decision: opt(z.enum(["allowed", "denied"])),
   exit: opt(z.number().int()),
   ms: opt(z.number().nonnegative()),
+  /** 사용자가 이 빨간 기록을 "확인함"으로 표시한 때와 누가. 없거나 null이면 확인 안 함. 기록은 지우지 않는다 */
+  ack: opt(SecureAck),
 });
 export type SecureCall = z.infer<typeof SecureCall>;
+
+/** Starship의 POST /api/v1/secure/ack 본문: 확인함 표시할(undo면 거둘) 호출 기록 id들. */
+export const SecureAckBody = z.object({
+  ids: z.array(Text.min(1).max(200)).min(1).max(50),
+  undo: z.boolean().optional(),
+});
+export type SecureAckBody = z.infer<typeof SecureAckBody>;
+
+/**
+ * 비서 서버 POST /api/secure/ack 응답. 모르는 칸은 받아 넘기고(느슨하게), 세 목록 모두 빠져도 된다.
+ * acked: 이번에 표시한 id, undone: 거둔 id, unknown: 비서가 모르는 id.
+ */
+export const SecureAckResult = z.looseObject({
+  acked: z.array(Text).optional(),
+  undone: z.array(Text).optional(),
+  unknown: z.array(Text).optional(),
+});
+export type SecureAckResult = z.infer<typeof SecureAckResult>;
 
 /**
  * GET {비서}/api/secure 응답. 둘 다 최근순.

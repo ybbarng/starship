@@ -8,10 +8,13 @@ import {
   filterRequests,
   filterRows,
   groupCalls,
+  isHarmlessCall,
   latestRequest,
   periodStart,
   remainingLabel,
+  rowAck,
   sessionsOf,
+  unackedAlertCount,
 } from "./rows";
 
 const NOW = new Date(2026, 10, 10, 15, 0).getTime();
@@ -76,6 +79,103 @@ describe("callAlerts: 빨간 까닭", () => {
         call("c", { actor: "human", session: undefined, requestId: null }),
       ),
     ).toEqual([]);
+  });
+
+  it("값을 건드리지 않는 호출(op --version 등)은 신청서가 없어도 빨갛지 않다", () => {
+    for (const args of [["--version"], ["-v"], ["--help"], ["-h"], ["help"]])
+      expect(
+        callAlerts(call("c", { requestId: null, command: { sub: "", args } })),
+      ).toEqual([]);
+  });
+
+  it("값을 건드리지 않는 호출이어도 denied면 빨갛다", () => {
+    expect(
+      callAlerts(
+        call("c", {
+          via: "hook",
+          requestId: null,
+          decision: "denied",
+          command: { sub: "", args: ["--version"] },
+        }),
+      ),
+    ).toEqual([ALERT_DENIED]);
+  });
+});
+
+describe("isHarmlessCall: 보수적으로 판정", () => {
+  it("하위 명령이 있거나 다른 인자가 섞이면 아니다", () => {
+    expect(isHarmlessCall({ sub: "read", args: ["--help"] })).toBe(false);
+    expect(isHarmlessCall({ sub: "", args: ["--version", REF] })).toBe(false);
+    expect(isHarmlessCall({ sub: "", args: ["--help=1"] })).toBe(false);
+    expect(isHarmlessCall({ sub: " ", args: ["-v"] })).toBe(false);
+  });
+
+  it("인자가 하나도 없으면 아니다", () => {
+    expect(isHarmlessCall({ sub: "", args: [] })).toBe(false);
+  });
+
+  it("판본·도움말 인자만 있으면 맞다", () => {
+    expect(isHarmlessCall({ sub: "", args: ["--version"] })).toBe(true);
+    expect(isHarmlessCall({ sub: "", args: ["help", "-h"] })).toBe(true);
+  });
+});
+
+describe("확인함 표시: rowAck, unackedAlertCount", () => {
+  const T1 = NOW - 5 * MIN;
+  const T2 = NOW - 2 * MIN;
+
+  it("빨간 기록이 모두 확인됐으면 가장 늦은 ack", () => {
+    const calls = [
+      call("h", {
+        via: "hook",
+        requestId: null,
+        decision: "denied",
+        ack: { at: T1 },
+      }),
+      call("w", { requestId: null, ack: { at: T2, by: "starship" } }),
+    ];
+    expect(rowAck(calls)).toEqual({ at: T2, by: "starship" });
+  });
+
+  it("빨간 기록 중 하나라도 확인 안 했으면 undefined", () => {
+    const calls = [
+      call("h", {
+        via: "hook",
+        requestId: null,
+        decision: "denied",
+        ack: { at: T1 },
+      }),
+      call("w", { requestId: null }),
+    ];
+    expect(rowAck(calls)).toBeUndefined();
+  });
+
+  it("빨갛지 않은 기록의 ack는 보지 않는다", () => {
+    expect(rowAck([call("w", { ack: { at: T1 } })])).toBeUndefined();
+    const calls = [
+      call("h", { via: "hook", decision: "allowed" }),
+      call("w", { requestId: null, ack: { at: T1 } }),
+    ];
+    expect(rowAck(calls)).toEqual({ at: T1 });
+  });
+
+  it("groupCalls가 줄에 ack를 붙이고, 확인 안 한 빨간 줄만 센다", () => {
+    const rows = groupCalls([
+      call("a", { at: NOW - 30 * MIN, requestId: null, ack: { at: T1 } }),
+      call("b", { at: NOW - 20 * MIN, requestId: null }),
+      call("c", { at: NOW - 10 * MIN }),
+      call("d", {
+        at: NOW - 40 * MIN,
+        session: blog,
+        via: "hook",
+        decision: "denied",
+      }),
+    ]);
+    const byKey = new Map(rows.map((r) => [r.key, r]));
+    expect(byKey.get("a")?.ack).toEqual({ at: T1 });
+    expect(byKey.get("b")?.ack).toBeUndefined();
+    expect(byKey.get("c")).not.toHaveProperty("ack");
+    expect(unackedAlertCount(rows)).toBe(2);
   });
 });
 

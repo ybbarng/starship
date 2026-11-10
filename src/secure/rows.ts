@@ -30,18 +30,66 @@ export type CallRow = {
   calls: SecureCall[];
   /** 빨갛게 보일 까닭. 비었으면 빨갛지 않다 */
   alerts: string[];
+  /** 확인함 표시. 빨간 까닭이 있는 기록이 모두 확인됐을 때 그중 가장 늦은 것(rowAck) */
+  ack?: { at: number; by?: string };
 };
 
 export const ALERT_DENIED = "hook이 막은 호출이에요";
 export const ALERT_NO_REQUEST = "신청서 없이 나간 호출이에요";
 
-/** 기록 하나가 빨간 까닭. denied거나, AI의 wrapper 기록인데 신청서가 없을 때. */
+/** 값을 건드리지 않는 인자. 하위 명령 없이 이것만 있으면 `op --version`처럼 판본·도움말만 본 호출이다 */
+const HARMLESS_ARGS = new Set(["--version", "-v", "--help", "-h", "help"]);
+
+/**
+ * 값을 건드리지 않는 호출인가. 보수적으로 하위 명령(command.sub)이 빈 글이고 인자가 모두
+ * --version·-v·--help·-h·help 중 하나일 때만 그렇다. 인자가 하나도 없으면 무엇을 했는지 몰라 예외로 두지 않는다.
+ */
+export function isHarmlessCall(command: SecureCall["command"]): boolean {
+  return (
+    command.sub === "" &&
+    command.args.length > 0 &&
+    command.args.every((a) => HARMLESS_ARGS.has(a))
+  );
+}
+
+/**
+ * 기록 하나가 빨간 까닭. denied면 늘 빨갛다. AI의 wrapper 기록인데 신청서가 없으면 빨갛되,
+ * 값을 건드리지 않는 호출(isHarmlessCall)은 뺀다.
+ */
 export function callAlerts(call: SecureCall): string[] {
   const out: string[] = [];
   if (call.decision === "denied") out.push(ALERT_DENIED);
-  if (call.actor === "ai" && call.via === "wrapper" && call.requestId === null)
+  if (
+    call.actor === "ai" &&
+    call.via === "wrapper" &&
+    call.requestId === null &&
+    !isHarmlessCall(call.command)
+  )
     out.push(ALERT_NO_REQUEST);
   return out;
+}
+
+/**
+ * 줄의 확인함 표시. 빨간 까닭이 있는 기록이 모두 ack를 가지면 그중 가장 늦은 것, 아니면 undefined.
+ * 빨간 기록이 하나도 없으면 확인할 것이 없으니 undefined.
+ */
+export function rowAck(
+  calls: readonly SecureCall[],
+): { at: number; by?: string } | undefined {
+  const red = calls.filter((c) => callAlerts(c).length > 0);
+  if (red.length === 0) return undefined;
+  let latest: { at: number; by?: string } | undefined;
+  for (const c of red) {
+    if (!c.ack) return undefined;
+    if (!latest || c.ack.at > latest.at)
+      latest = c.ack.by === undefined ? { at: c.ack.at } : { ...c.ack };
+  }
+  return latest;
+}
+
+/** 빨간데 아직 확인함 표시를 하지 않은 줄 수. */
+export function unackedAlertCount(rows: readonly CallRow[]): number {
+  return rows.filter((r) => r.alerts.length > 0 && !r.ack).length;
 }
 
 function canPair(group: SecureCall[], call: SecureCall, windowMs: number) {
@@ -62,6 +110,7 @@ function toRow(calls: SecureCall[]): CallRow {
   );
   const wrapper = sorted.find((c) => c.via === "wrapper");
   const alerts = [...new Set(sorted.flatMap(callAlerts))];
+  const ack = rowAck(sorted);
   const decision = sorted.some((c) => c.decision === "denied")
     ? "denied"
     : sorted.some((c) => c.decision === "allowed")
@@ -81,6 +130,7 @@ function toRow(calls: SecureCall[]): CallRow {
     vias: sorted.map((c) => c.via),
     calls: sorted,
     alerts,
+    ...(ack ? { ack } : {}),
   };
 }
 
