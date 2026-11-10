@@ -17,6 +17,7 @@ import {
   PERIOD_LABEL,
   type Period,
   sessionsOf,
+  unackedAlertCount,
 } from "@/secure/rows";
 import { BigRequest, CallLine, RED, RequestLine, SmallRequest } from "./parts";
 
@@ -112,14 +113,16 @@ function Body({ log }: { log: SecureLog }) {
   const active = activeRequests(log.requests, now);
   const latest = latestRequest(log.requests);
   const others = active.filter((r) => r.id !== latest?.id);
+  const unacked = unackedAlertCount(rows);
 
   return (
     <div className="mx-auto flex max-w-[960px] flex-col gap-6 px-4 py-5">
       <section data-secure-now className="flex flex-col gap-3">
-        <h2 className="flex items-baseline gap-2">
+        <h2 className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
           <span className="text-[15px] font-semibold">
             지금 유효한 신청서 {active.length}개
           </span>
+          <UnackedCount count={unacked} />
         </h2>
         {active.length === 0 && (
           <p
@@ -172,6 +175,25 @@ function Body({ log }: { log: SecureLog }) {
         </details>
       )}
     </div>
+  );
+}
+
+/** 확인 안 한 빨간 줄 수(기간·거르기와 상관없이 전체). 0건이면 조용히 둔다. */
+function UnackedCount({ count }: { count: number }) {
+  if (count === 0)
+    return (
+      <span data-secure-unacked={0} className="text-[12.5px] text-white/40">
+        확인 안 한 빨간 줄 없음
+      </span>
+    );
+  return (
+    <span
+      data-secure-unacked={count}
+      className="rounded px-1.5 py-0.5 text-[12.5px] font-semibold"
+      style={{ color: RED, background: `${RED}1f` }}
+    >
+      확인 안 한 빨간 줄 {count}건
+    </span>
   );
 }
 
@@ -243,7 +265,8 @@ function History({
   );
   const shownRows = filterRows(rows, filter, now);
   const shownReqs = filterRequests(log.requests, filter, now);
-  const redCount = shownRows.filter((r) => r.alerts.length).length;
+  const redCount = unackedAlertCount(shownRows);
+  const ackedCount = shownRows.filter((r) => r.alerts.length && r.ack).length;
 
   return (
     <section data-secure-history className="flex flex-col gap-3">
@@ -289,9 +312,18 @@ function History({
           ))}
         </select>
       </div>
-      {tab === "calls" && redCount > 0 && (
-        <p className="text-[12.5px] font-semibold" style={{ color: RED }}>
-          빨간 줄로 표시한 살펴볼 호출이 {redCount}건 있어요.
+      {tab === "calls" && (redCount > 0 || ackedCount > 0) && (
+        <p className="text-[12.5px]">
+          {redCount > 0 && (
+            <span className="font-semibold" style={{ color: RED }}>
+              빨간 줄로 표시한 살펴볼 호출이 {redCount}건 있어요.{" "}
+            </span>
+          )}
+          {ackedCount > 0 && (
+            <span className="text-white/45">
+              확인함으로 표시해 흐리게 둔 줄 {ackedCount}건.
+            </span>
+          )}
         </p>
       )}
       <ul

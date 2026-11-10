@@ -238,6 +238,17 @@ export function demoSecureLog(now: number) {
       requestId: null,
       decision: "denied",
     },
+    // garden-bot: 판본만 본 호출. 값을 건드리지 않아 신청서가 없어도 빨갛지 않다
+    {
+      id: "call-garden-w0",
+      at: iso(36 * MIN),
+      ...ai(sessions.garden),
+      via: "wrapper",
+      command: { sub: "", args: ["--version"] },
+      requestId: null,
+      exit: 0,
+      ms: 40,
+    },
     // garden-bot: hook을 거치지 않고 wrapper로만 나간 호출(신청서 없음)
     {
       id: "call-garden-w1",

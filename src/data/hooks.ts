@@ -7,7 +7,11 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { SecureResponse } from "@/protocol/secure";
+import {
+  type SecureAckBody,
+  SecureAckResponse,
+  SecureResponse,
+} from "@/protocol/secure";
 import {
   type ActionRequest,
   ActionResult,
@@ -181,6 +185,36 @@ export function useSecure() {
       return SecureResponse.parse(body);
     },
     refetchInterval: 5_000,
+  });
+}
+
+/**
+ * 보안 구역 빨간 줄의 "확인함" 표시(undo면 거두기). 줄마다 따로 써서 실패 이유를 그 줄 아래에 보인다.
+ * 끝나면 성공·실패와 상관없이 보안 기록을 다시 읽는다.
+ */
+export function useSecureAck() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (req: SecureAckBody): Promise<SecureAckResponse> => {
+      const res = await fetch("/api/v1/secure/ack", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(req),
+      });
+      const body: unknown = await res.json().catch(() => null);
+      if (!res.ok) {
+        const error =
+          typeof body === "object" && body && "error" in body
+            ? String((body as { error: unknown }).error)
+            : `확인 표시 ${res.status}`;
+        throw new Error(error);
+      }
+      const result = SecureAckResponse.parse(body);
+      if (result.unknown.length >= req.ids.length)
+        throw new Error("비서가 이 기록을 찾지 못했어요");
+      return result;
+    },
+    onSettled: () => client.invalidateQueries({ queryKey: ["secure"] }),
   });
 }
 

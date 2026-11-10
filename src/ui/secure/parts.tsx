@@ -3,6 +3,7 @@
 // 보안 구역 화면 조각: 이름 가림 단추, 명령 줄, 신청서 카드, 호출 줄.
 // 값처럼 보이는 글자는 여기서 그리지 않는다(tokenizeArgs가 hidden으로 바꾸고 글자를 담지 않는다).
 import { useState } from "react";
+import { useSecureAck } from "@/data/hooks";
 import type { SecureRequest } from "@/protocol/secure";
 import { type ArgToken, maskRef, tokenizeArgs } from "@/secure/mask";
 import { type CallRow, remainingLabel } from "@/secure/rows";
@@ -92,7 +93,7 @@ export function CommandLine({ sub, args }: { sub: string; args: string[] }) {
   const tokens = tokenizeArgs(sub, args);
   return (
     <span className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5 text-[12.5px]">
-      <span className="font-mono text-white">op {sub}</span>
+      <span className="font-mono text-white">{sub ? `op ${sub}` : "op"}</span>
       {tokens.map((t, i) => (
         // 인자 순서가 곧 자리라 번호를 열쇠로 쓴다
         // biome-ignore lint/suspicious/noArrayIndexKey: 인자 목록은 바뀌지 않는다
@@ -273,7 +274,59 @@ export function RequestLine({
   );
 }
 
-/** 기록 목록의 호출 한 줄(hook·wrapper 짝을 묶은 것). 빨간 까닭이 있으면 빨갛게. */
+/**
+ * 빨간 줄의 "확인함" 단추. 누르면 줄에 묶인 모든 기록 id를 보낸다. 확인한 줄은 시각과 "되돌리기"를 보인다.
+ * 기록은 지우지 않는다. 실패하면 단추 아래에 짧게 이유를 적는다.
+ */
+function AckControl({ row, now }: { row: CallRow; now: number }) {
+  const ack = useSecureAck();
+  const ids = row.calls.map((c) => c.id);
+  const busy = ack.isPending;
+  const button =
+    "rounded border px-2 py-0.5 text-[12px] font-semibold focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/60 disabled:opacity-50";
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+        {row.ack ? (
+          <>
+            <span data-secure-ack-at className="text-[12px] text-white/70">
+              ✓ 확인함 · {clock(row.ack.at, now)}
+            </span>
+            <button
+              type="button"
+              data-secure-undo
+              disabled={busy}
+              onClick={() => ack.mutate({ ids, undo: true })}
+              className={`${button} border-white/20 text-white/75 hover:bg-white/[0.08]`}
+            >
+              {busy ? "되돌리는 중…" : "되돌리기"}
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            data-secure-ack
+            disabled={busy}
+            onClick={() => ack.mutate({ ids })}
+            className={`${button} border-[#ff6b6b]/50 text-white hover:bg-[#ff6b6b]/20`}
+          >
+            {busy ? "표시하는 중…" : "확인함"}
+          </button>
+        )}
+      </div>
+      {ack.isError && (
+        <p
+          role="alert"
+          className="text-[12px] text-[#ffcf5c] [overflow-wrap:anywhere]"
+        >
+          표시하지 못했어요 · {ack.error.message}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** 기록 목록의 호출 한 줄(hook·wrapper 짝을 묶은 것). 빨간 까닭이 있으면 빨갛게, 확인했으면 흐리게. */
 export function CallLine({
   row,
   now,
@@ -283,17 +336,22 @@ export function CallLine({
   now: number;
   request?: SecureRequest;
 }) {
-  const red = row.alerts.length > 0;
+  const alerted = row.alerts.length > 0;
+  const acked = alerted && row.ack !== undefined;
+  const red = alerted && !acked;
   const hidden = hasHiddenArg(row.command.sub, row.command.args);
   const ctx = row.context;
   return (
     <li
       data-secure-call={row.key}
       data-secure-red={red || undefined}
-      className={`flex flex-col gap-1.5 border-b px-3 py-2.5 ${
+      data-secure-acked={acked || undefined}
+      className={`flex min-w-0 flex-col gap-1.5 border-b px-3 py-2.5 ${
         red
           ? "border-[#ff6b6b]/30 bg-[#ff6b6b]/[0.08] shadow-[inset_3px_0_0_#ff6b6b]"
-          : "border-white/[0.06]"
+          : acked
+            ? "border-white/[0.06] opacity-60 shadow-[inset_3px_0_0_rgba(255,107,107,0.25)]"
+            : "border-white/[0.06]"
       }`}
     >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12px]">
@@ -331,12 +389,13 @@ export function CallLine({
       {row.alerts.map((a) => (
         <p
           key={a}
-          className="text-[12.5px] font-semibold"
-          style={{ color: RED }}
+          className={`text-[12.5px] ${acked ? "text-white/60" : "font-semibold"}`}
+          style={acked ? undefined : { color: RED }}
         >
           ⚠ {a}
         </p>
       ))}
+      {alerted && <AckControl row={row} now={now} />}
       {hidden && (
         <p className="text-[12px] text-[#ffcf5c]">
           값처럼 보이는 글자를 숨겼어요. 이 화면에서는 볼 수 없어요.
