@@ -107,6 +107,15 @@ export const SecureAckResult = z.looseObject({
 });
 export type SecureAckResult = z.infer<typeof SecureAckResult>;
 
+/** Starship의 POST /api/v1/secure/ack 응답(200). 실패는 4xx·502와 { error }. */
+export const SecureAckResponse = z.object({
+  source: z.enum(["demo", "remote"]),
+  acked: z.array(Text),
+  undone: z.array(Text),
+  unknown: z.array(Text),
+});
+export type SecureAckResponse = z.infer<typeof SecureAckResponse>;
+
 /**
  * GET {비서}/api/secure 응답. 둘 다 최근순.
  * 항목 하나가 틀리면 그것만 빼고, 까닭은 problems에 "calls[3] (id c1): …" 꼴로 적는다.
