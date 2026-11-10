@@ -71,3 +71,21 @@ export function scrubArgs(args: readonly string[]): {
   });
   return { args: out, hidden };
 }
+
+/**
+ * 글(목적·계획·부모 명령 등) 속 낱말마다 같은 판정을 해서 값처럼 보이는 낱말만 지운다.
+ * 빈칸은 그대로 둔다.
+ */
+export function scrubText(text: string): { text: string; hidden: number } {
+  let hidden = 0;
+  const out = text
+    .split(/(\s+)/)
+    .map((part) => {
+      if (!part || /^\s+$/.test(part)) return part;
+      const r = scrubArg(part);
+      if (r.hidden) hidden += 1;
+      return r.arg;
+    })
+    .join("");
+  return { text: out, hidden };
+}

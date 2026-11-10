@@ -6,7 +6,23 @@ import {
   REDACTED_BY_HQ,
   scrubArg,
   scrubArgs,
+  scrubText,
 } from "./secret";
+
+describe("scrubText: 글 속 낱말", () => {
+  it("값처럼 보이는 낱말만 지우고 나머지 글과 빈칸은 둔다", () => {
+    const r = scrubText(`sh -c "op read x"  password=${TOKEN} 끝`);
+    expect(r.text).toBe(`sh -c "op read x"  password=${HIDDEN_ARG} 끝`);
+    expect(r.hidden).toBe(1);
+  });
+
+  it("값이 없으면 그대로", () => {
+    expect(scrubText("배포 토큰을 갱신한다")).toEqual({
+      text: "배포 토큰을 갱신한다",
+      hidden: 0,
+    });
+  });
+});
 
 // 시험용 가짜 값. 비밀 검사(gitleaks)가 글자 그대로의 가짜 토큰도 잡아서 조각을 이어 만든다
 const TOKEN = ["q7Rk2LmZ", "x9VbT4nW", "c8YpJ3sD"].join("");
