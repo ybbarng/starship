@@ -588,6 +588,21 @@
       ]
     },
     {
+      "id": "secure",
+      "title": "보안 구역",
+      "status": "building",
+      "size": 2,
+      "summary": "AI 세션의 1Password CLI 신청서와 호출 기록을 본다. 팝업이 떴을 때 지금 유효한 신청서만 보고 승인할지 정한다",
+      "since": "2026-11-10",
+      "found": "2026-11-10",
+      "links": [
+        {
+          "label": "형식",
+          "path": "src/protocol/secure.ts"
+        }
+      ]
+    },
+    {
       "id": "ops",
       "title": "운영",
       "status": "building",
