@@ -9,14 +9,16 @@ import {
   isTrustedFetch,
   parseRange,
   resolveFile,
+  VIEW_POLICY,
   VIEW_TYPES,
+  viewPolicy,
 } from "@/server/files";
 import { sourceInfo } from "@/server/source";
 
 /** 모든 응답에 붙인다. 파일 안 내용이 이 앱의 출처로 스크립트를 돌리지 못하게 한다. */
 const SAFE_HEADERS = {
   "X-Content-Type-Options": "nosniff",
-  "Content-Security-Policy": "sandbox",
+  "Content-Security-Policy": VIEW_POLICY,
   "Cache-Control": "no-store",
   "Referrer-Policy": "no-referrer",
 };
@@ -49,6 +51,7 @@ export async function GET(request: Request) {
   const name = encodeURIComponent(path.basename(file.real));
   const headers: Record<string, string> = {
     ...SAFE_HEADERS,
+    "Content-Security-Policy": viewPolicy(file.ext),
     "Content-Type": VIEW_TYPES[file.ext] ?? "text/plain; charset=utf-8",
     "Content-Disposition": `inline; filename*=UTF-8''${name}`,
     "Accept-Ranges": "bytes",

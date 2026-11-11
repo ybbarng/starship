@@ -23,7 +23,26 @@ import {
   parseRange,
   parseRoots,
   resolveFile,
+  VIEW_POLICY,
+  viewPolicy,
 } from "./files";
+
+describe("viewPolicy: 보기 응답을 이 앱과 다른 출처로 가둔다", () => {
+  it("html은 스크립트만 허용하고 같은 출처·바깥 연결·폼 전송은 막는다", () => {
+    const p = viewPolicy("html");
+    expect(p).toContain("sandbox allow-scripts");
+    expect(p).not.toContain("allow-same-origin");
+    expect(p).toContain("default-src 'none'");
+    expect(p).toContain("form-action 'none'");
+    expect(p).not.toMatch(/connect-src|https?:/);
+    expect(viewPolicy("htm")).toBe(p);
+  });
+
+  it("그 밖의 파일은 스크립트도 돌지 않는 sandbox", () => {
+    expect(viewPolicy("png")).toBe(VIEW_POLICY);
+    expect(viewPolicy("md")).toBe("sandbox");
+  });
+});
 
 // 임시 폴더 구조
 // base/
@@ -157,10 +176,14 @@ describe("순수 판단", () => {
     expect(checkResolved("/r/a.png", ["/r"], "view").ok).toBe(true);
     expect(checkResolved("/r/a.docx", ["/r"], "view").ok).toBe(false);
     expect(checkResolved("/r/a.docx", ["/r"], "open").ok).toBe(true);
-    for (const bad of ["svg", "html", "sh", "command", "tool", "pkg", "app"]) {
+    for (const bad of ["svg", "sh", "command", "tool", "pkg", "app"]) {
       expect(checkResolved(`/r/a.${bad}`, ["/r"], "view").ok).toBe(false);
       expect(checkResolved(`/r/a.${bad}`, ["/r"], "open").ok).toBe(false);
     }
+    // html은 가둬서 보기만 하고, 맥 브라우저로 열기는 막는다
+    expect(checkResolved("/r/a.html", ["/r"], "view").ok).toBe(true);
+    expect(checkResolved("/r/a.html", ["/r"], "open").ok).toBe(false);
+    expect(checkResolved("/r/a.htm", ["/r"], "open").ok).toBe(false);
     expect(checkResolved("/r/noext", ["/r"], "open").ok).toBe(false);
     expect(checkResolved("/r", ["/r"], "open").ok).toBe(false);
   });
@@ -227,8 +250,9 @@ describe("resolveFile (임시 폴더)", () => {
     });
   });
 
-  it("보기는 html을, 열기는 sh·폴더(.app)·실행 권한 파일을 거절한다", async () => {
-    expect((await view(at("page.html"))).ok).toBe(false);
+  it("열기는 html·sh·폴더(.app)·실행 권한 파일을 거절한다", async () => {
+    expect((await view(at("page.html"))).ok).toBe(true);
+    expect((await open(at("page.html"))).ok).toBe(false);
     expect((await open(at("run.sh"))).ok).toBe(false);
     expect((await open(at("App.app"))).ok).toBe(false);
     expect(await open(at("tool.pdf"))).toMatchObject({

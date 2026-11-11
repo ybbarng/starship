@@ -7,8 +7,14 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { isLoopbackHost, LOOPBACK } from "./host";
 
-/** 보기(브라우저 새 탭)에서 주는 확장자와 Content-Type. svg·html은 스크립트를 담을 수 있어 넣지 않는다. */
+/**
+ * 보기(브라우저 새 탭)에서 주는 확장자와 Content-Type.
+ * html은 세션이 만든 화면 시안을 휴대폰에서도 보려고 받는다. 스크립트가 돌 수 있어 viewPolicy로 따로 가둔다.
+ * svg는 받지 않는다(이미지로 걸 일이 드물고, 가둘 까닭을 늘리지 않는다).
+ */
 export const VIEW_TYPES: Record<string, string> = {
+  html: "text/html; charset=utf-8",
+  htm: "text/html; charset=utf-8",
   png: "image/png",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",
@@ -25,9 +31,37 @@ export const VIEW_TYPES: Record<string, string> = {
   csv: "text/plain; charset=utf-8",
 };
 
-/** 열기(맥의 맞는 프로그램)를 허용하는 확장자. 문서·이미지·영상·소리만. 실행 파일·스크립트·설치 파일은 없다. */
+/** 보기 응답의 Content-Security-Policy. 모든 파일을 이 앱과 다른 출처(sandbox)로 가둔다. */
+export const VIEW_POLICY = "sandbox";
+
+/**
+ * html 보기의 Content-Security-Policy. 시안이 스크립트로 그려지니 스크립트만 허용하고,
+ * allow-same-origin을 주지 않아 출처는 계속 남남이다(이 앱의 API·저장소에 닿지 못한다).
+ * 바깥 연결·폼 전송·다른 파일 불러오기는 모두 막아, 담긴 스크립트가 무엇을 내보내지도 못하게 한다.
+ * 그래서 옆 파일(이미지·css)이나 CDN을 부르는 html은 그 부분이 빠져 보인다.
+ */
+export const HTML_VIEW_POLICY = [
+  "sandbox allow-scripts",
+  "default-src 'none'",
+  "script-src 'unsafe-inline'",
+  "style-src 'unsafe-inline'",
+  "img-src data: blob:",
+  "font-src data:",
+  "form-action 'none'",
+  "base-uri 'none'",
+].join("; ");
+
+/** 확장자별 보기 Content-Security-Policy. */
+export function viewPolicy(ext: string): string {
+  return ext === "html" || ext === "htm" ? HTML_VIEW_POLICY : VIEW_POLICY;
+}
+
+/**
+ * 열기(맥의 맞는 프로그램)를 허용하는 확장자. 문서·이미지·영상·소리만. 실행 파일·스크립트·설치 파일은 없다.
+ * html은 열면 맥 브라우저가 가두지 않고 스크립트를 돌리니 넣지 않는다(보기로 본다).
+ */
 export const OPEN_EXTS = new Set([
-  ...Object.keys(VIEW_TYPES),
+  ...Object.keys(VIEW_TYPES).filter((e) => e !== "html" && e !== "htm"),
   "heic",
   "tiff",
   "mp3",

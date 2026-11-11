@@ -32,8 +32,9 @@
 | 허용 폴더 안의 파일만 | 경로와 허용 폴더를 모두 `realpath`로 푼 뒤 `isInside`로 본다. `../`는 글 단계(`checkInput`)에서도 거절한다. 이름만 비슷한 옆 폴더(`root-sibling`)는 `path.relative`로 걸러진다 |
 | 심볼릭 링크로 밖에 나가지 못한다 | 판단은 풀린 실제 경로로 한다. 확장자도 실제 파일 이름으로 본다(`a.pdf` → `run.sh` 링크는 sh로 판단) |
 | 숨김 파일·폴더(`.ssh`, `.env`, `.git` …)는 거절 | 허용 폴더 아래 상대 경로에 `.`으로 시작하는 조각이 있으면 거절(`hasHiddenPart`). 허용 폴더 자체가 숨김 폴더 아래 있는 것은 괜찮다. 예외: 세션 작업 사본 `.claude/worktrees/<이름>/` 안의 파일(사본 안의 `.git`·`.env` 같은 숨김 조각은 계속 거절, 2026-11-01) |
-| 보기는 정한 종류만 | `VIEW_TYPES`: png jpg jpeg gif webp pdf mp4 mov webm txt md log json csv. svg·html은 스크립트를 담을 수 있어 받지 않는다. md·log·json·csv는 `text/plain`으로 준다 |
+| 보기는 정한 종류만 | `VIEW_TYPES`: png jpg jpeg gif webp pdf mp4 mov webm txt md log json csv html htm. md·log·json·csv는 `text/plain`으로 준다. html은 세션이 만든 화면 시안을 휴대폰에서도 보려고 받는다(2026-11-11 사용자 막힘). svg는 받지 않는다 |
 | 보기 응답이 이 앱 출처로 스크립트를 돌리지 못한다 | `X-Content-Type-Options: nosniff`, `Content-Security-Policy: sandbox`, `Content-Disposition: inline` |
+| html 보기는 가둔 채 스크립트만 돈다 | `viewPolicy`가 html에만 `HTML_VIEW_POLICY`를 준다. `sandbox allow-scripts`에 `allow-same-origin`이 없어 출처는 계속 남남이다(이 앱의 API·저장소에 닿지 못하고, POST는 Origin이 `null`이라 `isSameOrigin`에, 파일 보기는 `Sec-Fetch-Site`가 `cross-site`라 `isTrustedFetch`에 걸린다). `default-src 'none'`에 인라인 스크립트·스타일과 `data:`·`blob:` 그림·글꼴만 열어, 바깥 연결·폼 전송·다른 파일 불러오기가 모두 막힌다. 그래서 옆 파일이나 CDN을 부르는 html은 그 부분이 빠져 보인다. 열기(`OPEN_EXTS`)에는 html을 넣지 않는다. 맥 브라우저는 가두지 않고 돌리기 때문이다 |
 | 보기는 200MB까지 | `MAX_VIEW_BYTES`. 넘으면 413, 열기로 본다 |
 | 다른 사이트가 내 파일을 끌어가지 못한다 | 보기는 `Sec-Fetch-Site`가 `same-origin`(카드 링크)이고 `Host`가 이 컴퓨터 자신(127.0.0.1·localhost·[::1])일 때만. `none`(주소창)은 브라우저가 아닌 클라이언트가 마음대로 넣을 수 있어 받지 않는다(2026-11-01 비서 지적). `Host`를 보면 DNS 재바인딩도 막힌다 |
 | 같은 Wi-Fi·VPN의 다른 기기가 못 본다 | 서버를 `next start -H 127.0.0.1`로 띄운다(`pnpm start`가 이렇게 띄운다). 코드는 ① 띄울 때 인자(`-H`·`--hostname`, 여러 개면 마지막 것)가 있으면 그 값이 이 컴퓨터 자신이어야 하고, `STARSHIP_BIND`도 있으면 둘 다 이 컴퓨터 자신일 때만 연다 ② 인자가 없을 때만 `STARSHIP_BIND` 환경 변수 ③ 그것도 없으면 `HOSTNAME`을 본다. 이 컴퓨터 자신이 아니면(아무것도 없어도) 모든 주소로 뜬 것으로 보고 보기·열기를 거절한다(`boundToLoopback`). 인자가 실제로 묶은 주소라 밝힌 값보다 앞선다(2026-11-03, 전에는 `STARSHIP_BIND`를 먼저 봐서 `-H 0.0.0.0`으로 띄워도 열렸다). 다른 기기는 `Host`·`Origin`을 꾸밀 수 있어서다. 데모 예시 파일만 예외 |
@@ -47,7 +48,7 @@
 | md 속 그림이 검사를 우회하지 않는다 | 그림은 불러오지 않고 `[그림: 대체 글]`로 둔다(http(s)면 그 주소로 가는 링크). 로컬 경로 그림을 `<img>`로 부르면 같은 출처 요청이라 다른 파일을 끌어 쓸 수 있고, 바깥 주소면 파일을 연 사실이 밖으로 나간다 |
 | 글 속 경로에도 단추를 단다(2026-11-03) | 책상 선택지·확인 항목에 `path`가 없으면 label·look·note에서, 기다림 세부에서도 `findPaths`로 경로를 찾는다. `path`가 있으면 그것만. 같은 경로는 한 번만 붙인다(`src/ui/desk/waitFiles.ts`, 시험 `waitFiles.test.ts`). 찾은 경로도 서버가 똑같이 검사한다 |
 
-시험(`files.test.ts`)은 임시 폴더에 진짜 파일·링크를 만들어 위 규칙을 하나씩 확인한다: `../`, 밖으로 가는 링크, 안에서 도는 링크, 이름만 pdf인 링크, 숨김 파일·숨김을 가리키는 링크, 허용 폴더 밖·옆 폴더, html·sh·.app·실행 권한 파일.
+시험(`files.test.ts`)은 임시 폴더에 진짜 파일·링크를 만들어 위 규칙을 하나씩 확인한다: `../`, 밖으로 가는 링크, 안에서 도는 링크, 이름만 pdf인 링크, 숨김 파일·숨김을 가리키는 링크, 허용 폴더 밖·옆 폴더, html 보기는 통과·열기는 거절, sh·.app·실행 권한 파일, html과 그 밖의 보기 응답 CSP.
 
 남는 틈: 검사와 읽기 사이에 파일을 바꿔치는 경쟁(TOCTOU)은 막지 않는다. 허용 폴더에 쓸 수 있는 것은 이 맥의 주인 자신뿐이라는 전제다.
 
