@@ -16,6 +16,7 @@
 
 ## 화면
 
+- [hq.md](hq.md) — 본부 방 설계안(사용자 결정 기다림): 비서의 할 일·나르기·시설·지도 판, 나르기 기록 형식 `starship-relay/1`과 저장 위치.
 - [cockpit-inbox.md](cockpit-inbox.md) — 조종석 결재함: 승무원별로 묶어 펼치기, 마지막 답변 접기, 코드 리뷰 칸, 키보드 처리.
 - [crew-views.md](crew-views.md) — 승무원을 보는 세 화면(결재함·승무원 정보·선실)의 역할 나누기.
 - [frontier.md](frontier.md) — 선실 가운데 그림인 육각 개척지: 끌고 확대하는 카메라, 확대 단계마다 보이는 글.
