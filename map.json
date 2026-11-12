@@ -3,7 +3,7 @@
   "title": "Starship",
   "goal": "세션들을 우주선 승무원으로 보며, 나를 기다리는 것·하는 일·쓴 연료를 한 화면(조종석)에서 묻지 않고 보고 답한다",
   "baselineAt": "2026-10-25",
-  "updatedAt": "2026-11-10T12:05:00+09:00",
+  "updatedAt": "2026-11-12T02:14:48.557Z",
   "here": "site-teams",
   "regions": [
     {
@@ -607,6 +607,54 @@
         {
           "label": "화면",
           "path": "src/ui/secure/SecurePage.tsx"
+        }
+      ]
+    },
+    {
+      "id": "hq",
+      "title": "본부 방",
+      "status": "fog",
+      "size": 3,
+      "summary": "비서의 할 일·나르기·시설·지도를 보는 방. 설계안을 쓰고 사용자 결정을 기다린다",
+      "next": "사용자가 세 갈림길을 고르면 비서와 나눠 구현",
+      "found": "2026-11-12",
+      "links": [
+        {
+          "label": "본부 방 설계안",
+          "path": "docs/hq.md"
+        }
+      ],
+      "signs": [
+        {
+          "id": "hq-room",
+          "type": "fork",
+          "title": "본부 방 모양",
+          "owner": "me",
+          "options": ["비서 선실을 넓힌다", "따로 화면 /hq"],
+          "recommend": "비서 선실을 넓힌다",
+          "status": "open"
+        },
+        {
+          "id": "hq-relay-writer",
+          "type": "fork",
+          "title": "나르기 기록을 누가 쓰나",
+          "owner": "me",
+          "options": ["hook + 비서 도구", "비서 도구만", "hook만"],
+          "recommend": "hook + 비서 도구",
+          "status": "open"
+        },
+        {
+          "id": "hq-phone",
+          "type": "fork",
+          "title": "휴대폰에서 나르기가 보이는 범위",
+          "owner": "me",
+          "options": [
+            "맥·휴대폰 모두 제목까지",
+            "휴대폰은 건수와 멈춤만",
+            "맥에서만"
+          ],
+          "recommend": "맥·휴대폰 모두 제목까지",
+          "status": "open"
         }
       ]
     },
