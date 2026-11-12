@@ -3,8 +3,8 @@
   "title": "Starship",
   "goal": "세션들을 우주선 승무원으로 보며, 나를 기다리는 것·하는 일·쓴 연료를 한 화면(조종석)에서 묻지 않고 보고 답한다",
   "baselineAt": "2026-10-25",
-  "updatedAt": "2026-11-12T02:18:29.954Z",
-  "here": "site-teams",
+  "updatedAt": "2026-11-12T02:19:09.908Z",
+  "here": "hq",
   "regions": [
     {
       "id": "protocol",
@@ -613,10 +613,10 @@
     {
       "id": "hq",
       "title": "본부 방",
-      "status": "fog",
+      "status": "building",
       "size": 3,
-      "summary": "비서의 할 일·나르기·시설·지도를 보는 방. 설계안을 쓰고 사용자 결정을 기다린다",
-      "next": "사용자가 세 갈림길을 고르면 비서와 나눠 구현",
+      "summary": "비서의 할 일·나르기·시설·지도를 보는 방. 비서 선실을 넓힌다(사용자 결정)",
+      "next": "비서: 나르기 기록·도구·hook·끝점, starship: 나르기·시설 판",
       "found": "2026-11-12",
       "links": [
         {
@@ -642,7 +642,8 @@
           "owner": "me",
           "options": ["hook + 비서 도구", "비서 도구만", "hook만"],
           "recommend": "hook + 비서 도구",
-          "status": "open"
+          "status": "decided",
+          "decided": "hook + 비서 도구"
         },
         {
           "id": "hq-phone",
@@ -655,9 +656,11 @@
             "맥에서만"
           ],
           "recommend": "맥·휴대폰 모두 제목까지",
-          "status": "open"
+          "status": "decided",
+          "decided": "맥·휴대폰 모두 제목까지"
         }
-      ]
+      ],
+      "since": "2026-11-12"
     },
     {
       "id": "ops",
