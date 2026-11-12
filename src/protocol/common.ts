@@ -32,6 +32,24 @@ export const When = z
   .string()
   .refine((s) => !Number.isNaN(parseWhen(s)), "날짜로 읽을 수 없어요");
 
+/** 시각: ISO 글이나 Unix 밀리초. 읽으면 밀리초 숫자로 바꾼다. 보안 기록·나르기 기록이 함께 쓴다. */
+export const Instant = z
+  .union([
+    z.number().nonnegative(),
+    z
+      .string()
+      .refine((s) => !Number.isNaN(parseWhen(s)), "시각으로 읽을 수 없어요"),
+  ])
+  .transform((v) => (typeof v === "number" ? Math.round(v) : parseWhen(v)));
+
+/** 빠져도 되는 칸. null도 받아 없는 것으로 본다(출력에서는 선택 칸). */
+export function opt<T extends z.ZodType>(s: T) {
+  return s
+    .nullish()
+    .transform((v) => v ?? undefined)
+    .optional();
+}
+
 /** 너그러운 배열을 읽은 결과: 맞는 항목과, 빠진 항목마다 사람이 읽을 한 줄. */
 export type Lenient<T> = { items: T[]; problems: string[] };
 

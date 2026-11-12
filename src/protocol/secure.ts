@@ -2,26 +2,11 @@
 // 정의 출처는 비서 서버의 GET /api/secure 응답이다. 설명: docs/secure.md.
 // 바깥(requests·calls가 배열인지)만 엄격하고, 항목은 하나씩 따로 검사해 틀린 것만 빼고 problems에 적는다(v1.ts Snapshot과 같은 방식).
 import { z } from "zod";
-import { lenientArray, parseWhen } from "./common";
+import { Instant, lenientArray, opt } from "./common";
 
-/** 시각: ISO 글이나 Unix 밀리초. 읽으면 밀리초 숫자로 바꾼다. */
-export const Instant = z
-  .union([
-    z.number().nonnegative(),
-    z
-      .string()
-      .refine((s) => !Number.isNaN(parseWhen(s)), "시각으로 읽을 수 없어요"),
-  ])
-  .transform((v) => (typeof v === "number" ? Math.round(v) : parseWhen(v)));
+export { Instant };
 
 const Text = z.string();
-/** 빠져도 되는 칸. null도 받아 없는 것으로 본다(출력에서는 선택 칸). */
-function opt<T extends z.ZodType>(s: T) {
-  return s
-    .nullish()
-    .transform((v) => v ?? undefined)
-    .optional();
-}
 const MaybeText = opt(z.string());
 
 export const SecureSession = z.object({
