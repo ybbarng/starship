@@ -3,8 +3,7 @@
   "title": "Starship",
   "goal": "세션들을 우주선 승무원으로 보며, 나를 기다리는 것·하는 일·쓴 연료를 한 화면(조종석)에서 묻지 않고 보고 답한다",
   "baselineAt": "2026-10-25",
-  "updatedAt": "2026-11-12T02:19:09.908Z",
-  "here": "hq",
+  "updatedAt": "2026-11-12T02:38:56.571Z",
   "regions": [
     {
       "id": "protocol",
@@ -613,10 +612,9 @@
     {
       "id": "hq",
       "title": "본부 방",
-      "status": "building",
+      "status": "done",
       "size": 3,
-      "summary": "비서의 할 일·나르기·시설·지도를 보는 방. 비서 선실을 넓혔다(사용자 결정). starship 쪽은 끝, 비서 끝점을 기다린다",
-      "next": "비서: 나르기 기록·relay 도구·hook·GET /api/relays (starship 쪽 판은 다 만듦)",
+      "summary": "비서 선실이 할 일·나르기·시설(·지도) 판이 된다. 나르기는 비서 기록(hook이 넘김을 자동으로, 비서가 부탁·돌려줌·끝을)으로 보인다",
       "found": "2026-11-12",
       "links": [
         {
@@ -658,6 +656,11 @@
           "recommend": "맥·휴대폰 모두 제목까지",
           "status": "decided",
           "decided": "맥·휴대폰 모두 제목까지"
+        },
+        {
+          "id": "hq-unlinked-noise",
+          "type": "risk",
+          "title": "비서의 모든 넘김이 기록돼 나르기와 상관없는 메시지가 '어느 일인지 모르는 넘김'에 7일 동안 쌓일 수 있다"
         }
       ],
       "since": "2026-11-12"
