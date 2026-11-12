@@ -615,8 +615,8 @@
       "title": "본부 방",
       "status": "building",
       "size": 3,
-      "summary": "비서의 할 일·나르기·시설·지도를 보는 방. 비서 선실을 넓힌다(사용자 결정)",
-      "next": "비서: 나르기 기록·도구·hook·끝점, starship: 나르기·시설 판",
+      "summary": "비서의 할 일·나르기·시설·지도를 보는 방. 비서 선실을 넓혔다(사용자 결정). starship 쪽은 끝, 비서 끝점을 기다린다",
+      "next": "비서: 나르기 기록·relay 도구·hook·GET /api/relays (starship 쪽 판은 다 만듦)",
       "found": "2026-11-12",
       "links": [
         {

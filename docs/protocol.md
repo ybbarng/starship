@@ -139,6 +139,13 @@ Starship은 화면만 맡는다. 할 일·교신·승무원·계기판 데이터
 - 한 번 받은 뒤 본부가 잠깐 실패하면(5xx·시간 초과·형식 오류) Starship 서버는 마지막으로 받은 값에 `stale: true`(선택 필드)와 실패 까닭(`note`)을 붙여 준다. `at`은 그대로라 화면은 칸을 숨기지 않고 "n분 전 값"으로 흐리게 보인다. 404는 "끝점 없음"이라 기억한 값을 쓰지 않는다.
 - Starship의 `GET /api/v1/usage/limits`는 이 응답에 `ok`(본부 값을 받았나)와 `source`(`demo`·`remote`)를 더해 준다(`UsageLimitsResponse`). Starship은 계정 토큰을 다루지 않는다. 값을 구하는 일은 본부가 맡는다.
 
+### 프로토콜 밖 비서 끝점
+
+아래 둘은 `{base}/v1` 아래가 아니라 비서 서버 뿌리(`STARSHIP_SERVER_URL`의 origin)의 `/api/` 아래에 있다. 비서 자신의 기록이라 프로토콜 판(`starship/1`)과 따로 바뀐다. 404면 Starship은 "아직 없음"(`status: "none"`)으로 보인다.
+
+- `GET {origin}/api/secure` — 1Password 신청서·호출 기록. Starship `GET /api/v1/secure`. 설명은 [secure.md](secure.md).
+- `GET {origin}/api/relays?limit=200` → `{ "relays": [줄…] }` — 나르기 기록(`starship-relay/1`, 순서는 보장하지 않는다). Starship `GET /api/v1/relays`가 `{ source, status, log: { relays, problems? } }`로 중계한다. 형식 원본은 [`src/protocol/relay.ts`](../src/protocol/relay.ts), 설명은 [hq.md](hq.md) "나르기 기록".
+
 ## 개념
 
 ### Task — 할 일
