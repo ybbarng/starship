@@ -7,6 +7,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { useMemo } from "react";
+import { RelayResponse } from "@/protocol/relay";
 import {
   type SecureAckBody,
   SecureAckResponse,
@@ -185,6 +186,27 @@ export function useSecure() {
       return SecureResponse.parse(body);
     },
     refetchInterval: 5_000,
+  });
+}
+
+/** 나르기 기록(본부 방). enabled일 때만 10초마다 읽는다. 실패하면 서버가 준 이유를 오류 글로. */
+export function useRelays(enabled: boolean) {
+  return useQuery({
+    queryKey: ["relays"],
+    queryFn: async (): Promise<RelayResponse> => {
+      const res = await fetch("/api/v1/relays", { cache: "no-store" });
+      const body: unknown = await res.json().catch(() => null);
+      if (!res.ok) {
+        const error =
+          typeof body === "object" && body && "error" in body
+            ? String((body as { error: unknown }).error)
+            : `나르기 기록 ${res.status}`;
+        throw new Error(error);
+      }
+      return RelayResponse.parse(body);
+    },
+    enabled,
+    refetchInterval: 10_000,
   });
 }
 

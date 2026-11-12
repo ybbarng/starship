@@ -40,7 +40,16 @@ const VERDICT_COLOR: Record<Link["verdict"], string> = {
   off: "text-white/55",
 };
 
-export function LinkHud({ link, now }: { link: Link; now: number }) {
+export function LinkHud({
+  link,
+  now,
+  fluid = false,
+}: {
+  link: Link;
+  now: number;
+  /** 감싼 칸 폭에 맞춘다(본부 방 시설 판). 기본은 조종석 창에 띄우는 고정 폭 */
+  fluid?: boolean;
+}) {
   const nodes = chainNodes(link);
   const loud = link.verdict === "warn" || link.verdict === "down";
   const ageSecs = Math.max(0, Math.round((now - link.at) / 1000));
@@ -49,7 +58,7 @@ export function LinkHud({ link, now }: { link: Link; now: number }) {
       data-link-hud
       data-verdict={link.verdict}
       aria-label={`관제 링크 · ${VERDICT_LABEL[link.verdict]}`}
-      className={`rounded-xl border px-3 pt-2 pb-2 backdrop-blur-sm ${FRAME[link.verdict]} ${loud ? "w-[370px]" : "w-[340px]"}`}
+      className={`rounded-xl border px-3 pt-2 pb-2 backdrop-blur-sm ${FRAME[link.verdict]} ${fluid ? "w-full" : loud ? "w-[370px]" : "w-[340px]"}`}
     >
       <div className="flex items-center gap-2 text-[11px]">
         <span className="font-semibold tracking-[0.16em] text-white/45">

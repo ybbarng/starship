@@ -1,8 +1,21 @@
 "use client";
 
 import Link from "next/link";
-import { type ComponentType, useEffect, useMemo, useState } from "react";
-import { useBridge, useCrewDesk, useCrewDesks, useCrewMap } from "@/data/hooks";
+import {
+  type ComponentType,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
+import {
+  useBridge,
+  useBridgeStatus,
+  useCrewDesk,
+  useCrewDesks,
+  useCrewMap,
+  useRelays,
+} from "@/data/hooks";
 import { useSent } from "@/data/sent";
 // 선실: 승무원(프로젝트) 하나의 방. 가운데 지도 한 장, 위쪽 줄에 진행률·늘어난 구역·갱신 시각,
 // 오른쪽 판에 고른 구역의 자세한 내용. 설계: docs/map.md "화면: 선실".
@@ -20,29 +33,48 @@ import {
 } from "@/protocol/map";
 import type { Crew, Task } from "@/protocol/v1";
 import { CrewBrief, CrewHeader } from "@/protos/classic/CrewDetail";
+import { HQ_CLOCK_MS, hqConnected } from "@/protos/cockpit/hqLink";
+import { foldRelays, stalledCount } from "@/relay/fold";
 import { CrewTasks, crewTaskCount } from "@/ui/desk/CrewTasks";
+import { FacilityBoard } from "@/ui/hq/FacilityBoard";
+import { RelayBoard } from "@/ui/hq/RelayBoard";
 import { Toasts } from "@/ui/kit";
 import { agoLabel } from "@/ui/kit/labels";
+import { cabinTabs, type SideTab, TAB_LABEL } from "./cabinTabs";
 import { FrontierView } from "./frontier/FrontierView";
 import { MAX_TEAMS, type TeamOnMap } from "./frontier/teams";
 import { SIGN_ICON } from "./labels";
 import { MapView, type MapViewProps } from "./MapView";
 import { RegionPanel } from "./RegionPanel";
 
-export function Cabin({
-  crewId,
-  View = FrontierView,
-  label,
-  backHref = "/",
-}: {
+type CabinProps = {
   crewId: string;
   /** 가운데 지도 그림. 시안마다 바꿔 끼운다. */
   View?: ComponentType<MapViewProps>;
   /** 시안 이름(화면 구석에 작게) */
   label?: string;
   backHref?: string;
-}) {
+  /**
+   * 본부 승무원 id(src/relay/hq.ts). 이 승무원의 선실만 본부 방으로 넓힌다:
+   * 현황판이 할 일 · 나르기 · 시설 · 지도 네 판이 된다(docs/hq.md). 안 주면 본부 방이 없다(시안 화면).
+   */
+  hqCrewId?: string;
+};
+
+/** 승무원이 바뀌면 고른 판·구역을 처음으로 돌린다 */
+export function Cabin(props: CabinProps) {
+  return <CabinRoom key={props.crewId} {...props} />;
+}
+
+function CabinRoom({
+  crewId,
+  View = FrontierView,
+  label,
+  backHref = "/",
+  hqCrewId,
+}: CabinProps) {
   const bridge = useBridge();
+  const hq = hqCrewId !== undefined && crewId === hqCrewId;
   const crew = bridge.crewById.get(crewId);
   // 작업팀이면 지도는 소장 것을 같이 쓴다(소장 id로 읽는다). 할 일·브리핑은 작업팀 자기 것(docs/crew-views.md "작업팀")
   const foremanId =
@@ -58,6 +90,50 @@ export function Cabin({
   const desk = deskQuery.data?.desk ?? null;
   const deskProblems = deskQuery.data?.problems ?? [];
   const tasks = bridge.tasksByCrew.get(crewId) ?? [];
+
+  // 현황판 판 고르기. 고르기 전에는 기다리는 것이 있으면 할 일, 없으면 지도(본부 방은 나르기). 책상이 늦게 와도 따라간다.
+  const [pickedTab, setTab] = useState<SideTab | null>(null);
+  // 읽음을 구독해야 "읽음"을 누른 순간 배지도 줄어든다(전에는 다음 폴링까지 그대로였다)
+  const read = useSent((s) => s.read);
+  const waiting = crewTaskCount(crewId, desk, tasks, read);
+  const { tabs, tab } = cabinTabs({
+    hq,
+    hasMap: !!map,
+    hasBrief: !!crew?.brief,
+    waiting,
+    picked: pickedTab,
+  });
+
+  const relays = useRelays(hq);
+  const relayData = relays.data;
+  const board = useMemo(
+    () => foldRelays(relayData?.log.relays ?? [], now),
+    [relayData, now],
+  );
+  const stalled = stalledCount(board);
+  const hqName = crew?.name ?? crewId;
+  const hqBoard = (t: SideTab): ReactNode =>
+    t === "relays" ? (
+      <RelayBoard
+        data={relayData}
+        error={relays.error}
+        board={board}
+        hqName={hqName}
+        now={now}
+      />
+    ) : t === "facility" ? (
+      <Facility gauges={bridge.gauges} link={bridge.link} />
+    ) : null;
+  const tabBar = (
+    <SideTabs
+      tabs={tabs}
+      tab={tab}
+      setTab={setTab}
+      waiting={waiting}
+      relays={board.active.length}
+      stalled={stalled}
+    />
+  );
 
   return (
     <main className="flex h-dvh min-h-[560px] flex-col bg-hull-950 text-white">
@@ -129,6 +205,18 @@ export function Cabin({
         </div>
       )}
 
+      {hq && stalled > 0 && (
+        <button
+          type="button"
+          data-relay-stalled-banner
+          onClick={() => setTab("relays")}
+          className="border-b border-[#ffcf5c]/30 bg-[#ffcf5c]/10 px-4 py-1.5 text-left text-[12.5px] text-[#ffe9a8] hover:bg-[#ffcf5c]/15"
+        >
+          멈춘 나르기 <b className="text-[#ffd84a]">{stalled}</b>건 · 하루 넘게
+          소식이 없어요 <span className="text-white/55">· 나르기 판 보기</span>
+        </button>
+      )}
+
       {query.isLoading ? (
         <Center>지도를 펼치는 중…</Center>
       ) : map ? (
@@ -144,7 +232,29 @@ export function Cabin({
           tasks={tasks}
           now={now}
           View={View}
+          tab={tab}
+          setTab={setTab}
+          tabBar={tabBar}
+          extraBoard={hqBoard}
         />
+      ) : hq ? (
+        // 본부 방에 지도가 없으면 지도 판을 숨기고, 현황판을 가운데 한 줄로 넓게 편다(휴대폰에서도 가로로 넘치지 않게)
+        <div className="flex min-h-0 flex-1 justify-center overflow-y-auto">
+          <div data-hq-room className="w-full max-w-[680px] px-4 py-4">
+            {tabBar}
+            {tab === "tasks" ? (
+              <CrewTasks
+                crewId={crewId}
+                desk={desk}
+                tasks={tasks}
+                now={now}
+                off={crew?.status === "off"}
+              />
+            ) : (
+              hqBoard(tab)
+            )}
+          </div>
+        </div>
       ) : (
         <div className="flex min-h-0 flex-1">
           <Center>
@@ -236,8 +346,85 @@ function TopLine({
   );
 }
 
-/** 현황판: 할 일(책상 + 책상 밖 일 + 마지막 답변) · 지도(개요·구역) · 브리핑. 역할은 docs/crew-views.md */
-type SideTab = "tasks" | "map" | "brief";
+function SideTabs({
+  tabs,
+  tab,
+  setTab,
+  waiting,
+  relays,
+  stalled,
+}: {
+  tabs: SideTab[];
+  tab: SideTab;
+  setTab: (t: SideTab) => void;
+  waiting: number;
+  /** 나르는 중인 일 수 */
+  relays: number;
+  /** 그 가운데 멈춘 것 */
+  stalled: number;
+}) {
+  return (
+    <div
+      data-side-tabs
+      className="mb-4 flex gap-1 rounded-md bg-white/[0.04] p-0.5 text-[12.5px]"
+    >
+      {tabs.map((t) => (
+        <button
+          key={t}
+          type="button"
+          data-side-tab={t}
+          aria-pressed={tab === t}
+          onClick={() => setTab(t)}
+          className={`flex-1 rounded px-2 py-1 whitespace-nowrap ${
+            tab === t
+              ? "bg-white/[0.1] font-semibold text-white"
+              : "text-white/50 hover:text-white/80"
+          }`}
+        >
+          {TAB_LABEL[t]}
+          {t === "tasks" && waiting > 0 && (
+            <b className="ml-1.5 rounded-full bg-[#ffd84a] px-1.5 text-[11px] text-hull-950">
+              {waiting}
+            </b>
+          )}
+          {t === "relays" && relays > 0 && (
+            <b
+              className={`ml-1.5 rounded-full px-1.5 text-[11px] ${stalled > 0 ? "bg-[#ffd84a] text-hull-950" : "bg-white/[0.12] text-white/80"}`}
+              title={stalled > 0 ? `멈춤 ${stalled}` : undefined}
+            >
+              {relays}
+            </b>
+          )}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** 시설 판. 본부 연결 상태는 5초마다 바뀌니 이 부품만 다시 그린다(src/data/hooks.ts useBridgeStatus) */
+function Facility({
+  gauges,
+  link,
+}: {
+  gauges: Parameters<typeof FacilityBoard>[0]["gauges"];
+  link: Parameters<typeof FacilityBoard>[0]["link"];
+}) {
+  const status = useBridgeStatus();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), HQ_CLOCK_MS);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <FacilityBoard
+      gauges={gauges}
+      link={link}
+      connected={hqConnected(!!status.error, status.updatedAt, now)}
+      lastAt={status.updatedAt}
+      now={now}
+    />
+  );
+}
 
 function MapRoom({
   map,
@@ -250,6 +437,10 @@ function MapRoom({
   tasks,
   now,
   View,
+  tab,
+  setTab,
+  tabBar,
+  extraBoard,
 }: {
   map: ProjectMap;
   crew?: Crew;
@@ -263,22 +454,15 @@ function MapRoom({
   tasks: Task[];
   now: number;
   View: ComponentType<MapViewProps>;
+  /** 고른 판(선실이 정한다) */
+  tab: SideTab;
+  setTab: (t: SideTab) => void;
+  /** 판 고르기 단추 줄 */
+  tabBar: ReactNode;
+  /** 본부 방의 나르기·시설 판. 그 밖의 판이면 null */
+  extraBoard: (t: SideTab) => ReactNode;
 }) {
   const [selected, setSelected] = useState<string | null>(map.here ?? null);
-  // 고르기 전에는 기다리는 것이 있으면 책상, 없으면 지도. 책상이 늦게 와도 따라간다.
-  const [pickedTab, setTab] = useState<SideTab | null>(null);
-  // 읽음을 구독해야 "읽음"을 누른 순간 배지도 줄어든다(전에는 다음 폴링까지 그대로였다)
-  const read = useSent((s) => s.read);
-  const waiting = crewTaskCount(crewId, desk, tasks, read);
-  const tabs: SideTab[] = crew?.brief
-    ? ["tasks", "map", "brief"]
-    : ["tasks", "map"];
-  const tab: SideTab =
-    pickedTab && tabs.includes(pickedTab)
-      ? pickedTab
-      : waiting > 0
-        ? "tasks"
-        : "map";
   const select = (id: string) => {
     setTab("map");
     setSelected(id);
@@ -342,40 +526,7 @@ function MapRoom({
         </footer>
       </div>
       <SidePanel>
-        <div
-          data-side-tabs
-          className="mb-4 flex gap-1 rounded-md bg-white/[0.04] p-0.5 text-[12.5px]"
-        >
-          {tabs.map((t) => (
-            <button
-              key={t}
-              type="button"
-              data-side-tab={t}
-              aria-pressed={tab === t}
-              onClick={() => setTab(t)}
-              className={`flex-1 rounded px-2 py-1 ${
-                tab === t
-                  ? "bg-white/[0.1] font-semibold text-white"
-                  : "text-white/50 hover:text-white/80"
-              }`}
-            >
-              {t === "tasks" ? (
-                <>
-                  할 일
-                  {waiting > 0 && (
-                    <b className="ml-1.5 rounded-full bg-[#ffd84a] px-1.5 text-[11px] text-hull-950">
-                      {waiting}
-                    </b>
-                  )}
-                </>
-              ) : t === "map" ? (
-                "지도"
-              ) : (
-                "브리핑"
-              )}
-            </button>
-          ))}
-        </div>
+        {tabBar}
         {tab === "tasks" ? (
           <CrewTasks
             crewId={crewId}
@@ -386,6 +537,8 @@ function MapRoom({
           />
         ) : tab === "brief" && crew?.brief ? (
           <CrewBrief brief={crew.brief} now={now} />
+        ) : tab === "relays" || tab === "facility" ? (
+          extraBoard(tab)
         ) : visibleSelected ? (
           <RegionPanel
             map={map}
