@@ -222,6 +222,20 @@ export function buildDemoDesks(now = Date.now()): Record<string, Desk> {
         },
       ],
     },
+    // 본부(비서). 기다림이 없어 본부 방은 나르기 판부터 열린다
+    secretary: {
+      desk: "starship-desk/1",
+      updatedAt: iso(now, 3),
+      waiting: [],
+      doing: [
+        { id: "inbox", title: "받은편지함 정리 중", since: iso(now, 12) },
+        {
+          id: "relay-a1",
+          title: "쿠폰 계산 문서 검토 나르는 중",
+          since: iso(now, 180),
+        },
+      ],
+    },
   };
 }
 

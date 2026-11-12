@@ -91,6 +91,14 @@ const CREW: CrewSeed[] = [
   { id: "home-lab", context: "personal", status: "idle", onDeck: false },
   { id: "search-index", context: "work", status: "off", onDeck: false },
   { id: "kanji-cards", context: "personal", status: "off", onDeck: false },
+  // 본부(비서 세션). 선실이 본부 방으로 넓어진다(docs/hq.md, src/relay/hq.ts의 기본 id와 같다)
+  {
+    id: "secretary",
+    context: "personal",
+    status: "working",
+    activity: "받은편지함 정리 중",
+    onDeck: true,
+  },
 ];
 
 const EXTRA_CREW = [
