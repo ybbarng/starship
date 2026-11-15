@@ -16,6 +16,7 @@ import {
   galacticToEquatorial,
   HALLEY,
   halleyPath,
+  orbitArc,
   orbitPath,
   raDecToEcliptic,
   scaleMode,
@@ -1230,11 +1231,15 @@ function Orbits({ catalog }: { catalog: SkyCatalog }) {
     );
     return { list, halley };
   }, [catalog]);
+  const real = scaleMode() === "real";
   // 궤도선은 위에서 내려다볼 때만 그린다(옆에서 보면 가로줄로 보여 거슬린다).
-  if (!view) return null;
-  const opacity = 0.32;
+  // 실제 축척은 행성이 빛점뿐이라 지나온 궤도 꼬리를 옆에서도 그린다(docs/scale.md).
+  if (!view) return real ? <OrbitTails catalog={catalog} /> : null;
+  // 실제 축척에서는 꼬리가 보이게 전체 고리를 더 옅게 둔다.
+  const opacity = real ? 0.16 : 0.32;
   return (
     <group>
+      {real && <OrbitTails catalog={catalog} />}
       {geos.list.map((g) => (
         <lineLoop key={g.uuid} geometry={g}>
           <lineBasicMaterial
@@ -1254,6 +1259,93 @@ function Orbits({ catalog }: { catalog: SkyCatalog }) {
           depthWrite={false}
         />
       </line>
+    </group>
+  );
+}
+
+/** 궤도 꼬리: 지나온 쪽으로 이만큼(도)의 호 */
+const TAIL_DEG = 40;
+const TAIL_POINTS = 48;
+/** 꼬리 자리를 다시 셈하는 간격. 40도 호는 하루에 거의 안 바뀌어 1분이면 충분하다. */
+const TAIL_REFRESH_MS = 60_000;
+const TAIL_COLOR = new THREE.Color("#9fbcff");
+
+/**
+ * 실제 축척의 궤도 꼬리. 행성 지금 자리에서 지나온 쪽으로 궤도 40도만큼을 그리고,
+ * 행성 쪽 끝이 가장 진하고 꼬리 끝으로 갈수록 투명해진다. 원반이 크게 보일 만큼 가까우면 숨긴다.
+ */
+function OrbitTails({ catalog }: { catalog: SkyCatalog }) {
+  const { camera, gl } = useThree();
+  const tails = useMemo(
+    () =>
+      BODIES.flatMap((b) => {
+        const el = b.orbit ? catalog.orbits[b.orbit] : undefined;
+        if (!el) return [];
+        const n = TAIL_POINTS + 1;
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute(
+          "position",
+          new THREE.BufferAttribute(new Float32Array(n * 3), 3),
+        );
+        const color = new Float32Array(n * 4);
+        for (let k = 0; k < n; k++) {
+          const fade = 1 - k / TAIL_POINTS;
+          color.set(
+            [TAIL_COLOR.r, TAIL_COLOR.g, TAIL_COLOR.b, 0.9 * fade * fade],
+            k * 4,
+          );
+        }
+        geo.setAttribute("color", new THREE.BufferAttribute(color, 4));
+        const mat = new THREE.LineBasicMaterial({
+          vertexColors: true,
+          transparent: true,
+          depthWrite: false,
+        });
+        const line = new THREE.Line(geo, mat);
+        line.frustumCulled = false;
+        return [{ body: b, el, geo, mat, line, head: new THREE.Vector3() }];
+      }),
+    [catalog],
+  );
+  useEffect(
+    () => () => {
+      for (const t of tails) {
+        t.geo.dispose();
+        t.mat.dispose();
+      }
+    },
+    [tails],
+  );
+  const last = useRef(Number.NEGATIVE_INFINITY);
+  useFrame(() => {
+    const now = Date.now();
+    if (now - last.current >= TAIL_REFRESH_MS) {
+      last.current = now;
+      for (const t of tails) {
+        const pos = t.geo.getAttribute("position") as THREE.BufferAttribute;
+        orbitArc(t.el, now, TAIL_DEG, TAIL_POINTS).forEach((p, k) => {
+          pos.setXYZ(k, ...toThree(compress(p)));
+        });
+        pos.needsUpdate = true;
+        t.head.fromBufferAttribute(pos, 0);
+      }
+    }
+    // 원반이 몇 픽셀 넘게 보이면 꼬리가 행성 가운데에서 튀어나와 보이므로 흐리게 지운다.
+    const focal =
+      gl.domElement.clientHeight /
+      2 /
+      Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360);
+    for (const t of tails) {
+      const rpx = (t.body.radius / camera.position.distanceTo(t.head)) * focal;
+      t.mat.opacity = Math.min(1, Math.max(0, (12 - rpx) / 8));
+      t.line.visible = t.mat.opacity > 0;
+    }
+  });
+  return (
+    <group>
+      {tails.map((t) => (
+        <primitive key={t.body.id} object={t.line} />
+      ))}
     </group>
   );
 }
@@ -2260,6 +2352,8 @@ type LabelSpec = {
   dir?: THREE.Vector3;
   at?: () => THREE.Vector3;
   body?: BodyDef;
+  /** 실제 축척에서 빛점만 남는 행성의 작은 이름표(원반이 커지면 숨긴다) */
+  dot?: boolean;
   /** 누르면 날아갈 목적지 */
   target?: string;
   /** 별 이름표: 태양 중심 위치(광년)와 지구에서 본 등급. 방향·등급을 관측자 자리에서 다시 셈한다. */
@@ -2292,6 +2386,11 @@ const LABEL_STYLE: Record<LabelSpec["kind"], string> = {
   sun: "font-size:12px;color:rgba(255,220,160,.9);font-weight:600;",
   grid: "font-size:10px;color:rgba(95,212,196,.8);font-family:ui-monospace,SF Mono,monospace;",
 };
+/** 빛점 행성 이름표: 행성 이름표보다 작고 옅게. 목적지여도 같은 크기다. */
+const DOT_LABEL_STYLE =
+  "font-size:10.5px;color:rgba(214,226,255,.72);font-weight:500;letter-spacing:.02em;";
+/** 실제 축척에서 원반 반지름이 이 픽셀보다 크면 빛점 이름표를 숨긴다(원반이 스스로 보인다). */
+const DOT_LABEL_MAX_PX = 4;
 
 function LabelLayer({
   catalog,
@@ -2371,6 +2470,7 @@ function LabelLayer({
         text: b.ko,
         kind: "body",
         body: b,
+        dot: scaleMode() === "real" && Boolean(b.orbit),
         target: DESTINATION_BY_ID.has(b.id) ? b.id : undefined,
         at: () =>
           new THREE.Vector3(...bodyPosition(b, catalog.orbits, Date.now())),
@@ -2435,7 +2535,7 @@ function LabelLayer({
       const el = document.createElement("span");
       el.textContent = s.text;
       // cssText가 앞서 넣은 스타일을 덮으므로 먼저 넣는다.
-      el.style.cssText = `position:absolute;left:0;top:0;white-space:nowrap;text-shadow:0 0 6px #000,0 0 2px #000;will-change:transform;transition:opacity .3s;${LABEL_STYLE[s.kind]}`;
+      el.style.cssText = `position:absolute;left:0;top:0;white-space:nowrap;text-shadow:0 0 6px #000,0 0 2px #000;will-change:transform;transition:opacity .3s;${s.dot ? DOT_LABEL_STYLE : LABEL_STYLE[s.kind]}`;
       const target = s.target;
       if (onPick && target) {
         // 이름표를 눌러도 그곳으로 날아간다.
@@ -2544,7 +2644,11 @@ function LabelLayer({
         const r = s.body?.radius ?? 0.1;
         // 너무 가까우면(화면을 채우면) 이름표를 숨기고, 너무 멀면 행성만 남긴다.
         const apparent = r / d;
-        if (s.kind === "body") {
+        if (s.dot) {
+          // 빛점 옆에 작게. 원반이 몇 픽셀로 커지면(가까이 가면) 숨긴다.
+          show = apparent * focal < DOT_LABEL_MAX_PX && d < 6000 * rangeScale();
+          offsetY = 5;
+        } else if (s.kind === "body") {
           const isMoon = Boolean(s.body?.parent);
           show =
             apparent < 0.08 &&
