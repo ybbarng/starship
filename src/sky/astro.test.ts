@@ -11,6 +11,7 @@ import {
   halleyAt,
   heliocentric,
   moonOrbitRadii,
+  orbitArc,
   raDecToEcliptic,
   SCENE_SCALE,
   sceneDistance,
@@ -157,6 +158,47 @@ describe("실제 축척", () => {
       expect(sceneRadius(11.3)).toBeLessThan(SCENE_SCALE.minRadius);
     } finally {
       setScaleMode("compressed");
+    }
+  });
+});
+
+describe("궤도 꼬리", () => {
+  const t = Date.UTC(2026, 10, 16);
+  type P = readonly [number, number, number];
+  const sub = (u: P, v: P): P => [u[0] - v[0], u[1] - v[1], u[2] - v[2]];
+  const dot = (u: P, v: P) => u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+  const angleDeg = (u: P, v: P) =>
+    (Math.acos(dot(u, v) / (Math.hypot(...u) * Math.hypot(...v))) * 180) /
+    Math.PI;
+  const at = (pts: P[], k: number): P => pts[k] ?? [0, 0, 0];
+
+  for (const id of ["mer", "ter", "nep", "plu", "cer"]) {
+    it(`${id}: 첫 점이 지금 자리이고 태양에서 본 폭이 40도다`, () => {
+      const el = sky.orbits[id] as Elements;
+      const arc = orbitArc(el, t, 40, 32);
+      expect(arc).toHaveLength(33);
+      const now = heliocentric(el, t);
+      expect(Math.hypot(...sub(at(arc, 0), now))).toBeLessThan(1e-9);
+      expect(angleDeg(at(arc, 0), at(arc, 32))).toBeCloseTo(40, 3);
+    });
+  }
+
+  it("해왕성 꼬리도 길이가 충분하다(약 21 AU)", () => {
+    const arc = orbitArc(sky.orbits.nep as Elements, t);
+    let len = 0;
+    for (let k = 1; k < arc.length; k++)
+      len += Math.hypot(...sub(at(arc, k), at(arc, k - 1)));
+    expect(len).toBeGreaterThan(19);
+    expect(len).toBeLessThan(23);
+  });
+
+  it("지나온 쪽으로 뻗는다: 조금 뒤 자리는 꼬리 반대쪽에 있다", () => {
+    for (const id of ["mer", "ter", "jup", "nep", "plu", "ves"]) {
+      const el = sky.orbits[id] as Elements;
+      const arc = orbitArc(el, t);
+      const tail = sub(at(arc, 1), at(arc, 0));
+      const ahead = sub(heliocentric(el, t + 30 * 86_400_000), at(arc, 0));
+      expect(dot(tail, ahead), id).toBeLessThan(0);
     }
   });
 });

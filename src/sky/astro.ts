@@ -69,7 +69,25 @@ function orbitalToEcliptic(
   periDeg: number,
   Mrad: number,
 ): Vec3 {
-  const E = solveKepler(Mrad, e);
+  return eccentricToEcliptic(
+    a,
+    e,
+    iDeg,
+    nodeDeg,
+    periDeg,
+    solveKepler(Mrad, e),
+  );
+}
+
+/** 이심 근점 이각 E(라디안)의 궤도 위 자리 → 황도 좌표 */
+function eccentricToEcliptic(
+  a: number,
+  e: number,
+  iDeg: number,
+  nodeDeg: number,
+  periDeg: number,
+  E: number,
+): Vec3 {
   const xp = a * (Math.cos(E) - e);
   const yp = a * Math.sqrt(1 - e * e) * Math.sin(E);
   const i = iDeg * DEG;
@@ -93,45 +111,68 @@ function wrapRad(deg: number): number {
   return r > Math.PI ? r - 2 * Math.PI : r < -Math.PI ? r + 2 * Math.PI : r;
 }
 
-/** 태양 중심 황도 좌표(AU) */
-export function heliocentric(el: Elements, ms: number): Vec3 {
+/** ms 시각의 궤도 요소: 긴반지름 a, 이심률 e, 기울기 i·승교점 N·근점 인수 w(도), 평균 근점 이각 M(라디안) */
+function elementsAt(
+  el: Elements,
+  ms: number,
+): { a: number; e: number; i: number; N: number; w: number; M: number } {
   const jd = julianDay(ms);
   if ("L" in el) {
     const T = (jd - 2_451_545) / 36_525;
-    const a = el.a + el.da * T;
-    const e = el.e + el.de * T;
-    const i = el.i + el.di * T;
     const L = el.L + el.dL * T;
     const W = el.W + el.dW * T;
     const N = el.N + el.dN * T;
-    return orbitalToEcliptic(a, e, i, N, W - N, wrapRad(L - W));
+    return {
+      a: el.a + el.da * T,
+      e: el.e + el.de * T,
+      i: el.i + el.di * T,
+      N,
+      w: W - N,
+      M: wrapRad(L - W),
+    };
   }
   const jdEp = julianDay(Date.parse(`${el.ep}T00:00:00Z`));
-  const M = el.M + el.n * (jd - jdEp);
-  return orbitalToEcliptic(el.a, el.e, el.i, el.N, el.w, wrapRad(M));
+  const { a, e, i, N, w } = el;
+  return { a, e, i, N, w, M: wrapRad(el.M + el.n * (jd - jdEp)) };
+}
+
+/** 태양 중심 황도 좌표(AU) */
+export function heliocentric(el: Elements, ms: number): Vec3 {
+  const { a, e, i, N, w, M } = elementsAt(el, ms);
+  return orbitalToEcliptic(a, e, i, N, w, M);
 }
 
 /** 궤도 한 바퀴를 점 n개로(궤도선 그리기용) */
 export function orbitPath(el: Elements, ms: number, n = 256): Vec3[] {
-  const jd = julianDay(ms);
-  let a: number;
-  let e: number;
-  let i: number;
-  let N: number;
-  let w: number;
-  if ("L" in el) {
-    const T = (jd - 2_451_545) / 36_525;
-    a = el.a + el.da * T;
-    e = el.e + el.de * T;
-    i = el.i + el.di * T;
-    N = el.N + el.dN * T;
-    w = el.W + el.dW * T - N;
-  } else {
-    ({ a, e, i, N, w } = el);
-  }
+  const { a, e, i, N, w } = elementsAt(el, ms);
   const out: Vec3[] = [];
   for (let k = 0; k <= n; k++) {
     out.push(orbitalToEcliptic(a, e, i, N, w, (k / n) * 2 * Math.PI - Math.PI));
+  }
+  return out;
+}
+
+/**
+ * 궤도 꼬리: ms 시각의 자리에서 지나온 쪽으로 궤도 `degrees`도만큼의 호를 점 n+1개로.
+ * 첫 점이 지금 자리이고 뒤로 갈수록 오래전 자리다. 각도는 태양에서 본 각(진근점 이각)이라
+ * 시간 기준과 달리 느린 바깥 행성도 꼬리 길이가 줄지 않는다(해왕성 40도는 약 21 AU).
+ */
+export function orbitArc(
+  el: Elements,
+  ms: number,
+  degrees = 40,
+  n = 32,
+): Vec3[] {
+  const { a, e, i, N, w, M } = elementsAt(el, ms);
+  const E0 = solveKepler(M, e);
+  const p = Math.sqrt(1 + e);
+  const q = Math.sqrt(1 - e);
+  const nu0 = 2 * Math.atan2(p * Math.sin(E0 / 2), q * Math.cos(E0 / 2));
+  const out: Vec3[] = [];
+  for (let k = 0; k <= n; k++) {
+    const nu = nu0 - (k / n) * degrees * DEG;
+    const E = 2 * Math.atan2(q * Math.sin(nu / 2), p * Math.cos(nu / 2));
+    out.push(eccentricToEcliptic(a, e, i, N, w, E));
   }
   return out;
 }
