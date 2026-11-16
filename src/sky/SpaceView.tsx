@@ -42,6 +42,13 @@ import {
 import { loadCatalog, loadFaint, type SkyCatalog } from "./catalog";
 import { deco, stepDeco } from "./deco";
 import { Hdr, useHdrEnabled } from "./Hdr";
+import {
+  TAIL_VIEW_DEG,
+  tailGlow,
+  tailTint,
+  tailViewFades,
+  tailWidth,
+} from "./orbitTail";
 import { projector } from "./projector";
 import { ScaleNote } from "./ScaleNote";
 import { SunGlare } from "./SunGlare";
@@ -1268,11 +1275,42 @@ const TAIL_DEG = 40;
 const TAIL_POINTS = 48;
 /** 꼬리 자리를 다시 셈하는 간격. 40도 호는 하루에 거의 안 바뀌어 1분이면 충분하다. */
 const TAIL_REFRESH_MS = 60_000;
-const TAIL_COLOR = new THREE.Color("#9fbcff");
+/** 꼬리 빛의 세기(더하기 혼합) */
+const TAIL_STRENGTH = 1;
+
+/** 한 꼬리의 빛 띠 정점 배열: 점마다 좌우 두 정점, 이웃 점 사이를 삼각형 둘로 잇는다. */
+function tailRibbon(n: number): THREE.BufferGeometry {
+  const geo = new THREE.BufferGeometry();
+  const vec3 = () => new THREE.BufferAttribute(new Float32Array(n * 6), 3);
+  geo.setAttribute("position", vec3());
+  geo.setAttribute("aPrev", vec3());
+  geo.setAttribute("aNext", vec3());
+  const side = new Float32Array(n * 2);
+  const width = new Float32Array(n * 2);
+  for (let k = 0; k < n; k++) {
+    const w = tailWidth(k / (n - 1));
+    side.set([-1, 1], k * 2);
+    width.set([w, w], k * 2);
+  }
+  geo.setAttribute("aSide", new THREE.BufferAttribute(side, 1));
+  geo.setAttribute("aWidth", new THREE.BufferAttribute(width, 1));
+  geo.setAttribute(
+    "aAlpha",
+    new THREE.BufferAttribute(new Float32Array(n * 2), 1),
+  );
+  const index: number[] = [];
+  for (let k = 0; k < n - 1; k++) {
+    const a = k * 2;
+    index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+  }
+  geo.setIndex(index);
+  return geo;
+}
 
 /**
- * 실제 축척의 궤도 꼬리. 행성 지금 자리에서 지나온 쪽으로 궤도 40도만큼을 그리고,
- * 행성 쪽 끝이 가장 진하고 꼬리 끝으로 갈수록 투명해진다. 원반이 크게 보일 만큼 가까우면 숨긴다.
+ * 실제 축척의 궤도 꼬리. 행성 지금 자리에서 지나온 쪽으로 궤도 40도만큼을 장노출 사진의 빛 자국처럼
+ * 그린다. 행성 색을 옅게 쓴 부드러운 빛 띠로, 머리 쪽이 가장 밝고 굵으며 끝으로 갈수록 가늘고 옅어진다.
+ * 카메라에서 본 각도가 커지면 화면 안에서 사라지고, 원반이 크게 보일 만큼 가까우면 숨긴다.
  */
 function OrbitTails({ catalog }: { catalog: SkyCatalog }) {
   const { camera, gl } = useThree();
@@ -1282,28 +1320,39 @@ function OrbitTails({ catalog }: { catalog: SkyCatalog }) {
         const el = b.orbit ? catalog.orbits[b.orbit] : undefined;
         if (!el) return [];
         const n = TAIL_POINTS + 1;
-        const geo = new THREE.BufferGeometry();
-        geo.setAttribute(
-          "position",
-          new THREE.BufferAttribute(new Float32Array(n * 3), 3),
-        );
-        const color = new Float32Array(n * 4);
-        for (let k = 0; k < n; k++) {
-          const fade = 1 - k / TAIL_POINTS;
-          color.set(
-            [TAIL_COLOR.r, TAIL_COLOR.g, TAIL_COLOR.b, 0.9 * fade * fade],
-            k * 4,
-          );
-        }
-        geo.setAttribute("color", new THREE.BufferAttribute(color, 4));
-        const mat = new THREE.LineBasicMaterial({
-          vertexColors: true,
+        const geo = tailRibbon(n);
+        const uniforms = {
+          uColor: { value: new THREE.Color(...tailTint(dotColor(b))) },
+          uOpacity: { value: 0 },
+          uViewport: { value: new THREE.Vector2(1, 1) },
+          uPixelRatio: { value: 1 },
+        };
+        const mat = new THREE.ShaderMaterial({
+          vertexShader: S.orbitTailVertex,
+          fragmentShader: S.orbitTailFragment,
+          uniforms,
           transparent: true,
           depthWrite: false,
+          blending: THREE.AdditiveBlending,
+          // 화면에서 좌우로 벌린 띠라 뻗는 방향에 따라 감김이 뒤집힌다.
+          side: THREE.DoubleSide,
         });
-        const line = new THREE.Line(geo, mat);
-        line.frustumCulled = false;
-        return [{ body: b, el, geo, mat, line, head: new THREE.Vector3() }];
+        const mesh = new THREE.Mesh(geo, mat);
+        mesh.frustumCulled = false;
+        return [
+          {
+            body: b,
+            el,
+            geo,
+            mat,
+            uniforms,
+            mesh,
+            points: [] as Vec3[],
+            glow: Array.from({ length: n }, (_, k) => tailGlow(k / (n - 1))),
+            fades: new Float32Array(n),
+            head: new THREE.Vector3(),
+          },
+        ];
       }),
     [catalog],
   );
@@ -1317,17 +1366,50 @@ function OrbitTails({ catalog }: { catalog: SkyCatalog }) {
     [tails],
   );
   const last = useRef(Number.NEGATIVE_INFINITY);
+  const lastCam = useRef(new THREE.Vector3(Number.NaN, 0, 0));
+  const viewport = useMemo(() => new THREE.Vector2(), []);
   useFrame(() => {
     const now = Date.now();
-    if (now - last.current >= TAIL_REFRESH_MS) {
+    const refreshed = now - last.current >= TAIL_REFRESH_MS;
+    if (refreshed) {
       last.current = now;
       for (const t of tails) {
+        t.points = orbitArc(t.el, now, TAIL_DEG, TAIL_POINTS).map((p) =>
+          toThree(compress(p)),
+        );
+        const n = t.points.length;
         const pos = t.geo.getAttribute("position") as THREE.BufferAttribute;
-        orbitArc(t.el, now, TAIL_DEG, TAIL_POINTS).forEach((p, k) => {
-          pos.setXYZ(k, ...toThree(compress(p)));
+        const prev = t.geo.getAttribute("aPrev") as THREE.BufferAttribute;
+        const next = t.geo.getAttribute("aNext") as THREE.BufferAttribute;
+        t.points.forEach((p, k) => {
+          const a = t.points[Math.max(0, k - 1)] as Vec3;
+          const b = t.points[Math.min(n - 1, k + 1)] as Vec3;
+          for (const v of [k * 2, k * 2 + 1]) {
+            pos.setXYZ(v, ...p);
+            prev.setXYZ(v, ...a);
+            next.setXYZ(v, ...b);
+          }
         });
         pos.needsUpdate = true;
+        prev.needsUpdate = true;
+        next.needsUpdate = true;
         t.head.fromBufferAttribute(pos, 0);
+      }
+    }
+    // 카메라에서 본 각도로 흐려지는 값은 카메라가 움직였거나 자리를 다시 셈했을 때만 고친다.
+    const cam = camera.position;
+    if (refreshed || lastCam.current.distanceToSquared(cam) > 1e-12) {
+      lastCam.current.copy(cam);
+      const c: Vec3 = [cam.x, cam.y, cam.z];
+      for (const t of tails) {
+        tailViewFades(t.points, c, TAIL_VIEW_DEG, t.fades);
+        const alpha = t.geo.getAttribute("aAlpha") as THREE.BufferAttribute;
+        t.fades.forEach((f, k) => {
+          const a = f * (t.glow[k] ?? 0);
+          alpha.setX(k * 2, a);
+          alpha.setX(k * 2 + 1, a);
+        });
+        alpha.needsUpdate = true;
       }
     }
     // 원반이 몇 픽셀 넘게 보이면 꼬리가 행성 가운데에서 튀어나와 보이므로 흐리게 지운다.
@@ -1335,16 +1417,22 @@ function OrbitTails({ catalog }: { catalog: SkyCatalog }) {
       gl.domElement.clientHeight /
       2 /
       Math.tan(((camera as THREE.PerspectiveCamera).fov * Math.PI) / 360);
+    gl.getDrawingBufferSize(viewport);
+    const ratio = gl.getPixelRatio();
     for (const t of tails) {
-      const rpx = (t.body.radius / camera.position.distanceTo(t.head)) * focal;
-      t.mat.opacity = Math.min(1, Math.max(0, (12 - rpx) / 8));
-      t.line.visible = t.mat.opacity > 0;
+      const rpx = (t.body.radius / cam.distanceTo(t.head)) * focal;
+      const u = t.uniforms;
+      u.uOpacity.value =
+        TAIL_STRENGTH * Math.min(1, Math.max(0, (12 - rpx) / 8));
+      u.uViewport.value.copy(viewport);
+      u.uPixelRatio.value = ratio;
+      t.mesh.visible = u.uOpacity.value > 0;
     }
   });
   return (
     <group>
       {tails.map((t) => (
-        <primitive key={t.body.id} object={t.line} />
+        <primitive key={t.body.id} object={t.mesh} />
       ))}
     </group>
   );

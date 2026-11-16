@@ -414,6 +414,56 @@ void main() {
 }
 `;
 
+/**
+ * 실제 축척의 궤도 꼬리: 화면 픽셀 단위 굵기의 빛 띠. 점마다 두 정점을 좌우로 벌린다.
+ * 밝기(aAlpha)와 굵기(aWidth, CSS 픽셀)는 src/sky/orbitTail.ts가 CPU에서 셈해 넣는다.
+ */
+export const orbitTailVertex = /* glsl */ `
+attribute vec3 aPrev;
+attribute vec3 aNext;
+attribute float aSide;
+attribute float aWidth;
+attribute float aAlpha;
+uniform vec2 uViewport;
+uniform float uPixelRatio;
+varying float vAcross;
+varying float vAlpha;
+vec2 toScreen(vec4 c) { return c.xy / c.w * uViewport * 0.5; }
+void main() {
+  mat4 mvp = projectionMatrix * modelViewMatrix;
+  vec4 c = mvp * vec4(position, 1.0);
+  vec4 p = mvp * vec4(aPrev, 1.0);
+  vec4 n = mvp * vec4(aNext, 1.0);
+  vAcross = aSide;
+  vAlpha = aAlpha;
+  if (c.w <= 0.0 || vAlpha <= 0.0) {
+    gl_Position = vec4(0.0, 0.0, 2.0, 1.0);
+    vAlpha = 0.0;
+    return;
+  }
+  vec2 sc = toScreen(c);
+  vec2 sp = p.w > 0.0 ? toScreen(p) : sc;
+  vec2 sn = n.w > 0.0 ? toScreen(n) : sc;
+  vec2 d = sn - sp;
+  d = length(d) > 1e-5 ? normalize(d) : vec2(1.0, 0.0);
+  float w = aWidth * uPixelRatio;
+  sc += vec2(-d.y, d.x) * aSide * w;
+  gl_Position = vec4(sc / (uViewport * 0.5) * c.w, c.z, c.w);
+}
+`;
+
+export const orbitTailFragment = /* glsl */ `
+uniform vec3 uColor;
+uniform float uOpacity;
+varying float vAcross;
+varying float vAlpha;
+void main() {
+  // 가운데 심이 밝고 가장자리로 부드럽게 퍼지는 빛
+  float g = exp(-vAcross * vAcross * 4.5);
+  gl_FragColor = vec4(uColor, g * vAlpha * uOpacity);
+}
+`;
+
 /** 은하수용: 가운데 심 없이 부드럽게 퍼지는 점 */
 export const softFragment = /* glsl */ `
 varying vec3 vColor;
