@@ -36,3 +36,20 @@ export function fileViewHref(p: string): string {
   const q = encodeURIComponent(p);
   return isMarkdown(p) ? `/files/view?path=${q}` : `/api/files?path=${q}`;
 }
+
+/**
+ * 선실 지도 자리(FilePane)에 띄울 파일 종류. html은 가둔 iframe으로, md는 그린 글 화면(/files/view)으로 띄운다.
+ * 그 밖(그림·PDF·영상·기록)은 지금처럼 새 탭으로 본다(2026-11-17).
+ */
+export type PaneKind = "html" | "md";
+
+export function paneKind(p: string): PaneKind | null {
+  if (/\.html?$/i.test(p)) return "html";
+  if (isMarkdown(p)) return "md";
+  return null;
+}
+
+/** 다른 화면(조종석 결재함)에서 그 승무원 선실로 가 지도 자리에 파일을 띄우는 주소 */
+export function cabinViewHref(crewId: string, p: string): string {
+  return `/crew/${encodeURIComponent(crewId)}?view=${encodeURIComponent(p)}`;
+}

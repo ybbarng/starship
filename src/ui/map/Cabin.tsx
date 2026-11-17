@@ -4,6 +4,7 @@ import Link from "next/link";
 import {
   type ComponentType,
   type ReactNode,
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -36,9 +37,12 @@ import { CrewBrief, CrewHeader } from "@/protos/classic/CrewDetail";
 import { HQ_CLOCK_MS, hqConnected } from "@/protos/cockpit/hqLink";
 import { foldRelays, stalledCount } from "@/relay/fold";
 import { CrewTasks, crewTaskCount } from "@/ui/desk/CrewTasks";
+import { FilePane } from "@/ui/files/FilePane";
+import { FilePaneProvider } from "@/ui/files/paneTarget";
 import { FacilityBoard } from "@/ui/hq/FacilityBoard";
 import { RelayBoard } from "@/ui/hq/RelayBoard";
 import { Toasts } from "@/ui/kit";
+import { paneKind } from "@/ui/kit/filePaths";
 import { agoLabel } from "@/ui/kit/labels";
 import { cabinTabs, type SideTab, TAB_LABEL } from "./cabinTabs";
 import { FrontierView } from "./frontier/FrontierView";
@@ -59,7 +63,21 @@ type CabinProps = {
    * 현황판이 할 일 · 나르기 · 시설 · 지도 네 판이 된다(docs/hq.md). 안 주면 본부 방이 없다(시안 화면).
    */
   hqCrewId?: string;
+  /** 처음부터 지도 자리에 띄울 파일(주소의 ?view=). html·md만 받는다 */
+  initialView?: string;
 };
+
+/** 주소의 ?view=를 지금 띄운 파일과 맞춘다. 새로 고쳐도 같은 파일이 남고, 닫으면 지운다 */
+function syncViewParam(path: string | null) {
+  try {
+    const url = new URL(window.location.href);
+    if (path) url.searchParams.set("view", path);
+    else url.searchParams.delete("view");
+    window.history.replaceState(null, "", url);
+  } catch {
+    // 주소를 못 바꿔도 화면은 바뀐다
+  }
+}
 
 /** 승무원이 바뀌면 고른 판·구역을 처음으로 돌린다 */
 export function Cabin(props: CabinProps) {
@@ -72,8 +90,21 @@ function CabinRoom({
   label,
   backHref = "/",
   hqCrewId,
+  initialView,
 }: CabinProps) {
   const bridge = useBridge();
+  // 지도 자리에 띄운 파일(html·md). 현황판의 "보기"가 고른다(src/ui/files/paneTarget.tsx)
+  const [viewing, setViewing] = useState<string | null>(() =>
+    initialView && paneKind(initialView) ? initialView : null,
+  );
+  const showFile = useCallback((p: string) => {
+    setViewing(p);
+    syncViewParam(p);
+  }, []);
+  const closeFile = useCallback(() => {
+    setViewing(null);
+    syncViewParam(null);
+  }, []);
   const hq = hqCrewId !== undefined && crewId === hqCrewId;
   const crew = bridge.crewById.get(crewId);
   // 작업팀이면 지도는 소장 것을 같이 쓴다(소장 id로 읽는다). 할 일·브리핑은 작업팀 자기 것(docs/crew-views.md "작업팀")
@@ -124,6 +155,13 @@ function CabinRoom({
     ) : t === "facility" ? (
       <Facility gauges={bridge.gauges} link={bridge.link} />
     ) : null;
+  const pane = viewing ? (
+    <FilePane
+      path={viewing}
+      onClose={closeFile}
+      closeLabel={map ? "지도로 돌아가기" : "닫기"}
+    />
+  ) : null;
   const tabBar = (
     <SideTabs
       tabs={tabs}
@@ -136,113 +174,155 @@ function CabinRoom({
   );
 
   return (
-    <main className="flex h-dvh min-h-[560px] flex-col bg-hull-950 text-white">
-      <header className="flex items-center gap-4 border-b border-white/[0.07] px-4 py-2.5">
-        <Link
-          href={backHref}
-          className="shrink-0 rounded px-2 py-1 text-[12px] text-white/55 hover:bg-white/[0.06] hover:text-white"
-        >
-          {backHref === "/" ? "← 갑판으로" : "← 시안 목록"}
-        </Link>
-        {label && (
-          <span className="shrink-0 rounded bg-white/[0.06] px-2 py-0.5 text-[11px] text-white/55">
-            시안 · {label}
-          </span>
+    <FilePaneProvider show={showFile}>
+      <main className="flex h-dvh min-h-[560px] flex-col bg-hull-950 text-white">
+        <header className="flex items-center gap-4 border-b border-white/[0.07] px-4 py-2.5">
+          <Link
+            href={backHref}
+            className="shrink-0 rounded px-2 py-1 text-[12px] text-white/55 hover:bg-white/[0.06] hover:text-white"
+          >
+            {backHref === "/" ? "← 갑판으로" : "← 시안 목록"}
+          </Link>
+          {label && (
+            <span className="shrink-0 rounded bg-white/[0.06] px-2 py-0.5 text-[11px] text-white/55">
+              시안 · {label}
+            </span>
+          )}
+          {crew ? (
+            <div className="min-w-0 flex-1 overflow-hidden [&_.text-sm]:truncate">
+              <CrewHeader crew={crew} now={now} />
+            </div>
+          ) : (
+            <span className="font-semibold">{crewId}</span>
+          )}
+          {foremanId && (
+            <span
+              data-team-of={foremanId}
+              className="flex shrink-0 items-center gap-1.5 rounded-full border border-[#e9b872]/30 bg-[#e9b872]/[0.08] px-2.5 py-0.5 text-[12px] text-white/70"
+            >
+              작업팀 · 소장 {mapCrew?.name ?? foremanId}
+              <Link
+                href={`/crew/${encodeURIComponent(foremanId)}`}
+                data-foreman-link={foremanId}
+                className="font-semibold text-[#f3d3a0] hover:underline"
+              >
+                소장 선실로 →
+              </Link>
+            </span>
+          )}
+          {map && (
+            <TopLine
+              map={map}
+              mapAt={data?.mapAt}
+              stale={data?.stale}
+              now={now}
+            />
+          )}
+        </header>
+
+        {data?.problems && data.problems.length > 0 && (
+          <div
+            data-map-problems
+            className="border-b border-[#ff6b6b]/30 bg-[#ff6b6b]/10 px-4 py-1.5 text-[12px] text-[#ffd0d0]"
+            title={data.problems.join("\n")}
+          >
+            지도 파일이 틀렸어요 ({data.problems.length}){" "}
+            {map ? "· 틀린 곳만 빼고 보여요" : ""} ·{" "}
+            <span className="text-white/60">{data.problems[0]}</span>
+          </div>
         )}
-        {crew ? (
-          <div className="min-w-0 flex-1 overflow-hidden [&_.text-sm]:truncate">
-            <CrewHeader crew={crew} now={now} />
+
+        {deskProblems.length > 0 && (
+          <div
+            data-desk-problems
+            className="border-b border-[#ff6b6b]/30 bg-[#ff6b6b]/10 px-4 py-1.5 text-[12px] text-[#ffd0d0]"
+            title={deskProblems.join("\n")}
+          >
+            책상 파일이 틀렸어요 ({deskProblems.length}){" "}
+            {desk ? "· 틀린 곳만 빼고 보여요" : ""} ·{" "}
+            <span className="text-white/60">{deskProblems[0]}</span>
+          </div>
+        )}
+
+        {hq && stalled > 0 && (
+          <button
+            type="button"
+            data-relay-stalled-banner
+            onClick={() => setTab("relays")}
+            className="border-b border-[#ffcf5c]/30 bg-[#ffcf5c]/10 px-4 py-1.5 text-left text-[12.5px] text-[#ffe9a8] hover:bg-[#ffcf5c]/15"
+          >
+            멈춘 나르기 <b className="text-[#ffd84a]">{stalled}</b>건 · 하루
+            넘게 소식이 없어요{" "}
+            <span className="text-white/55">· 나르기 판 보기</span>
+          </button>
+        )}
+
+        {query.isLoading ? (
+          <Center>지도를 펼치는 중…</Center>
+        ) : map ? (
+          <MapRoom
+            key={crewId}
+            map={map}
+            crew={crew}
+            crewId={crewId}
+            mapCrew={mapCrew}
+            mapCrewId={mapCrewId}
+            teams={teams}
+            desk={desk}
+            tasks={tasks}
+            now={now}
+            View={View}
+            tab={tab}
+            setTab={setTab}
+            tabBar={tabBar}
+            extraBoard={hqBoard}
+            pane={pane}
+          />
+        ) : hq && pane ? (
+          // 지도 없는 본부 방은 현황판만 한 줄로 펴 있어서, 띄운 파일이 그 자리를 잠깐 쓴다(닫으면 돌아온다)
+          <div className="min-h-0 flex-1 p-3">{pane}</div>
+        ) : hq ? (
+          // 본부 방에 지도가 없으면 지도 판을 숨기고, 현황판을 가운데 한 줄로 넓게 편다(휴대폰에서도 가로로 넘치지 않게)
+          <div className="flex min-h-0 flex-1 justify-center overflow-y-auto">
+            <div data-hq-room className="w-full max-w-[680px] px-4 py-4">
+              {tabBar}
+              {tab === "tasks" ? (
+                <CrewTasks
+                  crewId={crewId}
+                  desk={desk}
+                  tasks={tasks}
+                  now={now}
+                  off={crew?.status === "off"}
+                />
+              ) : (
+                hqBoard(tab)
+              )}
+            </div>
           </div>
         ) : (
-          <span className="font-semibold">{crewId}</span>
-        )}
-        {foremanId && (
-          <span
-            data-team-of={foremanId}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-[#e9b872]/30 bg-[#e9b872]/[0.08] px-2.5 py-0.5 text-[12px] text-white/70"
-          >
-            작업팀 · 소장 {mapCrew?.name ?? foremanId}
-            <Link
-              href={`/crew/${encodeURIComponent(foremanId)}`}
-              data-foreman-link={foremanId}
-              className="font-semibold text-[#f3d3a0] hover:underline"
-            >
-              소장 선실로 →
-            </Link>
-          </span>
-        )}
-        {map && (
-          <TopLine
-            map={map}
-            mapAt={data?.mapAt}
-            stale={data?.stale}
-            now={now}
-          />
-        )}
-      </header>
-
-      {data?.problems && data.problems.length > 0 && (
-        <div
-          data-map-problems
-          className="border-b border-[#ff6b6b]/30 bg-[#ff6b6b]/10 px-4 py-1.5 text-[12px] text-[#ffd0d0]"
-          title={data.problems.join("\n")}
-        >
-          지도 파일이 틀렸어요 ({data.problems.length}){" "}
-          {map ? "· 틀린 곳만 빼고 보여요" : ""} ·{" "}
-          <span className="text-white/60">{data.problems[0]}</span>
-        </div>
-      )}
-
-      {deskProblems.length > 0 && (
-        <div
-          data-desk-problems
-          className="border-b border-[#ff6b6b]/30 bg-[#ff6b6b]/10 px-4 py-1.5 text-[12px] text-[#ffd0d0]"
-          title={deskProblems.join("\n")}
-        >
-          책상 파일이 틀렸어요 ({deskProblems.length}){" "}
-          {desk ? "· 틀린 곳만 빼고 보여요" : ""} ·{" "}
-          <span className="text-white/60">{deskProblems[0]}</span>
-        </div>
-      )}
-
-      {hq && stalled > 0 && (
-        <button
-          type="button"
-          data-relay-stalled-banner
-          onClick={() => setTab("relays")}
-          className="border-b border-[#ffcf5c]/30 bg-[#ffcf5c]/10 px-4 py-1.5 text-left text-[12.5px] text-[#ffe9a8] hover:bg-[#ffcf5c]/15"
-        >
-          멈춘 나르기 <b className="text-[#ffd84a]">{stalled}</b>건 · 하루 넘게
-          소식이 없어요 <span className="text-white/55">· 나르기 판 보기</span>
-        </button>
-      )}
-
-      {query.isLoading ? (
-        <Center>지도를 펼치는 중…</Center>
-      ) : map ? (
-        <MapRoom
-          key={crewId}
-          map={map}
-          crew={crew}
-          crewId={crewId}
-          mapCrew={mapCrew}
-          mapCrewId={mapCrewId}
-          teams={teams}
-          desk={desk}
-          tasks={tasks}
-          now={now}
-          View={View}
-          tab={tab}
-          setTab={setTab}
-          tabBar={tabBar}
-          extraBoard={hqBoard}
-        />
-      ) : hq ? (
-        // 본부 방에 지도가 없으면 지도 판을 숨기고, 현황판을 가운데 한 줄로 넓게 편다(휴대폰에서도 가로로 넘치지 않게)
-        <div className="flex min-h-0 flex-1 justify-center overflow-y-auto">
-          <div data-hq-room className="w-full max-w-[680px] px-4 py-4">
-            {tabBar}
-            {tab === "tasks" ? (
+          <div className="flex min-h-0 flex-1">
+            {pane ? (
+              <div className="min-w-0 flex-1 p-3">{pane}</div>
+            ) : (
+              <Center>
+                {query.error && !data ? (
+                  <>지도를 받아 오지 못했어요 · {String(query.error.message)}</>
+                ) : (
+                  <div className="text-center">
+                    <div className="text-lg text-white/75">
+                      {foremanId
+                        ? "소장 지도가 아직 없어요"
+                        : "지도가 아직 없어요"}
+                    </div>
+                    <p className="mt-2 text-[13px] text-white/45">
+                      이 프로젝트 저장소에 <code>map.json</code>
+                      (starship-map/1)을 두면 여기에 펼쳐져요.
+                    </p>
+                  </div>
+                )}
+              </Center>
+            )}
+            <SidePanel className="flex flex-col gap-5">
               <CrewTasks
                 crewId={crewId}
                 desk={desk}
@@ -250,42 +330,13 @@ function CabinRoom({
                 now={now}
                 off={crew?.status === "off"}
               />
-            ) : (
-              hqBoard(tab)
-            )}
+              {crew?.brief && <CrewBrief brief={crew.brief} now={now} />}
+            </SidePanel>
           </div>
-        </div>
-      ) : (
-        <div className="flex min-h-0 flex-1">
-          <Center>
-            {query.error && !data ? (
-              <>지도를 받아 오지 못했어요 · {String(query.error.message)}</>
-            ) : (
-              <div className="text-center">
-                <div className="text-lg text-white/75">
-                  {foremanId ? "소장 지도가 아직 없어요" : "지도가 아직 없어요"}
-                </div>
-                <p className="mt-2 text-[13px] text-white/45">
-                  이 프로젝트 저장소에 <code>map.json</code>
-                  (starship-map/1)을 두면 여기에 펼쳐져요.
-                </p>
-              </div>
-            )}
-          </Center>
-          <SidePanel className="flex flex-col gap-5">
-            <CrewTasks
-              crewId={crewId}
-              desk={desk}
-              tasks={tasks}
-              now={now}
-              off={crew?.status === "off"}
-            />
-            {crew?.brief && <CrewBrief brief={crew.brief} now={now} />}
-          </SidePanel>
-        </div>
-      )}
-      <Toasts />
-    </main>
+        )}
+        <Toasts />
+      </main>
+    </FilePaneProvider>
   );
 }
 
@@ -441,6 +492,7 @@ function MapRoom({
   setTab,
   tabBar,
   extraBoard,
+  pane,
 }: {
   map: ProjectMap;
   crew?: Crew;
@@ -461,6 +513,8 @@ function MapRoom({
   tabBar: ReactNode;
   /** 본부 방의 나르기·시설 판. 그 밖의 판이면 null */
   extraBoard: (t: SideTab) => ReactNode;
+  /** 지도 자리에 띄운 파일. 지도는 아래에 그대로 두어(끄지 않는다) 닫으면 보던 자리로 돌아온다 */
+  pane: ReactNode;
 }) {
   const [selected, setSelected] = useState<string | null>(map.here ?? null);
   const select = (id: string) => {
@@ -485,7 +539,7 @@ function MapRoom({
   return (
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="min-h-0 flex-1 p-3">
+        <div className="relative min-h-0 flex-1 p-3">
           <View
             map={map}
             crew={mapCrew}
@@ -498,6 +552,7 @@ function MapRoom({
             showDropped={showDropped}
             now={now}
           />
+          {pane && <div className="absolute inset-3 z-30">{pane}</div>}
         </div>
         <footer className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-white/[0.07] px-4 py-2 text-[12px] text-white/55">
           <span>

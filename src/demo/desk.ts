@@ -62,9 +62,16 @@ export function buildDemoDesks(now = Date.now()): Record<string, Desk> {
           id: "checkout-motion",
           type: "check",
           title: "결제 화면 연출 4개 확인",
-          detail: "움직임이 과하지 않은지 봐 주세요.",
+          // 세부 글 속 html 경로는 결재함 서류에도 "보기 →"(선실 지도 자리로)를 붙인다. 선실에서는 아래 항목에 한 번만 붙는다.
+          detail: `움직임이 과하지 않은지 봐 주세요. 길이 설명은 ${demoFile("motion-timing.html")}에 있어요.`,
           since: iso(now, 25),
           items: [
+            {
+              // html 설명은 선실 지도 자리에 띄운다(가둔 iframe, docs/desk.md)
+              label: "연출 길이 설명(직접 만져 보기)",
+              path: demoFile("motion-timing.html"),
+              look: "2초 기준이 납득되나",
+            },
             {
               label: "담기 버튼이 장바구니로 날아가기",
               url: "https://example.com/web-shop/demo/motion-1",

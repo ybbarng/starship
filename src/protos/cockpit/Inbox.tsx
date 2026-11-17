@@ -9,6 +9,7 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { useBridgeStatus, useCrewDesk } from "@/data/hooks";
 import type { Context, Crew, Task } from "@/protocol/v1";
 import { AnswerList } from "@/ui/desk/Answers";
+import { FilePaneProvider } from "@/ui/files/paneTarget";
 import {
   ago,
   CONTEXT_COLOR,
@@ -704,7 +705,11 @@ function SheetAnswers({ crewId, now }: { crewId: string; now: number }) {
   const desk = useCrewDesk(crewId).data?.desk;
   const answers = desk?.answers ?? [];
   if (!answers.length) return null;
-  return <AnswerList crewId={crewId} answers={answers} now={now} />;
+  return (
+    <FilePaneProvider crewId={crewId}>
+      <AnswerList crewId={crewId} answers={answers} now={now} />
+    </FilePaneProvider>
+  );
 }
 
 /** 마지막 답변: 터미널에서 이미 읽었을 수 있어 한 줄로 접어 두고, 펼치면 서류처럼 답할 수 있다. */
@@ -810,11 +815,17 @@ function PaperView({
         </>
       )}
       {files.length > 0 && (
-        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1" data-paper-files>
-          {files.map((p) => (
-            <FileButtons key={p} path={p} />
-          ))}
-        </div>
+        // html·md "보기"는 그 승무원 선실의 지도 자리로 간다(선실 안에서는 그 자리에 바로 띄운다, paneTarget.tsx)
+        <FilePaneProvider crewId={task.crewId}>
+          <div
+            className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1"
+            data-paper-files
+          >
+            {files.map((p) => (
+              <FileButtons key={p} path={p} />
+            ))}
+          </div>
+        </FilePaneProvider>
       )}
       <TaskActions
         task={task}

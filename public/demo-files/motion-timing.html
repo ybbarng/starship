@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>연출 길이 한눈에 보기</title>
+<!-- 데모용 지어낸 설명. 한 파일(CSS·JS 인라인), 바깥 주소 없음. 선실 지도 자리의 가둔 iframe에서 돈다(docs/desk.md). -->
+<style>
+  :root { color-scheme: dark; --bg:#0d1220; --card:#161d30; --line:#2a3550; --text:#e8ecf6; --dim:#97a3bd; --accent:#7ce0ff; --warn:#ffcf5c; --ok:#5ee08a; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.6 system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 20px 16px 40px; }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  p.lead { color: var(--dim); margin: 0 0 16px; }
+  .tabs { display:flex; gap:4px; background:#ffffff0d; padding:3px; border-radius:8px; margin-bottom:14px; }
+  .tabs button { flex:1; border:0; border-radius:6px; padding:6px 8px; background:transparent; color:var(--dim); font:inherit; cursor:pointer; }
+  .tabs button[aria-selected="true"] { background:#ffffff1f; color:var(--text); font-weight:600; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  label { color: var(--dim); }
+  input[type=range] { flex:1; min-width: 160px; accent-color: var(--accent); }
+  output { font-variant-numeric: tabular-nums; font-weight:600; min-width: 4.5em; }
+  .track { position:relative; height:36px; margin:14px 0 6px; background:#ffffff08; border-radius:8px; overflow:hidden; }
+  .dot { position:absolute; top:8px; left:8px; width:20px; height:20px; border-radius:50%; background:var(--accent); }
+  .verdict { margin-top:8px; font-weight:600; }
+  .verdict.ok { color: var(--ok); } .verdict.warn { color: var(--warn); }
+  button.play { border:1px solid var(--accent); background:#7ce0ff1a; color:var(--accent); border-radius:6px; padding:5px 12px; font:inherit; cursor:pointer; }
+  table { width:100%; border-collapse: collapse; margin-top:4px; }
+  td, th { text-align:left; padding:6px 4px; border-bottom:1px solid var(--line); }
+  th { color: var(--dim); font-weight: 500; }
+  .card[hidden] { display:none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>연출 길이 한눈에 보기</h1>
+  <p class="lead">결제 화면 연출 네 가지가 얼마나 걸리는지, 느린 폰에서는 어떻게 느껴지는지 직접 만져 보세요.</p>
+
+  <div class="tabs" role="tablist">
+    <button type="button" role="tab" aria-selected="true" data-tab="try">직접 해 보기</button>
+    <button type="button" role="tab" aria-selected="false" data-tab="table">연출 표</button>
+    <button type="button" role="tab" aria-selected="false" data-tab="why">왜 2초인가</button>
+  </div>
+
+  <section class="card" data-panel="try">
+    <div class="row">
+      <label for="ms">연출 길이</label>
+      <input id="ms" type="range" min="200" max="3000" step="100" value="800">
+      <output id="msOut">800ms</output>
+    </div>
+    <div class="row" style="margin-top:6px">
+      <label><input id="slow" type="checkbox"> 느린 폰처럼(프레임 절반)</label>
+      <button class="play" id="play" type="button">움직여 보기</button>
+    </div>
+    <div class="track"><div class="dot" id="dot"></div></div>
+    <div class="verdict ok" id="verdict">짧아요. 기다리는 느낌이 없어요</div>
+  </section>
+
+  <section class="card" data-panel="table" hidden>
+    <table>
+      <thead><tr><th>연출</th><th>길이</th><th>느린 폰</th></tr></thead>
+      <tbody>
+        <tr><td>담기 버튼이 장바구니로</td><td>600ms</td><td>괜찮음</td></tr>
+        <tr><td>금액 숫자 굴리기</td><td>900ms</td><td>괜찮음</td></tr>
+        <tr><td>결제 완료 색종이</td><td>1800ms</td><td>끊김 조금</td></tr>
+        <tr><td>품절 상품 흔들기</td><td>400ms</td><td>괜찮음</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card" data-panel="why" hidden>
+    <p>사람은 1초 안쪽의 움직임은 "반응"으로, 2초를 넘는 움직임은 "기다림"으로 느낍니다.
+    색종이처럼 축하하는 연출도 2초 안에 끝나야 다음 화면으로 넘어가는 손이 멈추지 않아요.</p>
+    <p style="color:var(--dim)">그래서 점검 기준을 "2초 안에 끝나나"로 잡았어요.</p>
+  </section>
+</main>
+<script>
+  // 탭
+  const tabs = document.querySelectorAll("[data-tab]");
+  for (const t of tabs) {
+    t.addEventListener("click", () => {
+      for (const o of tabs) o.setAttribute("aria-selected", String(o === t));
+      for (const p of document.querySelectorAll("[data-panel]"))
+        p.hidden = p.dataset.panel !== t.dataset.tab;
+    });
+  }
+  // 슬라이더와 판정
+  const ms = document.getElementById("ms");
+  const out = document.getElementById("msOut");
+  const verdict = document.getElementById("verdict");
+  const slow = document.getElementById("slow");
+  const judge = () => {
+    const v = Number(ms.value) * (slow.checked ? 1.4 : 1);
+    out.textContent = `${ms.value}ms`;
+    const [cls, text] =
+      v <= 1000 ? ["ok", "짧아요. 기다리는 느낌이 없어요"]
+      : v <= 2000 ? ["ok", "적당해요. 2초 안에 끝나요"]
+      : ["warn", "길어요. 기다리는 느낌이 나요"];
+    verdict.className = `verdict ${cls}`;
+    verdict.textContent = `${text}${slow.checked ? " (느린 폰 기준)" : ""}`;
+  };
+  ms.addEventListener("input", judge);
+  slow.addEventListener("change", judge);
+  // 움직여 보기
+  const dot = document.getElementById("dot");
+  let anim = null;
+  document.getElementById("play").addEventListener("click", () => {
+    if (anim) cancelAnimationFrame(anim);
+    const dur = Number(ms.value);
+    const width = dot.parentElement.clientWidth - 36;
+    const start = performance.now();
+    let frame = 0;
+    const step = (now) => {
+      frame++;
+      const t = Math.min(1, (now - start) / dur);
+      if (!slow.checked || frame % 2 === 0)
+        dot.style.transform = `translateX(${width * (1 - (1 - t) ** 3)}px)`;
+      anim = t < 1 ? requestAnimationFrame(step) : null;
+    };
+    anim = requestAnimationFrame(step);
+  });
+  judge();
+</script>
+</body>
+</html>

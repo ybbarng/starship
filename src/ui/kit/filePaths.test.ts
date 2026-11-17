@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fileViewHref, findPaths } from "./filePaths";
+import { cabinViewHref, fileViewHref, findPaths, paneKind } from "./filePaths";
 
 describe("findPaths: 글 속 파일 경로 찾기", () => {
   it("세부 글에 적힌 절대 경로를 찾는다(뒤에 붙은 조사는 빼고)", () => {
@@ -66,6 +66,27 @@ describe("fileViewHref: 보기 단추 주소", () => {
     expect(fileViewHref(p)).toBe(`/api/files?path=${encodeURIComponent(p)}`);
     expect(fileViewHref("/Users/me/Desktop/run.log")).toMatch(
       /^\/api\/files\?/,
+    );
+  });
+});
+
+describe("paneKind: 선실 지도 자리에 띄울 종류", () => {
+  it("html·htm은 html로(대소문자 무관)", () => {
+    expect(paneKind("/Users/me/Desktop/설명.html")).toBe("html");
+    expect(paneKind("~/out/A.HTM")).toBe("html");
+  });
+
+  it("md는 md로, 그 밖은 띄우지 않는다", () => {
+    expect(paneKind("/Users/me/notes/a.md")).toBe("md");
+    expect(paneKind("/Users/me/Desktop/a.png")).toBeNull();
+    expect(paneKind("/Users/me/Desktop/a.html.txt")).toBeNull();
+  });
+});
+
+describe("cabinViewHref: 선실로 가서 띄우는 주소", () => {
+  it("승무원 id와 경로를 주소용으로 감싼다", () => {
+    expect(cabinViewHref("web shop", "/a/b c.html")).toBe(
+      "/crew/web%20shop?view=%2Fa%2Fb%20c.html",
     );
   });
 });
