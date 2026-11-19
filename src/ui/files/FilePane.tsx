@@ -6,8 +6,43 @@
 //   allow-same-origin이 없어 출처가 없는(opaque) 문서가 되고, 부모 화면·이 앱의 API·저장소에 닿지 못한다.
 //   allow-top-navigation·allow-popups·allow-forms도 주지 않는다. 서버도 같은 CSP sandbox를 붙인다(src/server/files.ts).
 // md는 이 앱 자신의 화면(/files/view, md 속 HTML은 그리지 않는다)을 띄운다. 그 화면이 /api/files를 fetch해야 해서 가두지 않는다.
-import { useEffect } from "react";
+// 파일이 바뀌면 다시 읽는다(2026-11-19 사용자 요청): 창이 열려 있고 탭이 보이는 동안 2초마다
+//   HEAD /api/files로 ETag(수정 시각·크기)만 묻고, 처음 본 값과 다르면 iframe을 새로 띄운다.
+import { useCallback, useEffect, useState } from "react";
 import { baseName, fileViewHref, paneKind } from "@/ui/kit/filePaths";
+
+/** 바뀌었는지 묻는 간격. 본문 없이 머리만 오가서 가볍다. */
+const WATCH_MS = 2_000;
+
+/** 파일이 바뀔 때마다 1씩 오르는 수. iframe key에 붙여 다시 띄운다. */
+function useFileVersion(path: string): [number, () => void] {
+  const [version, setVersion] = useState(0);
+  const reload = useCallback(() => setVersion((v) => v + 1), []);
+  useEffect(() => {
+    let seen: string | null = null;
+    let stopped = false;
+    const url = `/api/files?path=${encodeURIComponent(path)}`;
+    const poll = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const res = await fetch(url, { method: "HEAD", cache: "no-store" });
+        const tag = res.ok ? res.headers.get("etag") : null;
+        if (stopped || !tag) return;
+        if (seen !== null && tag !== seen) reload();
+        seen = tag;
+      } catch {
+        // 서버가 잠깐 내려가도 다음 차례에 다시 묻는다.
+      }
+    };
+    void poll();
+    const id = window.setInterval(poll, WATCH_MS);
+    return () => {
+      stopped = true;
+      window.clearInterval(id);
+    };
+  }, [path, reload]);
+  return [version, reload];
+}
 
 export function FilePane({
   path,
@@ -20,6 +55,8 @@ export function FilePane({
 }) {
   const kind = paneKind(path);
   const src = fileViewHref(path);
+  const [version, reload] = useFileVersion(path);
+  const frameKey = `${path}#${version}`;
 
   // Esc로 돌아간다. 다른 창(모달 등)이 먼저 받은 Esc는 건드리지 않는다.
   // iframe 안을 누른 뒤에는 키가 iframe으로 가서 여기 닿지 않는다(가둔 html은 부모에 키를 넘길 수 없다).
@@ -47,6 +84,15 @@ export function FilePane({
         >
           {baseName(path)}
         </span>
+        <button
+          type="button"
+          data-file-pane-reload
+          onClick={reload}
+          title="파일이 바뀌면 저절로 다시 읽어요"
+          className="shrink-0 text-[11.5px] text-white/45 hover:text-white/80 hover:underline"
+        >
+          다시 읽기 ↻
+        </button>
         <a
           href={src}
           target="_blank"
@@ -68,7 +114,7 @@ export function FilePane({
       </header>
       {kind === "html" ? (
         <iframe
-          key={path}
+          key={frameKey}
           title={baseName(path)}
           src={src}
           sandbox="allow-scripts"
@@ -78,7 +124,7 @@ export function FilePane({
         />
       ) : (
         <iframe
-          key={path}
+          key={frameKey}
           title={baseName(path)}
           src={src}
           referrerPolicy="no-referrer"

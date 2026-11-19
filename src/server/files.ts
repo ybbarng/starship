@@ -224,7 +224,7 @@ export async function resolveFile(
   input: unknown,
   roots: string[],
   purpose: FilePurpose,
-): Promise<FileCheck & { size?: number }> {
+): Promise<FileCheck & { size?: number; mtimeMs?: number }> {
   input = expandHome(input);
   const bad = checkInput(input);
   if (bad) return { ok: false, status: 400, reason: bad };
@@ -252,7 +252,15 @@ export async function resolveFile(
       status: 413,
       reason: "보기에는 너무 커요. 열기로 보세요",
     };
-  return { ...checked, size: st.size };
+  return { ...checked, size: st.size, mtimeMs: st.mtimeMs };
+}
+
+/**
+ * 파일 버전 표시(ETag). 수정 시각과 크기로 만든다. 지도 자리에 띄운 창이 이 값만 물어
+ * 파일이 바뀌었는지 안다(docs/files.md "지도 자리에 띄우기").
+ */
+export function fileEtag(mtimeMs: number, size: number): string {
+  return `"${Math.floor(mtimeMs).toString(36)}-${size.toString(36)}"`;
 }
 
 /* ───────────── 보기 응답 도움 ───────────── */

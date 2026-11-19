@@ -5,6 +5,7 @@ import {
   realpathSync,
   rmSync,
   symlinkSync,
+  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -15,6 +16,7 @@ import {
   checkInput,
   checkResolved,
   expandHome,
+  fileEtag,
   fileRoots,
   hasHiddenPart,
   isInside,
@@ -396,5 +398,42 @@ describe("boundToLoopback", () => {
         STARSHIP_BIND: "",
       }),
     ).toBe(true);
+  });
+});
+
+describe("파일 버전 표시(ETag)", () => {
+  // 지도 자리에 띄운 창은 이 값이 바뀌면 다시 읽는다. 같은 길이로 글자만 고쳐도 바뀌어야 한다.
+  it("크기가 같아도 수정 시각이 바뀌면 다른 값이 된다", async () => {
+    const dir = realpathSync(mkdtempSync(path.join(tmpdir(), "etag-")));
+    try {
+      const file = path.join(dir, "explain.html");
+      writeFileSync(file, "<p>설명 1</p>");
+      utimesSync(
+        file,
+        new Date("2026-11-19T01:00:00Z"),
+        new Date("2026-11-19T01:00:00Z"),
+      );
+      const before = await resolveFile(file, [dir], "view");
+      writeFileSync(file, "<p>설명 2</p>");
+      utimesSync(
+        file,
+        new Date("2026-11-19T01:00:05Z"),
+        new Date("2026-11-19T01:00:05Z"),
+      );
+      const after = await resolveFile(file, [dir], "view");
+      expect(before.ok && after.ok).toBe(true);
+      expect(after.size).toBe(before.size);
+      expect(fileEtag(after.mtimeMs ?? 0, after.size ?? 0)).not.toBe(
+        fileEtag(before.mtimeMs ?? 0, before.size ?? 0),
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("같은 수정 시각·크기면 같은 값이다", () => {
+    const at = Date.parse("2026-11-19T01:00:00Z");
+    expect(fileEtag(at, 120)).toBe(fileEtag(at, 120));
+    expect(fileEtag(at, 120)).not.toBe(fileEtag(at, 121));
   });
 });

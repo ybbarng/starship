@@ -5,6 +5,7 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import {
   boundToLoopback,
+  fileEtag,
   fileRoots,
   isTrustedFetch,
   parseRange,
@@ -30,9 +31,20 @@ function fail(status: number, reason: string) {
   });
 }
 
-export async function GET(request: Request) {
+type Checked =
+  | { ok: false; error: Response }
+  | {
+      ok: true;
+      file: { real: string; ext: string };
+      size: number;
+      headers: Record<string, string>;
+    };
+
+/** GET·HEAD 공통 검사. 통과하면 파일과 응답 머리를 돌려준다. */
+async function check(request: Request): Promise<Checked> {
   // 다른 사이트가 <img>·fetch로 내 파일을 끌어가지 못하게 막는다.
-  if (!isTrustedFetch(request)) return fail(403, "다른 출처의 요청");
+  if (!isTrustedFetch(request))
+    return { ok: false, error: fail(403, "다른 출처의 요청") };
   const input = new URL(request.url).searchParams.get("path");
   const { roots, demo } = fileRoots(
     process.env.STARSHIP_FILE_ROOTS,
@@ -40,12 +52,15 @@ export async function GET(request: Request) {
   );
   // 모든 주소로 뜬 서버는 다른 기기가 Host를 꾸며 들어올 수 있다. 데모 예시 파일만 예외.
   if (!demo && !boundToLoopback())
-    return fail(
-      403,
-      "서버가 이 컴퓨터 밖에도 열려 있어 파일을 내주지 않아요(-H 127.0.0.1로 띄우세요)",
-    );
+    return {
+      ok: false,
+      error: fail(
+        403,
+        "서버가 이 컴퓨터 밖에도 열려 있어 파일을 내주지 않아요(-H 127.0.0.1로 띄우세요)",
+      ),
+    };
   const file = await resolveFile(input, roots, "view");
-  if (!file.ok) return fail(file.status, file.reason);
+  if (!file.ok) return { ok: false, error: fail(file.status, file.reason) };
 
   const size = file.size ?? 0;
   const name = encodeURIComponent(path.basename(file.real));
@@ -55,7 +70,29 @@ export async function GET(request: Request) {
     "Content-Type": VIEW_TYPES[file.ext] ?? "text/plain; charset=utf-8",
     "Content-Disposition": `inline; filename*=UTF-8''${name}`,
     "Accept-Ranges": "bytes",
+    ETag: fileEtag(file.mtimeMs ?? 0, size),
   };
+  return { ok: true, file, size, headers };
+}
+
+/** 본문 없이 머리만. 지도 자리에 띄운 창이 파일이 바뀌었는지(ETag) 볼 때 쓴다. */
+export async function HEAD(request: Request) {
+  const r = await check(request);
+  if (!r.ok)
+    return new Response(null, {
+      status: r.error.status,
+      headers: r.error.headers,
+    });
+  return new Response(null, {
+    status: 200,
+    headers: { ...r.headers, "Content-Length": String(r.size) },
+  });
+}
+
+export async function GET(request: Request) {
+  const r = await check(request);
+  if (!r.ok) return r.error;
+  const { file, size, headers } = r;
 
   // 동영상 앞뒤 넘기기를 위해 구간 요청(Range) 하나를 받는다.
   const range = parseRange(request.headers.get("range"), size);
