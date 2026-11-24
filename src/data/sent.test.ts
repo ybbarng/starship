@@ -2,9 +2,99 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { type Desk, deskTaskId } from "@/protocol/desk";
 import type { Task } from "@/protocol/v1";
 import { crewTaskCount } from "@/ui/desk/CrewTasks";
-import { deskSentKey, forkKey, noteTaskResult, readKey, useSent } from "./sent";
+import {
+  deskSentKey,
+  forkKey,
+  keepLast,
+  noteTaskResult,
+  READ_MAX,
+  readKey,
+  SENT_MAX,
+  SENT_TTL_MS,
+  tidySaved,
+  useSent,
+} from "./sent";
 
-beforeEach(() => useSent.setState({ sent: {}, read: {}, snoozed: {} }));
+beforeEach(() =>
+  useSent.setState({ sent: {}, sentAt: {}, read: {}, snoozed: {} }),
+);
+
+describe("tidySaved: 저장해 둔 것을 읽을 때 정리한다", () => {
+  const now = Date.parse("2026-11-24T12:00:00+09:00");
+  const HOUR = 60 * 60 * 1000;
+  const coupon = deskSentKey(deskTaskId("web-shop", "coupon-ui"));
+  const push = deskSentKey(deskTaskId("web-shop", "prod-push"));
+
+  it("끝 시각이 지난 미룸은 버리고 아직 남은 미룸은 둔다", () => {
+    const saved = { snoozed: { [coupon]: now - 1, [push]: now + HOUR } };
+    expect(tidySaved(saved, now).snoozed).toEqual({ [push]: now + HOUR });
+  });
+
+  it("보낸 지 7일이 지났거나 보낸 시각이 없는 답은 버린다", () => {
+    const fork = forkKey("web-shop", "cart", "coupon");
+    const saved = {
+      sent: { [coupon]: "결제 칸 안에", [push]: "승인", [fork]: "합치기" },
+      sentAt: { [coupon]: now - SENT_TTL_MS - 1, [push]: now - HOUR },
+    };
+    const out = tidySaved(saved, now);
+    expect(out.sent).toEqual({ [push]: "승인" });
+    expect(out.sentAt).toEqual({ [push]: now - HOUR });
+  });
+
+  it("읽음은 넣은 순서로 최근 READ_MAX개만 남긴다", () => {
+    const read: Record<string, true> = {};
+    for (let i = 0; i < READ_MAX + 2; i++)
+      read[readKey("web-shop", `a${i}`)] = true;
+    const out = Object.keys(tidySaved({ read }, now).read);
+    expect(out.length).toBe(READ_MAX);
+    expect(out[0]).toBe(readKey("web-shop", "a2"));
+  });
+
+  it("보낸 답도 최근 SENT_MAX개만 남긴다", () => {
+    const sent: Record<string, string> = {};
+    const sentAt: Record<string, number> = {};
+    for (let i = 0; i < SENT_MAX + 1; i++) {
+      const k = deskSentKey(deskTaskId("web-shop", `w${i}`));
+      sent[k] = "승인";
+      sentAt[k] = now - HOUR;
+    }
+    const out = Object.keys(tidySaved({ sent, sentAt }, now).sent);
+    expect(out.length).toBe(SENT_MAX);
+    expect(out[0]).toBe(deskSentKey(deskTaskId("web-shop", "w1")));
+  });
+
+  it("모양이 틀린 값과 비어 있는 저장은 빈 상태로 읽는다", () => {
+    const empty = { sent: {}, sentAt: {}, read: {}, snoozed: {} };
+    expect(tidySaved(undefined, now)).toEqual(empty);
+    expect(
+      tidySaved({ sent: [1], read: { [coupon]: "yes" }, snoozed: "x" }, now),
+    ).toEqual(empty);
+  });
+
+  it("keepLast는 상한 안이면 그대로 두고 넘으면 앞에서부터 버린다", () => {
+    expect(keepLast({ a: 1, b: 2 }, 2)).toEqual({ a: 1, b: 2 });
+    expect(keepLast({ a: 1, b: 2, c: 3 }, 2)).toEqual({ b: 2, c: 3 });
+  });
+});
+
+describe("저장소 동작이 남긴 시각과 상한", () => {
+  it("mark는 보낸 시각을 남기고 clear는 함께 지운다", () => {
+    const key = forkKey("web-shop", "cart", "coupon");
+    const before = Date.now();
+    useSent.getState().mark(key, "합치기");
+    expect(useSent.getState().sentAt[key]).toBeGreaterThanOrEqual(before);
+    useSent.getState().clear(key);
+    expect(useSent.getState().sentAt).toEqual({});
+  });
+
+  it("다시 보낸 답은 맨 뒤로 옮겨 상한에서 가장 늦게 버려진다", () => {
+    const s = useSent.getState();
+    s.mark("fork:a", "1");
+    s.mark("fork:b", "2");
+    s.mark("fork:a", "3");
+    expect(Object.keys(useSent.getState().sent)).toEqual(["fork:b", "fork:a"]);
+  });
+});
 
 describe("보낸 답: 화면 하나가 아니라 저장소에", () => {
   it("깃발 답은 승무원·구역·깃발로 찾는다(창을 닫았다 열어도 같은 열쇠)", () => {

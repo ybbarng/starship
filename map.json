@@ -3,7 +3,7 @@
   "title": "Starship",
   "goal": "세션들을 우주선 승무원으로 보며, 나를 기다리는 것·하는 일·쓴 연료를 한 화면(조종석)에서 묻지 않고 보고 답한다",
   "baselineAt": "2026-10-25",
-  "updatedAt": "2026-11-17T01:35:00.000Z",
+  "updatedAt": "2026-11-24T13:30:00.000Z",
   "regions": [
     {
       "id": "protocol",
@@ -274,6 +274,22 @@
         {
           "label": "ForkAnswer.tsx",
           "path": "src/ui/map/ForkAnswer.tsx"
+        }
+      ]
+    },
+    {
+      "id": "sent-persist",
+      "title": "보낸 답·미룸을 새로 고쳐도 남기기",
+      "parent": "cabin",
+      "status": "done",
+      "size": 1,
+      "summary": "보낸 답·읽음·미룸을 localStorage(starship-sent/1)에 남기고 다른 탭 변경도 따라옴. 끝난 미룸·7일 지난 답은 읽을 때 버리고 각 300개 상한",
+      "since": "2026-11-24",
+      "found": "2026-11-24",
+      "links": [
+        {
+          "label": "sent.ts",
+          "path": "src/data/sent.ts"
         }
       ]
     },
