@@ -213,8 +213,12 @@ export const useSent = create<SentStore>()(
             return null;
           }
         },
-        setItem: (name, value) =>
-          safeLocalStorage.setItem(name, JSON.stringify(value)),
+        // 마운트 뒤 처음 읽기 전에는 쓰지 않는다. 자식 화면의 효과(prune 등)가 Providers의
+        // 읽기보다 먼저 돌아, 빈 상태로 저장해 둔 것을 덮어쓰기 때문이다
+        setItem: (name, value) => {
+          if (!useSent.persist.hasHydrated()) return;
+          safeLocalStorage.setItem(name, JSON.stringify(value));
+        },
         removeItem: (name) => safeLocalStorage.removeItem(name),
       },
       partialize: ({ sent, sentAt, read, snoozed }): SavedSent => ({
