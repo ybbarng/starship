@@ -5,7 +5,15 @@
 //   왼쪽 = 승무원 목차: 기다리는 일이 있는 승무원(건수·가장 오래 기다린 시간·지금 하는 일), 그 아래 나머지 승무원
 //   가운데 = 고른 승무원의 결재 서류: 제목 전체·세부·선택지를 모두 펼치고 그 자리에서 처리
 import Link from "next/link";
-import { memo, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Children,
+  memo,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useBridgeStatus, useCrewDesk } from "@/data/hooks";
 import type { Context, Crew, Task } from "@/protocol/v1";
 import { AnswerList } from "@/ui/desk/Answers";
@@ -174,39 +182,45 @@ function GroupItem({
           : "hover:bg-white/[0.06]"
       }`}
     >
-      <span className="flex min-w-0 items-center gap-1.5 text-[12px]">
-        {g.crew ? (
-          <CrewLamp status={g.crew.status} />
-        ) : (
-          <span className="h-[7px] w-[7px] shrink-0 rounded-full border border-dashed border-white/40" />
-        )}
-        <span
-          className="h-2.5 w-[3px] shrink-0 rounded-sm"
-          style={{ background: CONTEXT_COLOR[groupContext(g)] }}
-        />
-        {tag && <RoleTag tag={tag} />}
-        <span
-          className={`truncate font-semibold ${on ? "text-white" : "text-white/85"}`}
-        >
-          {groupName(g)}
-        </span>
+      {/* 이름이 먼저 자리를 갖고, 숫자가 들어갈 자리가 모자라면 숫자만 다음 줄 오른쪽으로 내려간다(NameFirst) */}
+      <NameFirst
+        className="text-[12px]"
+        name={
+          <>
+            {g.crew ? (
+              <CrewLamp status={g.crew.status} />
+            ) : (
+              <span className="h-[7px] w-[7px] shrink-0 rounded-full border border-dashed border-white/40" />
+            )}
+            <span
+              className="h-2.5 w-[3px] shrink-0 rounded-sm"
+              style={{ background: CONTEXT_COLOR[groupContext(g)] }}
+            />
+            {tag && <RoleTag tag={tag} />}
+            <span
+              data-crew-name
+              className={`truncate font-semibold ${on ? "text-white" : "text-white/85"}`}
+            >
+              {groupName(g)}
+            </span>
+          </>
+        }
+      >
         {g.answers > 0 && (
           <span
             data-group-answers
             title={`답해 둔 것 ${g.answers}`}
-            className={`${g.tasks.length ? "" : "ml-auto"} shrink-0 rounded-full bg-[#7ce0ff]/20 px-1.5 text-[10.5px] leading-[15px] font-bold text-[#bfefff] tabular-nums`}
+            className="rounded-full bg-[#7ce0ff]/20 px-1.5 text-[10.5px] leading-[15px] font-bold text-[#bfefff] tabular-nums"
           >
             답 {g.answers}
           </span>
         )}
         {g.tasks.length > 0 && (
-          <span
-            className={`${g.answers ? "" : "ml-auto"} shrink-0 rounded-full bg-[#ffd84a] px-1.5 text-[10.5px] leading-[15px] font-bold text-hull-950 tabular-nums`}
-          >
+          <span className="rounded-full bg-[#ffd84a] px-1.5 text-[10.5px] leading-[15px] font-bold text-hull-950 tabular-nums">
             {g.tasks.length}
           </span>
         )}
-      </span>
+      </NameFirst>
       <span className="mt-0.5 flex min-w-0 items-center gap-1.5 pl-[19px] text-[10.5px]">
         <span className="min-w-0 flex-1 truncate text-white/40">
           {g.key === LOOSE_KEY
@@ -225,6 +239,40 @@ function GroupItem({
         )}
       </span>
     </button>
+  );
+}
+
+/**
+ * 승무원 이름 줄: 이름(등·꼬리표 포함)이 먼저 자리를 갖고, 뒤의 숫자·배지는 남는 자리에 오른쪽으로 붙는다.
+ * 자리가 모자라면 숫자 묶음만 다음 줄 오른쪽으로 내려간다. 이름은 칸 전체보다 길 때만 말줄임한다.
+ * 배지가 shrink-0이고 이름만 줄어들 수 있어서, 작업팀·기다림 수가 크면 이름이 "we…"까지 줄던 일(2026-11-24).
+ */
+function NameFirst({
+  name,
+  children,
+  className = "",
+}: {
+  name: ReactNode;
+  children?: ReactNode;
+  className?: string;
+}) {
+  const tail = Children.toArray(children);
+  return (
+    <span
+      className={`flex min-w-0 flex-wrap items-center gap-x-1.5 ${className}`}
+    >
+      <span className="flex max-w-full min-w-0 items-center gap-1.5">
+        {name}
+      </span>
+      {tail.length > 0 && (
+        <span
+          data-name-tail
+          className="ml-auto flex shrink-0 items-center gap-1.5"
+        >
+          {tail}
+        </span>
+      )}
+    </span>
   );
 }
 
@@ -281,20 +329,29 @@ function ForemanRow({
           type="button"
           onClick={() => onCrew(boss.id)}
           title={`${boss.name} 승무원 정보`}
-          className="flex w-full min-w-0 items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-[12px] hover:bg-white/[0.06]"
+          className="block w-full rounded-md px-2 py-1.5 text-left hover:bg-white/[0.06]"
         >
-          <CrewLamp status={boss.status} />
-          <span
-            className="h-2.5 w-[3px] shrink-0 rounded-sm"
-            style={{ background: CONTEXT_COLOR[boss.context] }}
-          />
-          <RoleTag tag="소장" />
-          <span className="truncate font-semibold text-white/70">
-            {boss.name}
-          </span>
-          <span className="ml-auto shrink-0 text-[10.5px] text-white/35">
-            결재 없음
-          </span>
+          <NameFirst
+            className="text-[12px]"
+            name={
+              <>
+                <CrewLamp status={boss.status} />
+                <span
+                  className="h-2.5 w-[3px] shrink-0 rounded-sm"
+                  style={{ background: CONTEXT_COLOR[boss.context] }}
+                />
+                <RoleTag tag="소장" />
+                <span
+                  data-crew-name
+                  className="truncate font-semibold text-white/70"
+                >
+                  {boss.name}
+                </span>
+              </>
+            }
+          >
+            <span className="text-[10.5px] text-white/35">결재 없음</span>
+          </NameFirst>
         </button>
       )}
       <button
@@ -454,18 +511,28 @@ function InboxIndexView({
                     data-status={c.status}
                     title={`${c.name} · ${c.activity ?? ""}${teams ? ` · 작업팀 ${teams}` : ""}`}
                     onClick={() => onCrew(c.id)}
-                    className={`relative flex min-w-0 items-center gap-1.5 rounded px-1.5 py-[3px] text-left text-[11px] transition hover:bg-white/[0.07] ${
+                    className={`relative block min-w-0 rounded px-1.5 py-[3px] text-left transition hover:bg-white/[0.07] ${
                       c.status === "off" ? "text-white/35" : "text-white/65"
                     }`}
                   >
-                    <CrewLamp status={c.status} />
-                    <span className="truncate">{c.name}</span>
-                    {teams > 0 && (
-                      <span className="shrink-0 text-[10px] text-white/40">
-                        팀 {teams}
-                      </span>
-                    )}
-                    <MapBadge crew={c} compact />
+                    <NameFirst
+                      className="text-[11px]"
+                      name={
+                        <>
+                          <CrewLamp status={c.status} />
+                          <span data-crew-name className="truncate">
+                            {c.name}
+                          </span>
+                        </>
+                      }
+                    >
+                      {teams > 0 && (
+                        <span className="text-[10px] text-white/40">
+                          팀 {teams}
+                        </span>
+                      )}
+                      <MapBadge crew={c} compact />
+                    </NameFirst>
                   </button>
                 );
               })}
