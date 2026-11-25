@@ -1240,33 +1240,43 @@ function Orbits({ catalog }: { catalog: SkyCatalog }) {
   }, [catalog]);
   const real = scaleMode() === "real";
   // 궤도선은 위에서 내려다볼 때만 그린다(옆에서 보면 가로줄로 보여 거슬린다).
-  // 실제 축척은 행성이 빛점뿐이라 지나온 궤도 꼬리를 옆에서도 그린다(docs/scale.md).
-  if (!view) return real ? <OrbitTails catalog={catalog} /> : null;
+  // 실제 축척은 행성이 빛점뿐이라 지나온 궤도 꼬리를 옆에서도 그리되, 조종석에서는
+  // 꼬리가 궤도면과 같은 높이라 곧은 막대로 보여 아주 옅게 둔다(2026-11-25 사용자 결정, docs/scale.md).
+  // 꼬리는 늘 같은 자리(첫 자식)에 두어, 화면을 오갈 때 다시 만들어지지 않고 세기만 부드럽게 바뀐다.
   // 실제 축척에서는 꼬리가 보이게 전체 고리를 더 옅게 둔다.
   const opacity = real ? 0.16 : 0.32;
   return (
-    <group>
-      {real && <OrbitTails catalog={catalog} />}
-      {geos.list.map((g) => (
-        <lineLoop key={g.uuid} geometry={g}>
-          <lineBasicMaterial
-            color="#7da2ff"
-            transparent
-            opacity={opacity}
-            depthWrite={false}
-          />
-        </lineLoop>
-      ))}
-      <line>
-        <primitive object={geos.halley} attach="geometry" />
-        <lineBasicMaterial
-          color="#9fe3ff"
-          transparent
-          opacity={0.18}
-          depthWrite={false}
+    <>
+      {real && (
+        <OrbitTails
+          catalog={catalog}
+          strength={view ? TAIL_STRENGTH : TAIL_COCKPIT_STRENGTH}
         />
-      </line>
-    </group>
+      )}
+      {view && (
+        <group>
+          {geos.list.map((g) => (
+            <lineLoop key={g.uuid} geometry={g}>
+              <lineBasicMaterial
+                color="#7da2ff"
+                transparent
+                opacity={opacity}
+                depthWrite={false}
+              />
+            </lineLoop>
+          ))}
+          <line>
+            <primitive object={geos.halley} attach="geometry" />
+            <lineBasicMaterial
+              color="#9fe3ff"
+              transparent
+              opacity={0.18}
+              depthWrite={false}
+            />
+          </line>
+        </group>
+      )}
+    </>
   );
 }
 
@@ -1275,8 +1285,12 @@ const TAIL_DEG = 40;
 const TAIL_POINTS = 48;
 /** 꼬리 자리를 다시 셈하는 간격. 40도 호는 하루에 거의 안 바뀌어 1분이면 충분하다. */
 const TAIL_REFRESH_MS = 60_000;
-/** 꼬리 빛의 세기(더하기 혼합) */
+/** 꼬리 빛의 세기(더하기 혼합). 위에서 내려다볼 때 */
 const TAIL_STRENGTH = 1;
+/** 조종석에서 볼 때의 꼬리 세기. 행성 자리는 알려 주되 막대 느낌이 나지 않게 아주 옅게 */
+const TAIL_COCKPIT_STRENGTH = 0.25;
+/** 세기를 바꿀 때 새 값 쪽으로 다가가는 빠르기(초당 비율) */
+const TAIL_EASE_PER_S = 3;
 
 /** 한 꼬리의 빛 띠 정점 배열: 점마다 좌우 두 정점, 이웃 점 사이를 삼각형 둘로 잇는다. */
 function tailRibbon(n: number): THREE.BufferGeometry {
@@ -1312,8 +1326,16 @@ function tailRibbon(n: number): THREE.BufferGeometry {
  * 그린다. 행성 색을 옅게 쓴 부드러운 빛 띠로, 머리 쪽이 가장 밝고 굵으며 끝으로 갈수록 가늘고 옅어진다.
  * 카메라에서 본 각도가 커지면 화면 안에서 사라지고, 원반이 크게 보일 만큼 가까우면 숨긴다.
  */
-function OrbitTails({ catalog }: { catalog: SkyCatalog }) {
+function OrbitTails({
+  catalog,
+  strength,
+}: {
+  catalog: SkyCatalog;
+  strength: number;
+}) {
   const { camera, gl } = useThree();
+  // 지금 세기. 조종석과 내려다보기를 오갈 때 strength 쪽으로 부드럽게 다가간다.
+  const shown = useRef(strength);
   const tails = useMemo(
     () =>
       BODIES.flatMap((b) => {
@@ -1368,7 +1390,9 @@ function OrbitTails({ catalog }: { catalog: SkyCatalog }) {
   const last = useRef(Number.NEGATIVE_INFINITY);
   const lastCam = useRef(new THREE.Vector3(Number.NaN, 0, 0));
   const viewport = useMemo(() => new THREE.Vector2(), []);
-  useFrame(() => {
+  useFrame((_, dt) => {
+    shown.current +=
+      (strength - shown.current) * Math.min(1, dt * TAIL_EASE_PER_S);
     const now = Date.now();
     const refreshed = now - last.current >= TAIL_REFRESH_MS;
     if (refreshed) {
@@ -1423,7 +1447,7 @@ function OrbitTails({ catalog }: { catalog: SkyCatalog }) {
       const rpx = (t.body.radius / cam.distanceTo(t.head)) * focal;
       const u = t.uniforms;
       u.uOpacity.value =
-        TAIL_STRENGTH * Math.min(1, Math.max(0, (12 - rpx) / 8));
+        shown.current * Math.min(1, Math.max(0, (12 - rpx) / 8));
       u.uViewport.value.copy(viewport);
       u.uPixelRatio.value = ratio;
       t.mesh.visible = u.uOpacity.value > 0;
